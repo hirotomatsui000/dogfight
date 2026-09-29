@@ -60,7 +60,8 @@ top speed, turn rate, stall speed and G-limits.
 npm run build:single
 ```
 
-This writes `dist-single/index.html`: the whole game in one self-contained file (about 615 kB, no other assets).
+This writes `dist-single/index.html`: the whole game, including the scenery photos, in one self-contained file
+(about 5 MB, no other assets).
 
 To publish it on Netlify:
 1. Open https://app.netlify.com/drop.
@@ -69,6 +70,12 @@ To publish it on Netlify:
 
 Any static host works the same way, and the file also runs when opened directly in a browser. Visitors need a
 desktop or laptop with a keyboard and mouse; phones and tablets see a notice.
+
+## Scenery photos
+
+The sky is a real photo (Poly Haven, CC0). The ground uses real Sentinel-2 satellite imagery of Polish farmland,
+forest and the Tatra mountains (EOX, CC BY 4.0), tiled across the fictional map by land type. See `CREDITS.md`.
+`node tools/fetch-assets.ts` re-creates `src/client/assets/` from the original sources (macOS, needs `sips`).
 
 ## Project layout
 

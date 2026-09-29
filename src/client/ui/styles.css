@@ -123,3 +123,6 @@ select:focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
 }
 
 .notice { color: var(--warn); }
+
+.credits { margin: 16px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.credits a { color: inherit; }

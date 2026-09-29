@@ -34,12 +34,10 @@ function showError(message: string): void {
 function showMenu(): void {
   const close = showStartMenu(app, (options) => {
     close();
-    try {
-      startGame(app, options, showMenu);
-    } catch (err) {
+    startGame(app, options, showMenu).catch((err: unknown) => {
       console.error(err);
       showError(err instanceof Error ? err.message : String(err));
-    }
+    });
   });
 }
 

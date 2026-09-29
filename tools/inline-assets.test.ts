@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { inlineAssets } from './inline-assets.ts';
+import { findExternalAssetRefs, inlineAssets } from './inline-assets.ts';
+
+describe('findExternalAssetRefs', () => {
+  it('finds build-asset references left in markup or code', () => {
+    const html =
+      '<img src="/assets/a-1.jpg"><script type="module">const s = "./assets/sky-9.jpg"; f(`/assets/x.png`);</script>';
+    expect(findExternalAssetRefs(html)).toEqual(['/assets/a-1.jpg', './assets/sky-9.jpg', '/assets/x.png']);
+  });
+  it('ignores data URIs and unrelated paths', () => {
+    expect(findExternalAssetRefs('<link rel="icon" href="data:image/svg+xml,%3Csvg%3E"><a href="/about">x</a>')).toEqual([]);
+  });
+});
 
 const page = (head: string, body = '') => `<!doctype html><html><head>${head}</head><body>${body}</body></html>`;
 const assets = (files: Record<string, string>) => (href: string) => {

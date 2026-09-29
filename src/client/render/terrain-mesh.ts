@@ -1,33 +1,21 @@
-import {
-  BufferAttribute,
-  BufferGeometry,
-  Color,
-  Group,
-  Mesh,
-  MeshLambertMaterial,
-  MeshStandardMaterial,
-  PlaneGeometry,
-  SRGBColorSpace,
-  Vector3,
-} from 'three';
+import { BufferAttribute, BufferGeometry, Group, type Material, Mesh, Vector3 } from 'three';
 import type { MapDefinition } from '../../shared/data/maps/map-definition.ts';
 import type { GridTerrain } from '../../shared/map/terrain.ts';
-import { fieldVariation, type RGB255, terrainColor } from './terrain-colors.ts';
+import { landClassWeights } from './land-class.ts';
 
-const SEA_SIZE_M = 400000;
-
-/** Static chunked terrain whose vertices sit exactly on the simulation's height grid. */
+/**
+ * Static chunked terrain whose vertices sit exactly on the simulation's height grid.
+ * Each vertex carries land-class weights (`landClass` = farm, forest, mountain, sand; `landExtra` = water, snow)
+ * that the terrain material uses to blend satellite photos.
+ */
 export class TerrainMesh {
   readonly group = new Group();
   readonly chunkCount: number;
 
-  constructor(terrain: GridTerrain, def: MapDefinition, chunkCells = 64) {
+  constructor(terrain: GridTerrain, def: MapDefinition, material: Material, chunkCells = 64) {
     const cells = terrain.resolution - 1;
     const chunksPerSide = Math.ceil(cells / chunkCells);
-    const material = new MeshLambertMaterial({ vertexColors: true });
     const normal = new Vector3();
-    const color = new Color();
-    const rgb: RGB255 = [0, 0, 0];
 
     for (let cj = 0; cj < chunksPerSide; cj++) {
       for (let ci = 0; ci < chunksPerSide; ci++) {
@@ -37,9 +25,11 @@ export class TerrainMesh {
         const nz = Math.min(chunkCells, cells - j0) + 1;
         const centerX = terrain.origin + (i0 + (nx - 1) / 2) * terrain.cellSize;
         const centerZ = terrain.origin + (j0 + (nz - 1) / 2) * terrain.cellSize;
-        const positions = new Float32Array(nx * nz * 3);
-        const normals = new Float32Array(nx * nz * 3);
-        const colors = new Float32Array(nx * nz * 3);
+        const count = nx * nz;
+        const positions = new Float32Array(count * 3);
+        const normals = new Float32Array(count * 3);
+        const landClass = new Float32Array(count * 4);
+        const landExtra = new Float32Array(count * 2);
 
         for (let j = 0; j < nz; j++) {
           for (let i = 0; i < nx; i++) {
@@ -48,20 +38,13 @@ export class TerrainMesh {
             const x = terrain.origin + gi * terrain.cellSize;
             const z = terrain.origin + gj * terrain.cellSize;
             const h = terrain.heights[gj * terrain.resolution + gi];
-            const k = (j * nx + i) * 3;
-            positions[k] = x - centerX;
-            positions[k + 1] = h;
-            positions[k + 2] = z - centerZ;
+            const v = j * nx + i;
+            positions.set([x - centerX, h, z - centerZ], v * 3);
             terrain.normalAt(x, z, normal);
-            normals[k] = normal.x;
-            normals[k + 1] = normal.y;
-            normals[k + 2] = normal.z;
-            const cover = def.landCover(x, z, h, 1 - normal.y);
-            terrainColor(cover, fieldVariation(x, z), rgb);
-            color.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, SRGBColorSpace);
-            colors[k] = color.r;
-            colors[k + 1] = color.g;
-            colors[k + 2] = color.b;
+            normals.set([normal.x, normal.y, normal.z], v * 3);
+            const w = landClassWeights(def.landCover(x, z, h, 1 - normal.y));
+            landClass.set([w.farm, w.forest, w.mountain, w.sand], v * 4);
+            landExtra.set([w.water, w.snow], v * 2);
           }
         }
 
@@ -78,7 +61,8 @@ export class TerrainMesh {
         const geometry = new BufferGeometry();
         geometry.setAttribute('position', new BufferAttribute(positions, 3));
         geometry.setAttribute('normal', new BufferAttribute(normals, 3));
-        geometry.setAttribute('color', new BufferAttribute(colors, 3));
+        geometry.setAttribute('landClass', new BufferAttribute(landClass, 4));
+        geometry.setAttribute('landExtra', new BufferAttribute(landExtra, 2));
         geometry.setIndex(indices);
         geometry.computeBoundingSphere();
         const mesh = new Mesh(geometry, material);
@@ -90,13 +74,5 @@ export class TerrainMesh {
       }
     }
     this.chunkCount = chunksPerSide * chunksPerSide;
-
-    const sea = new Mesh(
-      new PlaneGeometry(SEA_SIZE_M, SEA_SIZE_M),
-      new MeshStandardMaterial({ color: 0x1f4a66, roughness: 0.3, metalness: 0.05 }),
-    );
-    sea.name = 'sea';
-    sea.rotation.x = -Math.PI / 2;
-    this.group.add(sea);
   }
 }

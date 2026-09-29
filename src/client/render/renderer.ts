@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, PerspectiveCamera, Scene, SRGBColorSpace, WebGLRenderer } from 'three';
+import { NeutralToneMapping, PerspectiveCamera, Scene, SRGBColorSpace, WebGLRenderer } from 'three';
 
 const NEAR_M = 0.5;
 const FAR_M = 200000;
@@ -13,8 +13,8 @@ export class Renderer {
     this.webgl = new WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
     this.webgl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.webgl.outputColorSpace = SRGBColorSpace;
-    this.webgl.toneMapping = ACESFilmicToneMapping;
-    this.webgl.toneMappingExposure = 0.55;
+    this.webgl.toneMapping = NeutralToneMapping;
+    this.webgl.toneMappingExposure = 1;
     container.appendChild(this.webgl.domElement);
     this.resize();
     window.addEventListener('resize', this.onResize);

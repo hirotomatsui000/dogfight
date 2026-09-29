@@ -42,6 +42,12 @@ describe('findSun', () => {
 });
 
 describe('horizonColor', () => {
+  it('samples right at the horizon (0.5°–2.5°), not the cloud band higher up', () => {
+    // 1 px per degree: rows 87-89 are 2.5°-0.5° above the horizon; rows 84-86 (3.5°-5.5°) hold darker clouds.
+    const img = solid(360, 180, [40, 60, 90]);
+    for (let y = 87; y < 90; y++) for (let x = 0; x < 360; x++) paint(img, x, y, [200, 210, 225]);
+    expect(horizonColor(img, { px: 0, py: 0 })).toBe('#c8d2e1');
+  });
   it('averages the band just above the horizon, ignoring the area around the sun', () => {
     const img = solid(360, 180, [100, 150, 200]);
     for (let y = 0; y < 180; y++) for (let x = 0; x < 360; x++) if (y >= 90) paint(img, x, y, [0, 0, 0]);

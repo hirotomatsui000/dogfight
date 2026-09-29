@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
-    "build:single": "npm run build && node tools/build-single.ts",
+    "build:single": "tsc --noEmit && vite build --mode single && node tools/build-single.ts",
     "preview": "vite preview --host",
     "test": "vitest run",
     "test:watch": "vitest",

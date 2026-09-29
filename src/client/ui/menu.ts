@@ -131,6 +131,17 @@ export function showStartMenu(root: HTMLElement, onStart: (o: StartOptions) => v
   ].join('<br>');
   panel.appendChild(help);
 
+  // Required attribution for the CC BY 4.0 satellite imagery (full list: CREDITS.md).
+  const credits = document.createElement('p');
+  credits.className = 'credits';
+  credits.innerHTML =
+    'Satellite imagery: <a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless</a> ' +
+    'by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2017), ' +
+    '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> · ' +
+    'Sky and ground detail: <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0) · ' +
+    'Water normals: three.js (MIT)';
+  panel.appendChild(credits);
+
   start.addEventListener('click', () => {
     const options: StartOptions = {
       aircraftId: selected,

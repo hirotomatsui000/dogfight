@@ -1,6 +1,11 @@
 /** Reads a built asset by the href/src exactly as it appears in the HTML (e.g. "/assets/index-abc.js"). */
 export type ReadAsset = (href: string) => string;
 
+/** References to Vite's asset folder that survived inlining; a single-file page must have none. */
+export function findExternalAssetRefs(html: string): string[] {
+  return Array.from(html.matchAll(/["'`(](\.?\/assets\/[^"'`)\s]+)/g), (m) => m[1]);
+}
+
 const attribute = (tag: string, name: string): string | null =>
   new RegExp(`\\b${name}="([^"]*)"`, 'i').exec(tag)?.[1] ?? null;
 

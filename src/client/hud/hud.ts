@@ -253,7 +253,8 @@ export class Hud {
   private drawSpeed(f: HudFrame): void {
     const units = f.view.config.hudUnits;
     const flight = f.view.flight;
-    const x = this.width / 2 - 290;
+    // Stay on screen in narrow windows.
+    const x = Math.max(16, this.width / 2 - 290);
     const y = this.height / 2;
     this.drawValueBox(x, y, String(Math.round(speedValue(flight.airspeed, units))), speedLabel(units));
     const ctx = this.ctx;
@@ -265,7 +266,7 @@ export class Hud {
   private drawAltitude(f: HudFrame): void {
     const units = f.view.config.hudUnits;
     const flight = f.view.flight;
-    const x = this.width / 2 + 200;
+    const x = Math.min(this.width - 120, this.width / 2 + 200);
     const y = this.height / 2;
     const alt = altitudeValue(flight.pos.y, units);
     this.drawValueBox(x, y, String(Math.round(alt / 10) * 10), altitudeLabel(units));

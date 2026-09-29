@@ -59,8 +59,8 @@ export function findSun(img: RgbImage): { px: number; py: number; direction: Dir
 const toHex = (v: number) => Math.round(v).toString(16).padStart(2, '0');
 
 /**
- * Average color of the sky 1°–6° above the horizon, excluding everything within 20° of the sun.
- * Used as the distance-haze color so terrain fades into the photographed horizon.
+ * Average color of the sky 0.5°–2.5° above the horizon (the hazy horizon line itself), excluding everything within
+ * 20° of the sun. Used as the distance-haze color so terrain fades into the photographed horizon.
  */
 export function horizonColor(img: RgbImage, sun: { px: number; py: number }): string {
   const { width, height } = img;
@@ -72,7 +72,7 @@ export function horizonColor(img: RgbImage, sun: { px: number; py: number }): st
   let n = 0;
   for (let y = 0; y < height; y++) {
     const elevationDeg = 90 - ((y + 0.5) / height) * 180;
-    if (elevationDeg < 1 || elevationDeg > 6) continue;
+    if (elevationDeg < 0.5 || elevationDeg > 2.5) continue;
     for (let x = 0; x < width; x++) {
       const [dx, dy, dz] = equirectPixelToDirection(x, y, width, height);
       if (dx * sx + dy * sy + dz * sz > cosExclude) continue;
