@@ -13,6 +13,8 @@ export class DomInput {
   private wheel = 0;
   private left = false;
   private right = false;
+  /** true after the browser refused a pointer-lock request */
+  pointerLockRefused = false;
 
   constructor(target: HTMLElement) {
     this.target = target;
@@ -46,7 +48,14 @@ export class DomInput {
   }
 
   requestPointerLock(): void {
-    if (!this.pointerLocked) void this.target.requestPointerLock();
+    if (this.pointerLocked) return;
+    // Modern browsers return a Promise that rejects when capture is refused (embedded views, no user gesture);
+    // older Safari returns nothing. Either way the game stays playable with the keyboard.
+    const result = this.target.requestPointerLock() as Promise<void> | undefined;
+    result?.catch((err: unknown) => {
+      this.pointerLockRefused = true;
+      console.info('Mouse capture unavailable; click the view to try again.', err instanceof Error ? err.message : String(err));
+    });
   }
 
   /** Returns the input since the last call and clears per-frame deltas. */
