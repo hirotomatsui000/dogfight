@@ -54,6 +54,22 @@ top speed, turn rate, stall speed and G-limits.
 
 `npm run build` type-checks with TypeScript and builds the production bundle into `dist/`.
 
+## Publish as a website
+
+```bash
+npm run build:single
+```
+
+This writes `dist-single/index.html`: the whole game in one self-contained file (about 615 kB, no other assets).
+
+To publish it on Netlify:
+1. Open https://app.netlify.com/drop.
+2. Drag the `dist-single` folder onto the page.
+3. Netlify gives the site a public URL, which you can rename under **Site configuration**.
+
+Any static host works the same way, and the file also runs when opened directly in a browser. Visitors need a
+desktop or laptop with a keyboard and mouse; phones and tablets see a notice.
+
 ## Project layout
 
 | Path | Contents |

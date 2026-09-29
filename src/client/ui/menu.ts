@@ -2,6 +2,7 @@ import { listAircraft, TEAM_NAMES } from '../../shared/data/aircraft/registry.ts
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import { G0 } from '../../shared/math/units.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
+import { isTouchOnly } from './device.ts';
 import { loadSetting, saveSetting } from './storage.ts';
 
 export interface StartOptions {
@@ -43,6 +44,15 @@ export function showStartMenu(root: HTMLElement, onStart: (o: StartOptions) => v
   subtitle.className = 'subtitle';
   subtitle.textContent = 'Prototype · Free flight over the test range';
   panel.append(title, subtitle);
+
+  if (typeof window.matchMedia === 'function' && isTouchOnly((q) => window.matchMedia(q))) {
+    const notice = document.createElement('p');
+    notice.className = 'notice';
+    notice.setAttribute('role', 'status');
+    notice.textContent =
+      'This prototype needs a keyboard and mouse — touch controls are not supported yet. Please open it on a desktop or laptop computer.';
+    panel.appendChild(notice);
+  }
 
   const row = document.createElement('div');
   row.className = 'row';
