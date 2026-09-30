@@ -18,7 +18,7 @@ import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
 import { ControlMapper, type ControlMode } from './input/control-mapper.ts';
 import { DomInput } from './input/dom-input.ts';
-import { loadSceneryTextures } from './render/assets.ts';
+import type { SceneryTextures } from './render/assets.ts';
 import { Effects } from './render/effects/effects.ts';
 import type { ParticleFrame } from './render/effects/particles.ts';
 import { Renderer } from './render/renderer.ts';
@@ -74,8 +74,16 @@ function deathText(cause: DeathCause, killer: string | null): string {
   return 'CRASHED';
 }
 
-/** Builds a local game in `root` once the scenery photos are loaded. Resolves to a cleanup function. */
-export async function startGame(root: HTMLElement, options: StartOptions, handlers: GameHandlers): Promise<() => void> {
+/**
+ * Builds a local game in `root` once the scenery photos are loaded. `scenery` is usually already loaded by the
+ * title screen. Resolves to a cleanup function.
+ */
+export async function startGame(
+  root: HTMLElement,
+  options: StartOptions,
+  handlers: GameHandlers,
+  scenery: Promise<SceneryTextures>,
+): Promise<() => void> {
   // Created before the first await: browsers only let sound start from a click.
   let soundOn = loadSetting('sound', true);
   const audio = AudioEngine.create();
@@ -84,7 +92,7 @@ export async function startGame(root: HTMLElement, options: StartOptions, handle
   const renderer = new Renderer(root);
   let textures;
   try {
-    textures = await loadSceneryTextures(renderer.webgl.capabilities.getMaxAnisotropy());
+    textures = await scenery;
   } catch (err) {
     renderer.dispose();
     audio?.dispose();

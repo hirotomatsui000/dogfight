@@ -10,6 +10,7 @@ real aircraft over a fictional landscape inspired by Poland. This repository is 
 - Weapons: a cannon with a lead marker, heat-seeking missiles that need a lock, and flares.
 - Damage, kill credit and respawns; tracers, missile trails, flares, explosions and smoke; synthesized sound.
 - A combat HUD with target box, missile lock, missile warning, radar display, kill feed and scoreboard.
+- A third-person camera that follows your jet, and a title screen over a live 3D view of the jet you pick.
 - Sim-lite flight physics over a 60 × 60 km test range with photo scenery; Free Flight is still available.
 - Everything runs locally in the browser.
 
@@ -25,7 +26,8 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173, choose a mission, an opponent and an aircraft, and press **Take off**.
+Open http://localhost:5173, pick an aircraft and an opponent, and press **FLY** (or **Free flight** to fly without
+enemies). **Controls** on the title screen lists the keys and switches between mouse aim and keyboard steering.
 Click the view to capture the mouse, then fly with the mouse.
 
 Other devices on the same network can open the "Network" URL that Vite prints.

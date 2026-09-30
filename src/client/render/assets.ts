@@ -16,26 +16,26 @@ export interface SceneryTextures {
   waterNormals: Texture;
 }
 
-const MAX_ANISOTROPY = 8;
+/** three.js lowers this to what the graphics card supports, so loading needs no renderer. */
+const ANISOTROPY = 8;
 
-export async function loadSceneryTextures(maxAnisotropy: number): Promise<SceneryTextures> {
+export async function loadSceneryTextures(): Promise<SceneryTextures> {
   const loader = new TextureLoader();
   const [sky, farm, forest, mountain, detail, waterNormals] = await Promise.all(
     [skyUrl, farmUrl, forestUrl, mountainUrl, detailUrl, waterNormalsUrl].map((url) => loader.loadAsync(url)),
   );
-  const anisotropy = Math.min(MAX_ANISOTROPY, maxAnisotropy);
   sky.colorSpace = SRGBColorSpace;
   // Real photos are not seamless: mirrored tiling hides the edges.
   for (const photo of [farm, forest, mountain]) {
     photo.colorSpace = SRGBColorSpace;
     photo.wrapS = MirroredRepeatWrapping;
     photo.wrapT = MirroredRepeatWrapping;
-    photo.anisotropy = anisotropy;
+    photo.anisotropy = ANISOTROPY;
   }
   detail.colorSpace = SRGBColorSpace;
   detail.wrapS = RepeatWrapping;
   detail.wrapT = RepeatWrapping;
-  detail.anisotropy = anisotropy;
+  detail.anisotropy = ANISOTROPY;
   waterNormals.colorSpace = NoColorSpace;
   waterNormals.wrapS = RepeatWrapping;
   waterNormals.wrapT = RepeatWrapping;

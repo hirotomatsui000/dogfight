@@ -10,6 +10,7 @@ Contested Skies uses these free-license assets. The files live in `src/client/as
 | Close-up ground detail `detail-grass-rock.jpg` ("Aerial Grass Rock") | https://polyhaven.com/a/aerial_grass_rock | Rob Tuytel | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Water normal map `waternormals.jpg` | https://github.com/mrdoob/three.js (`examples/textures`, r186) | three.js authors | [MIT](https://github.com/mrdoob/three.js/blob/dev/LICENSE) |
 | three.js library | https://threejs.org | three.js authors | MIT |
+| Display font Rajdhani (Latin subset, weights 600 and 700), bundled from the `@fontsource/rajdhani` package | https://fonts.google.com/specimen/Rajdhani | Indian Type Foundry | [SIL Open Font License 1.1](https://openfontlicense.org) (full text: `node_modules/@fontsource/rajdhani/LICENSE`) |
 
 Satellite imagery attribution, as required by CC BY 4.0:
 

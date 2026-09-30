@@ -35,6 +35,8 @@ export class Renderer {
   dispose(): void {
     window.removeEventListener('resize', this.onResize);
     this.webgl.dispose();
+    // Free the GPU context now: the title screen and each match create their own renderer.
+    this.webgl.forceContextLoss();
     this.webgl.domElement.remove();
   }
 
