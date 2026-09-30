@@ -1,7 +1,6 @@
-import { type PerspectiveCamera, Vector3 } from 'three';
+import { Vector3 } from 'three';
 import { clamp, DEG, RAD } from '../../shared/math/units.ts';
-import type { CameraMode } from '../camera/camera-rig.ts';
-import type { AircraftView } from '../session/game-session.ts';
+import { drawCombatLayer } from './combat-layer.ts';
 import {
   altitudeLabel,
   altitudeValue,
@@ -13,36 +12,16 @@ import {
   verticalSpeedLabel,
   verticalSpeedValue,
 } from './format.ts';
+import { drawGameLayer } from './game-layer.ts';
+import type { HudFrame } from './hud-frame.ts';
+import { AMBER, FONT, FONT_BIG, FONT_SMALL, GREEN, RED, SHADOW, WHITE } from './palette.ts';
+import { Projector, type ScreenPoint } from './projector.ts';
+import { drawRadarScope } from './radar-scope.ts';
 
-export interface HudFrame {
-  view: AircraftView;
-  camera: PerspectiveCamera;
-  cameraMode: CameraMode;
-  aimDirection: Vector3 | null;
-  modeLabel: string;
-  radarAltitudeM: number;
-  pullUp: boolean;
-  message: string | null;
-  hint: string;
-  dt: number;
-}
+export type { HudFrame } from './hud-frame.ts';
 
-interface Point {
-  x: number;
-  y: number;
-}
-
-const GREEN = '#63ff95';
-const AMBER = '#ffc14d';
-const RED = '#ff5a4f';
-const WHITE = '#e8fff0';
-const SHADOW = 'rgba(0, 0, 0, 0.65)';
-const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
-const FONT = `600 15px ${MONO}`;
-const FONT_BIG = `700 22px ${MONO}`;
-const FONT_SMALL = `500 12px ${MONO}`;
-const FAR = 10000;
 const RADAR_ALT_SHOW_M = 1500;
+const SCOPE_RADIUS_PX = 80;
 
 const dirFrom = (heading: number, elevation: number, out: Vector3) =>
   out.set(Math.sin(heading) * Math.cos(elevation), Math.sin(elevation), -Math.cos(heading) * Math.cos(elevation));
@@ -51,14 +30,12 @@ const dirFrom = (heading: number, elevation: number, out: Vector3) =>
 export class Hud {
   readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
+  private readonly projector = new Projector();
   private width = 0;
   private height = 0;
   private maxG = 1;
   private gOverTime = 0;
   private clock = 0;
-  private readonly world = new Vector3();
-  private readonly ndc = new Vector3();
-  private readonly camSpace = new Vector3();
   private readonly dir = new Vector3();
   private readonly onResize = () => this.resize();
 
@@ -111,8 +88,14 @@ export class Hud {
       this.drawThrottle(f);
       this.drawStatus(f);
       this.drawWarnings(f);
+      if (f.status.modeId !== 'free-flight') {
+        drawCombatLayer(ctx, this.projector, f, this.clock);
+        drawRadarScope(ctx, 100 + SCOPE_RADIUS_PX, this.height - 40 - SCOPE_RADIUS_PX, SCOPE_RADIUS_PX, f);
+      }
     }
+    drawGameLayer(ctx, this.width, this.height, f);
     this.drawModeAndHint(f);
+    if (f.banner) this.drawCenterText(f.banner, this.height * 0.3, AMBER, FONT_BIG);
     if (f.message) this.drawCenterText(f.message, this.height * 0.38, WHITE, FONT_BIG);
     ctx.restore();
   }
@@ -121,6 +104,7 @@ export class Hud {
     const dpr = Math.min(window.devicePixelRatio, 2);
     this.width = window.innerWidth;
     this.height = window.innerHeight;
+    this.projector.setSize(this.width, this.height);
     this.canvas.width = Math.round(this.width * dpr);
     this.canvas.height = Math.round(this.height * dpr);
     this.canvas.style.width = `${this.width}px`;
@@ -128,34 +112,19 @@ export class Hud {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  /** Projects a world point to screen pixels; false when it is behind the camera. */
-  private project(camera: PerspectiveCamera, world: Vector3, out: Point): boolean {
-    this.camSpace.copy(world).applyMatrix4(camera.matrixWorldInverse);
-    if (this.camSpace.z > -0.1) return false;
-    this.ndc.copy(world).project(camera);
-    out.x = (this.ndc.x + 1) * 0.5 * this.width;
-    out.y = (1 - this.ndc.y) * 0.5 * this.height;
-    return true;
-  }
-
-  private projectDirection(camera: PerspectiveCamera, direction: Vector3, out: Point): boolean {
-    this.world.copy(camera.position).addScaledVector(direction, FAR);
-    return this.project(camera, this.world, out);
-  }
-
   private drawPitchLadder(f: HudFrame): void {
     const ctx = this.ctx;
     const nose = this.dir.set(0, 0, -1).applyQuaternion(f.view.quaternion);
     const heading = Math.atan2(nose.x, -nose.z);
     const pitchNow = Math.asin(clamp(nose.y, -1, 1)) * RAD;
-    const a: Point = { x: 0, y: 0 };
-    const b: Point = { x: 0, y: 0 };
+    const a: ScreenPoint = { x: 0, y: 0 };
+    const b: ScreenPoint = { x: 0, y: 0 };
     const tmp = new Vector3();
     for (let p = -85; p <= 85; p += 5) {
       if (Math.abs(p - pitchNow) > 28) continue;
       const half = (p === 0 ? 10 : 4.5) * DEG;
-      if (!this.projectDirection(f.camera, dirFrom(heading - half, p * DEG, tmp), a)) continue;
-      if (!this.projectDirection(f.camera, dirFrom(heading + half, p * DEG, tmp), b)) continue;
+      if (!this.projector.direction(f.camera, dirFrom(heading - half, p * DEG, tmp), a)) continue;
+      if (!this.projector.direction(f.camera, dirFrom(heading + half, p * DEG, tmp), b)) continue;
       const gap = p === 0 ? 0.12 : 0.32;
       const mx = (a.x + b.x) / 2;
       const my = (a.y + b.y) / 2;
@@ -177,9 +146,9 @@ export class Hud {
   }
 
   private drawBoresight(f: HudFrame): void {
-    const p: Point = { x: 0, y: 0 };
+    const p: ScreenPoint = { x: 0, y: 0 };
     this.dir.set(0, 0, -1).applyQuaternion(f.view.quaternion);
-    if (!this.projectDirection(f.camera, this.dir, p)) return;
+    if (!this.projector.direction(f.camera, this.dir, p)) return;
     const ctx = this.ctx;
     ctx.beginPath();
     ctx.moveTo(p.x - 18, p.y);
@@ -195,8 +164,8 @@ export class Hud {
   private drawFlightPathMarker(f: HudFrame): void {
     const v = f.view.flight.vel;
     if (v.lengthSq() < 1) return;
-    const p: Point = { x: 0, y: 0 };
-    if (!this.projectDirection(f.camera, this.dir.copy(v).normalize(), p)) return;
+    const p: ScreenPoint = { x: 0, y: 0 };
+    if (!this.projector.direction(f.camera, this.dir.copy(v).normalize(), p)) return;
     const ctx = this.ctx;
     ctx.beginPath();
     ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
@@ -211,8 +180,8 @@ export class Hud {
 
   private drawAimReticle(f: HudFrame): void {
     if (!f.aimDirection) return;
-    const p: Point = { x: 0, y: 0 };
-    if (!this.projectDirection(f.camera, f.aimDirection, p)) return;
+    const p: ScreenPoint = { x: 0, y: 0 };
+    if (!this.projector.direction(f.camera, f.aimDirection, p)) return;
     const ctx = this.ctx;
     ctx.save();
     ctx.strokeStyle = WHITE;
@@ -321,10 +290,10 @@ export class Hud {
     const frac = clamp(v.hp / v.config.damage.hitPoints, 0, 1);
     ctx.strokeRect(x, y + 10, 180, 10);
     ctx.save();
-    ctx.fillStyle = frac > 0.6 ? GREEN : frac > 0.3 ? AMBER : RED;
+    ctx.fillStyle = frac >= 0.6 ? GREEN : frac >= 0.3 ? AMBER : RED;
     ctx.fillRect(x + 2, y + 12, 176 * frac, 6);
     ctx.restore();
-    if (v.flight.airbrake > 0.1) ctx.fillText('AIRBRAKE', x, y + 42);
+    if (v.flight.airbrake > 0.1) ctx.fillText('AIRBRAKE', x + 100, y);
   }
 
   private drawWarnings(f: HudFrame): void {
@@ -339,7 +308,7 @@ export class Hud {
   private drawModeAndHint(f: HudFrame): void {
     const ctx = this.ctx;
     ctx.font = FONT_SMALL;
-    ctx.fillText(`${f.modeLabel.toUpperCase()}  ·  ${f.view.callsign}`, 16, 22);
+    ctx.fillText(`${f.status.label.toUpperCase()}  ·  ${f.view.callsign}`, 16, 22);
     ctx.globalAlpha = 0.75;
     ctx.fillText(f.hint, this.width / 2 - ctx.measureText(f.hint).width / 2, this.height - 16);
     ctx.globalAlpha = 1;

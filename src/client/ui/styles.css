@@ -126,3 +126,11 @@ select:focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
 
 .credits { margin: 16px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .credits a { color: inherit; }
+
+select:disabled { opacity: 0.5; }
+
+.result-title { margin: 0; font-size: 34px; letter-spacing: 0.1em; text-transform: uppercase; }
+.results { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 8px; }
+.results th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; padding: 4px 6px; }
+.results td { padding: 6px; border-top: 1px solid var(--line); }
+.results tr.me td { color: var(--accent); font-weight: 700; }

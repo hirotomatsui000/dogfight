@@ -1,3 +1,4 @@
+import { DIFFICULTIES, type DifficultyId } from '../../shared/ai/difficulty.ts';
 import { listAircraft, TEAM_NAMES } from '../../shared/data/aircraft/registry.ts';
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import { G0 } from '../../shared/math/units.ts';
@@ -5,24 +6,47 @@ import type { ControlMode } from '../input/control-mapper.ts';
 import { isTouchOnly } from './device.ts';
 import { loadSetting, saveSetting } from './storage.ts';
 
+export type MissionId = 'team-deathmatch' | 'free-flight';
+
 export interface StartOptions {
   aircraftId: string;
   callsign: string;
   controlMode: ControlMode;
+  mission: MissionId;
+  difficulty: DifficultyId;
 }
 
-const sanitizeCallsign = (s: string) => s.replace(/[^A-Za-z0-9 _.-]/g, '').trim().slice(0, 16) || 'Pilot';
+export function sanitizeCallsign(s: string): string {
+  return s.replace(/[^A-Za-z0-9 _.-]/g, '').trim().slice(0, 16) || 'Pilot';
+}
 
-function statsFor(c: AircraftConfig): [string, string][] {
+export function statsFor(c: AircraftConfig): [string, string][] {
   const p = c.physics;
   return [
     ['Top speed', `Mach ${c.performance.topSpeedMach11km[0].toFixed(1)}+`],
     ['Thrust / weight', (p.thrustAbN / (p.massKg * G0)).toFixed(2)],
     ['Roll rate', `${p.maxRollRateDegS}°/s`],
-    ['Stealth', `${Math.round(c.sensors.stealth * 100)}%`],
-    ['Missiles', `${c.stores.srm} SR / ${c.stores.mrm} MR`],
+    ['Hit points', String(c.damage.hitPoints)],
+    ['Missiles', `${c.stores.srm} short-range${c.sensors.helmetSight ? ' · helmet sight' : ''}`],
     ['Cannon', `${c.stores.cannon} · ${c.stores.cannonRounds} rds`],
   ];
+}
+
+function select<T extends string>(label: string, options: readonly (readonly [T, string])[], value: T): { field: HTMLLabelElement; input: HTMLSelectElement } {
+  const field = document.createElement('label');
+  field.className = 'field';
+  const span = document.createElement('span');
+  span.textContent = label;
+  const input = document.createElement('select');
+  for (const [v, text] of options) {
+    const option = document.createElement('option');
+    option.value = v;
+    option.textContent = text;
+    input.appendChild(option);
+  }
+  input.value = value;
+  field.append(span, input);
+  return { field, input };
 }
 
 /** Shows the start screen. Returns a cleanup function that removes it. */
@@ -42,7 +66,7 @@ export function showStartMenu(root: HTMLElement, onStart: (o: StartOptions) => v
   title.textContent = 'CONTESTED SKIES';
   const subtitle = document.createElement('p');
   subtitle.className = 'subtitle';
-  subtitle.textContent = 'Prototype · Free flight over the test range';
+  subtitle.textContent = 'Prototype · Dogfight an AI pilot over the test range';
   panel.append(title, subtitle);
 
   if (typeof window.matchMedia === 'function' && isTouchOnly((q) => window.matchMedia(q))) {
@@ -64,22 +88,22 @@ export function showStartMenu(root: HTMLElement, onStart: (o: StartOptions) => v
   callsign.maxLength = 16;
   callsign.value = loadSetting('callsign', 'Pilot');
   callsignField.append(callsignLabel, callsign);
-
-  const controlField = document.createElement('label');
-  controlField.className = 'field';
-  const controlLabel = document.createElement('span');
-  controlLabel.textContent = 'Controls';
-  const control = document.createElement('select');
-  for (const [value, text] of [['mouse-aim', 'Mouse aim (recommended)'], ['direct', 'Keyboard direct']] as const) {
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = text;
-    control.appendChild(option);
-  }
-  control.value = loadSetting<ControlMode>('controlMode', 'mouse-aim');
-  controlField.append(controlLabel, control);
-  row.append(callsignField, controlField);
+  const control = select<ControlMode>('Controls', [['mouse-aim', 'Mouse aim (recommended)'], ['direct', 'Keyboard direct']], loadSetting<ControlMode>('controlMode', 'mouse-aim'));
+  row.append(callsignField, control.field);
   panel.appendChild(row);
+
+  const row2 = document.createElement('div');
+  row2.className = 'row';
+  const mission = select<MissionId>('Mission', [['team-deathmatch', 'Dogfight vs AI'], ['free-flight', 'Free flight']], loadSetting<MissionId>('mission', 'team-deathmatch'));
+  const difficultyOptions = Object.values(DIFFICULTIES).map((d) => [d.id, d.label] as const);
+  const difficulty = select<DifficultyId>('Opponent', difficultyOptions, loadSetting<DifficultyId>('difficulty', 'rookie'));
+  const syncDifficulty = () => {
+    difficulty.input.disabled = mission.input.value !== 'team-deathmatch';
+  };
+  mission.input.addEventListener('change', syncDifficulty);
+  syncDifficulty();
+  row2.append(mission.field, difficulty.field);
+  panel.appendChild(row2);
 
   const cards = document.createElement('div');
   cards.className = 'cards';
@@ -124,10 +148,10 @@ export function showStartMenu(root: HTMLElement, onStart: (o: StartOptions) => v
   const help = document.createElement('div');
   help.className = 'help';
   help.innerHTML = [
-    '<kbd>Mouse</kbd> aim (click the view to capture the mouse)',
-    '<kbd>W</kbd>/<kbd>S</kbd> pitch · <kbd>A</kbd>/<kbd>D</kbd> roll · <kbd>Q</kbd>/<kbd>E</kbd> rudder',
-    '<kbd>Shift</kbd>/<kbd>Z</kbd> or wheel throttle (top = afterburner) · <kbd>B</kbd> airbrake',
-    '<kbd>C</kbd> or right mouse: look around · <kbd>V</kbd> camera (HUD / chase / free) · <kbd>P</kbd> or <kbd>Esc</kbd> pause',
+    '<kbd>Mouse</kbd> aim (click the view to capture the mouse) · <kbd>W</kbd>/<kbd>S</kbd> <kbd>A</kbd>/<kbd>D</kbd> <kbd>Q</kbd>/<kbd>E</kbd> override',
+    '<kbd>Space</kbd> or left click: cannon · <kbd>F</kbd> missile (needs a lock tone) · <kbd>X</kbd> flares · <kbd>R</kbd> next target',
+    '<kbd>Shift</kbd>/<kbd>Z</kbd> or wheel throttle (top = afterburner) · <kbd>B</kbd> airbrake · <kbd>C</kbd> or right mouse: look around',
+    '<kbd>V</kbd> camera · <kbd>Tab</kbd> scores · <kbd>P</kbd> or <kbd>Esc</kbd> pause',
   ].join('<br>');
   panel.appendChild(help);
 
@@ -146,11 +170,15 @@ export function showStartMenu(root: HTMLElement, onStart: (o: StartOptions) => v
     const options: StartOptions = {
       aircraftId: selected,
       callsign: sanitizeCallsign(callsign.value),
-      controlMode: control.value === 'direct' ? 'direct' : 'mouse-aim',
+      controlMode: control.input.value === 'direct' ? 'direct' : 'mouse-aim',
+      mission: mission.input.value === 'free-flight' ? 'free-flight' : 'team-deathmatch',
+      difficulty: difficulty.input.value in DIFFICULTIES ? (difficulty.input.value as DifficultyId) : 'rookie',
     };
     saveSetting('aircraft', options.aircraftId);
     saveSetting('callsign', options.callsign);
     saveSetting('controlMode', options.controlMode);
+    saveSetting('mission', options.mission);
+    saveSetting('difficulty', options.difficulty);
     onStart(options);
   });
 

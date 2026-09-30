@@ -1,7 +1,7 @@
 import './ui/styles.css';
 import { startGame } from './game.ts';
 import { Renderer } from './render/renderer.ts';
-import { showStartMenu } from './ui/menu.ts';
+import { type StartOptions, showStartMenu } from './ui/menu.ts';
 
 function requireElement(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -31,13 +31,17 @@ function showError(message: string): void {
   app.appendChild(overlay);
 }
 
+function launch(options: StartOptions): void {
+  startGame(app, options, { onQuit: showMenu, onRestart: launch }).catch((err: unknown) => {
+    console.error(err);
+    showError(err instanceof Error ? err.message : String(err));
+  });
+}
+
 function showMenu(): void {
   const close = showStartMenu(app, (options) => {
     close();
-    startGame(app, options, showMenu).catch((err: unknown) => {
-      console.error(err);
-      showError(err instanceof Error ? err.message : String(err));
-    });
+    launch(options);
   });
 }
 
