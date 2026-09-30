@@ -1,10 +1,12 @@
-# Contested Skies — Design Spec (revision 3)
+# Contested Skies — Design Spec (revision 4)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
   - Revision 2 incorporated the owner's project brief, which supersedes revision 1 where they differ.
   - Revision 3 adds the public-website roadmap approved on 2026-09-29 (§24), a new milestone M1c, the current key
     bindings (§15.3), and the photo scenery from `2026-09-29-realistic-graphics-design.md`.
+  - Revision 4 applies the owner's feedback after playing M1b: the game is always third-person (§15.1), and the start
+    menu becomes a minimal title screen over a live 3D background (§15.5).
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -42,6 +44,8 @@ A browser-based, online multiplayer flight-combat simulator prototype.
 | Scenery | Photographed sky with image-based lighting, and Sentinel-2 satellite photos blended by land class, replace the sky shader and vertex-colored terrain | Owner request; `2026-09-29-realistic-graphics-design.md` |
 | Public website | Single-player builds publish as one self-contained HTML file on static hosting (Netlify). Online play (M2) needs a Node host with WebSockets; the owner chooses and pays for it | Owner request + roadmap review, 2026-09-29 |
 | Roadmap additions | Public-website features (§24) and milestone M1c "Website basics"; gamepad and flight-stick support move from M5 to M1c | Roadmap review, 2026-09-29 |
+| Camera | Third-person chase camera only; the first-person HUD view, the cockpit view and the free camera are dropped | Owner feedback on M1b, 2026-09-29 |
+| Start screen | A minimal title screen over a live 3D showcase of the selected jet. The scenery photos preload there and the game reuses them | Owner feedback on M1b, 2026-09-29 |
 
 ## 3. Goals and non-goals
 
@@ -53,7 +57,7 @@ A browser-based, online multiplayer flight-combat simulator prototype.
    automatically superior: automated bot tournaments must show every pairing's win rate between 35% and 65%.
 5. The Lechovia map: cities, villages, roads, rivers, forests, fields, hills/mountains, fictional airfields,
    clouds/weather, day/night.
-6. Four game modes; a modern, readable fighter HUD; HUD, cockpit, chase and free cameras.
+6. Four game modes; a modern, readable fighter HUD; a smooth third-person camera.
 7. 60 fps on a 2020+ laptop at 1080p in a current desktop browser.
 8. A first-time visitor is flying within one minute, learns the basics from a guided training flight, and gets
    graphics settings that suit their hardware automatically (§24).
@@ -160,8 +164,8 @@ contested-skies/
         ├── main.ts
         ├── session/         game-session.ts, local-session.ts, network-session.ts (M2)
         ├── input/           keyboard, mouse-aim, gamepad (M5) → ControlInput
-        ├── render/          renderer, sky, terrain/, models/, effects/, clouds (M4)
-        ├── camera/          camera-rig.ts (HUD, cockpit, chase, free), transitions, shake
+        ├── render/          renderer, sky, terrain/, models/, effects/, title-screen showcase, clouds (M4)
+        ├── camera/          camera-rig.ts (third-person chase, look-around, shake)
         ├── hud/             hud.ts, layers (flight, weapons, radar display, warnings), units
         ├── ui/              menus, overlays, settings
         └── audio/           synthesized sounds
@@ -474,7 +478,7 @@ All modes implement `GameMode`: setup, per-tick update, scoring on events, spawn
 
 | Mode | Rules | Milestone |
 |---|---|---|
-| **Free Flight** | No scoring or enemies (optional passive AI targets); spawn anywhere; time-of-day and weather controls; free camera encouraged | M1 |
+| **Free Flight** | No scoring or enemies (optional passive AI targets); spawn anywhere; time-of-day and weather controls | M1 |
 | **Team Deathmatch** | +1 per enemy kill; each death of a team's aircraft gives the other team +1; first to 15 or most after 10 min | M1 (vs AI), M2 (online) |
 | **Air Superiority** | Three capture zones (cylinders, 4 km radius, 1–7 km altitude) along the front. A zone's capture progress moves toward the team with more aircraft inside (rate ∝ numeric advantage, 10 s to capture with +1). Each owned zone gives +1 point every 2 s. First to 300 or most after 12 min | M5 |
 | **Team Objective** | Each team protects two AI-flown high-value "Sentinel" radar aircraft (slow, 400 HP) orbiting behind its lines. Destroying one gives +20 and cuts the enemy team's datalink for 60 s; kills give +1; destroyed Sentinels return after 120 s. First to 60 or most after 15 min | M5 |
@@ -517,24 +521,22 @@ on the runway, as the player chooses.
 
 ## 15. Client
 
-### 15.1 Cameras
+### 15.1 Camera
 
-| Camera | Description |
-|---|---|
-| HUD view | First-person at the pilot's eye with the HUD only; the default |
-| Cockpit | First-person with a simple procedural cockpit (canopy frame, panel, HUD glass) (M5) |
-| Chase | Third-person behind and above, smoothed follow |
-| Free camera | Detached fly-cam for testing (WASD + mouse, Shift fast) |
+The game is always third-person (revision 4). There is no first-person, cockpit or free camera.
 
-- **Padlock / free look:** looking at a target sets the helmet-sight direction.
-- **Transitions:** 0.35 s smoothstep blends of position, orientation and FOV between rigs.
+- **Chase camera:** behind and above the jet (30 m back, 7 m up, 70° field of view) with a smoothed follow. In
+  mouse-aim mode it follows the aim direction and keeps the horizon level; in keyboard mode it rolls with the jet.
+  After a respawn it starts behind the new position instead of sweeping across the map.
+- **Look around:** holding C or the right mouse button swings the camera around the jet; releasing it swings back.
+  The look direction also aims the helmet sight.
 - **Shake:** trauma-based noise from G > 6, the transonic buffet band, afterburner, cannon fire, hits and nearby
   explosions. It decays over time, and a "reduce motion" setting scales it.
 
 ### 15.2 HUD (Canvas 2D, clean green; amber/white option)
 
-- **Flight:** airspeed, altitude, heading tape, throttle and afterburner, G (current and max), Mach, AoA, pitch
-  ladder, flight-path marker.
+- **Flight:** airspeed, altitude, heading tape, throttle and afterburner, G (current and max), Mach, AoA,
+  flight-path marker.
 - **Aircraft status:** HP and damage state, airbrake, stall warning, pull-up warning.
 - **Weapons:** selected weapon, remaining cannon rounds, SRM, MRM and countermeasures. Gun boresight cross and lead
   marker on the designated target within 2 km.
@@ -567,7 +569,6 @@ on the runway, as the player chooses.
 | X | Countermeasures |
 | B | Airbrake (hold) |
 | C or right mouse | Look around (hold); also aims the helmet sight |
-| V | Cycle camera |
 | Tab | Scoreboard (hold) |
 | M | Map (M4) |
 | P / Esc | Pause |
@@ -588,8 +589,15 @@ on the runway, as the player chooses.
 
 ### 15.5 UI and audio
 
-- **Menus:** callsign, team and aircraft selection (cards with stats derived from the data files), mode, map, time of
-  day, weather, bots, difficulty.
+- **Start screen (revision 4):** a minimal title screen over a live 3D scene. The selected jet circles over the
+  landscape while the camera orbits it slowly; the scene holds still when the system asks for reduced motion.
+  - On screen: the title, the aircraft choice, the opponent's skill, a large FLY button, links to Free Flight and to
+    Controls (control scheme and key list), the callsign in a corner, and one line of image credits.
+  - The scenery photos load while the start screen is up and the game reuses them, so a match starts without a
+    loading wait. Until they are ready the title shows over a dark background.
+  - Typography: the display font Rajdhani (SIL Open Font License 1.1) is bundled with the page, Latin subset only;
+    small text uses the system font.
+- **Later menus:** mode, map, time of day, weather and bots arrive with the features that need them (M2–M5).
 - **Other screens:** loading, pause/settings, death/respawn (killer, weapon, countdown, aircraft change), match end.
 - **Settings** persist in `localStorage` (try/catch, defaults if unavailable).
 - **Audio:** WebAudio-synthesized, no asset files.
@@ -676,12 +684,12 @@ brief (§11 of the brief: steps 1–11).
 | # | Milestone | Brief steps | Scope | Accepted when |
 |---|---|---|---|---|
 | M1a | **Fly** | 1–6 (+ basic HUD) | Scaffold; math; atmosphere; data-driven aircraft config (Kestrel); flight model; steering; test-range terrain; local World and session; renderer, sky, terrain mesh, parametric model; keyboard + mouse-aim; HUD and chase cameras with transitions/shake; free camera; basic flight HUD; start menu with Free Flight | One aircraft is flyable at 60 fps; stall, G-limit, energy bleed and altitude effects observable; tests green |
-| M1b | **Fight** | 7–9 | Second aircraft (Kobchik) as the AI opponent; cannon + lead; SRM + IR seeker; flares; basic radar detection and designation; damage model; destruction and respawn; Team Deathmatch vs 1 AI; bot pilot; effects (tracers, missile trails, flares, explosions, smoke); full combat HUD (target info, lock, missile warning, radar display, ammo, kill feed, hit markers, scoreboard); minimal audio | A 1v1 dogfight against the AI is playable end to end with both weapons and countermeasures |
-| M1c | **Website basics** | — (§24) | Guided training flight; controls card; settings screen (volume, mouse sensitivity, invert, HUD color and size, key remapping); gamepad and flight-stick support; Low/Medium/High graphics presets chosen from the frame rate; loading progress; title screen, page metadata, social-preview image and icon; color-blind-safe team markers; every sound warning also shown as text | A first-time visitor completes the training flight and a fight on a mid-range laptop without reading the README |
+| M1b | **Fight** | 7–9 | Second aircraft (Kobchik) as the AI opponent; cannon + lead; SRM + IR seeker; flares; basic radar detection and designation; damage model; destruction and respawn; Team Deathmatch vs 1 AI; bot pilot; effects (tracers, missile trails, flares, explosions, smoke); full combat HUD (target info, lock, missile warning, radar display, ammo, kill feed, hit markers, scoreboard); minimal audio; third-person camera and a minimal title screen over a live 3D background (checkpoint feedback) | A 1v1 dogfight against the AI is playable end to end with both weapons and countermeasures |
+| M1c | **Website basics** | — (§24) | Guided training flight; settings screen (volume, mouse sensitivity, invert, HUD color and size, key remapping); gamepad and flight-stick support; Low/Medium/High graphics presets chosen from the frame rate; loading progress; page metadata, social-preview image and icon; color-blind-safe team markers; every sound warning also shown as text | A first-time visitor completes the training flight and a fight on a mid-range laptop without reading the README |
 | M2 | **Multiplayer** | 10 | Node server, rooms, protocol and codecs, authoritative World, NetworkSession (prediction, reconciliation, interpolation, clock sync, lag compensation), lobby (team + aircraft), bots fill, LAN URLs, lag simulator; invite links and Quick play; preset quick-chat; callsign filter; page/server version check; error reporting and a health check; one browser smoke test; multi-file site build; Dockerfile for the owner's host | Two tabs plus a second LAN machine fight each other smoothly at `?lag=150`; integration tests green; `docker build`/`run` serves the game |
 | M3 | **Roster & weapons** | 11 | The remaining 6 aircraft (data + parametric models); upgraded model generator (smooth fuselage, canopy glass, panel lines, sky-reflecting paint, team paint schemes); radar/stealth model; MRM "Lance" + chaff; RWR `LOCK` warning; balance tournament | All 8 aircraft selectable; tournament win rates within 35–65% |
 | M4 | **World** | 11 | Lechovia map (terrain LOD in worker, geography, settlements, roads, airfields), runway spawns with ground handling, clouds and weather, day/night cycle | Take off from a fictional airfield and fight over recognizable Poland-inspired terrain at 60 fps, day and night |
-| M5 | **Modes & polish** | 11 | Air Superiority, Team Objective, Free Flight extras; end-of-match summary; cockpit camera; graphics upgrades (contrails, wingtip vapor, damage fire); kill cam, spectating while respawning, changing jets on respawn; full audio; remaining accessibility options; README | All four modes playable online |
+| M5 | **Modes & polish** | 11 | Air Superiority, Team Objective, Free Flight extras; end-of-match summary; graphics upgrades (contrails, wingtip vapor, damage fire); kill cam, spectating while respawning, changing jets on respawn; full audio; remaining accessibility options; README | All four modes playable online |
 
 ## 21. Risks and mitigations
 
@@ -726,11 +734,11 @@ its milestone.
 
 | Area | Features | Milestone |
 |---|---|---|
-| First minute | A 2–3 minute guided training flight: fly with the mouse, shoot a target drone, lock and fire a missile, beat an incoming missile with flares. A controls card on the start screen | M1c |
+| First minute | A 2–3 minute guided training flight: fly with the mouse, shoot a target drone, lock and fire a missile, beat an incoming missile with flares. (The start screen's Controls panel arrived in M1b.) | M1c |
 | Controllers | Gamepad and flight-stick support (Gamepad API, standard mapping, axis calibration); key remapping; mouse sensitivity and invert | M1c |
 | Hardware range | Low/Medium/High graphics presets (pixel ratio, texture size, draw distance, effects), chosen automatically from the measured frame rate and changeable in settings | M1c |
 | Loading | A loading progress bar. Once assets pass about 5 MB, publish the multi-file build (`dist/`) instead of one HTML file so browsers cache and load pieces in parallel | M1c (progress), M2 (multi-file) |
-| Sharing | A title screen with a screenshot and a Play button; page title, description, social-preview image and icon | M1c |
+| Sharing | A title screen with a Play button over a live 3D background (M1b); page title, description, social-preview image and icon (M1c) | M1b, M1c |
 | Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle | M2 |
 | Joining | An invite link per room, and "Quick play" that joins the busiest room. Bots fill empty seats so one human plus bots is a full match | M2 |
 | Safety | Server authority for all hits (§7); callsign filter; preset quick-chat messages only; rate limits; a short privacy note (no accounts, no tracking) | M2 |
