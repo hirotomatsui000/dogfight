@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { kestrel } from '../data/aircraft/kestrel.ts';
 import { DEG } from '../math/units.ts';
-import { dragCoefficient, liftCoefficient, stallSpeed, thrustNewtons, trimAlpha, waveDragFactor } from './aero.ts';
+import { cornerSpeed, dragCoefficient, liftCoefficient, stallSpeed, thrustNewtons, trimAlpha, waveDragFactor } from './aero.ts';
 
 const p = kestrel.physics;
 
@@ -84,5 +84,14 @@ describe('stallSpeed', () => {
     const v = stallSpeed(p, 1.225);
     expect(v).toBeGreaterThan(kestrel.performance.stallSpeedMs[0]);
     expect(v).toBeLessThan(kestrel.performance.stallSpeedMs[1]);
+  });
+});
+
+describe('cornerSpeed', () => {
+  it('is the speed where maximum lift gives the G limit', () => {
+    const v = cornerSpeed(p, 0.909);
+    const lift = 0.5 * 0.909 * v * v * p.wingAreaM2 * liftCoefficient(p.alphaMaxDeg * DEG, p);
+    expect(lift / (p.massKg * 9.80665)).toBeCloseTo(p.gMax, 6);
+    expect(v).toBeCloseTo(stallSpeed(p, 0.909) * Math.sqrt(p.gMax), 6);
   });
 });

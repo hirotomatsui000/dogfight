@@ -65,3 +65,9 @@ export function stallSpeed(p: AircraftPhysics, density: number): number {
   const clMax = p.clAlpha * p.alphaMaxDeg * DEG;
   return Math.sqrt((2 * p.massKg * G0) / (density * p.wingAreaM2 * clMax));
 }
+
+/** Corner speed: the slowest speed at which full lift reaches the G limit (fastest turn rate). */
+export function cornerSpeed(p: AircraftPhysics, density: number): number {
+  const clMax = p.clAlpha * p.alphaMaxDeg * DEG;
+  return Math.sqrt((2 * p.gMax * p.massKg * G0) / (density * p.wingAreaM2 * clMax));
+}

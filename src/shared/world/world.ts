@@ -1,3 +1,5 @@
+import { BotPilot, type BotWorld, botSeed } from '../ai/bot-pilot.ts';
+import type { DifficultyProfile } from '../ai/difficulty.ts';
 import { damageFlightEnv, damageState, maneuverKillCredit } from '../damage/damage.ts';
 import { getAircraft } from '../data/aircraft/registry.ts';
 import type { TeamId } from '../data/aircraft/types.ts';
@@ -6,7 +8,7 @@ import type { Terrain } from '../map/terrain.ts';
 import { type Approach, closestApproach } from '../math/closest-approach.ts';
 import { Rng } from '../math/rng.ts';
 import type { GameMode, ModeContext } from '../modes/mode.ts';
-import { type ControlInput, sanitizeInput } from '../physics/controls.ts';
+import { type ControlInput, neutralInput, sanitizeInput } from '../physics/controls.ts';
 import { type FlightEnv, stepFlight } from '../physics/flight-model.ts';
 import type { Projectile } from '../weapons/cannon.ts';
 import type { Missile } from '../weapons/missile.ts';
@@ -32,10 +34,12 @@ export interface AddAircraftOptions {
   callsign: string;
   team: TeamId;
   aircraftId: string;
+  /** makes the aircraft an AI bot with this skill */
+  bot?: DifficultyProfile;
 }
 
 /** Authoritative simulation. Pure: no I/O, no clocks, randomness only from `rng`. */
-export class World implements ModeContext, CombatHost {
+export class World implements ModeContext, CombatHost, BotWorld {
   readonly tickRate = TICK_RATE;
   readonly map: MapDefinition;
   readonly terrain: Terrain;
@@ -43,7 +47,9 @@ export class World implements ModeContext, CombatHost {
   readonly rng: Rng;
   readonly combat: Combat;
   tick = 0;
+  private readonly seed: number;
   private readonly aircraft = new Map<number, AircraftEntity>();
+  private readonly bots = new Map<number, { pilot: BotPilot; input: ControlInput }>();
   private events: GameEvent[] = [];
   private nextId = 1;
   private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1 };
@@ -54,8 +60,13 @@ export class World implements ModeContext, CombatHost {
     this.map = opts.map;
     this.terrain = opts.terrain;
     this.mode = opts.mode;
+    this.seed = opts.seed;
     this.rng = new Rng(opts.seed);
     this.combat = new Combat(this);
+  }
+
+  get combatArea(): MapDefinition['combatArea'] {
+    return this.map.combatArea;
   }
 
   aircraftList(): IterableIterator<AircraftEntity> {
@@ -86,26 +97,33 @@ export class World implements ModeContext, CombatHost {
       callsign: opts.callsign,
       team: opts.team,
       config,
-      isBot: false,
+      isBot: opts.bot !== undefined,
       flight: spawnFlightState(this.map, this.terrain, opts.team, slot, config.physics),
       spawnSlot: slot,
     });
     this.aircraft.set(entity.id, entity);
+    if (opts.bot) this.bots.set(entity.id, { pilot: new BotPilot(opts.bot, botSeed(this.seed, entity.id)), input: neutralInput(0.8) });
     this.emit({ type: 'spawned', aircraftId: entity.id, spawnGen: entity.spawnGen });
     return entity;
   }
 
   removeAircraft(id: number): boolean {
     if (!this.aircraft.delete(id)) return false;
+    this.bots.delete(id);
     this.combat.forget(id);
     return true;
   }
 
   step(inputs: ReadonlyMap<number, ControlInput>): void {
+    // Pilots decide on the state at the start of the tick.
     for (const a of this.aircraft.values()) {
       if (!a.alive) continue;
-      const raw = inputs.get(a.id);
+      const bot = this.bots.get(a.id);
+      const raw = bot ? bot.pilot.think(this, a, bot.input) : inputs.get(a.id);
       if (raw) sanitizeInput(raw, a.input);
+    }
+    for (const a of this.aircraft.values()) {
+      if (!a.alive) continue;
       a.prevPos.copy(a.flight.pos);
       damageFlightEnv(damageState(a.hp, a.config.damage.hitPoints), this.env);
       stepFlight(a.flight, a.input, a.config.physics, DT, this.env);
