@@ -3,7 +3,9 @@ import {
   altitudeLabel,
   altitudeValue,
   formatClock,
+  formatClosure,
   formatMach,
+  formatRange,
   headingDegrees,
   headingLabel,
   speedLabel,
@@ -38,5 +40,12 @@ describe('HUD formatting', () => {
   it('formats Mach and clocks', () => {
     expect(formatMach(0.853)).toBe('M 0.85');
     expect(formatClock(125.4)).toBe('2:05');
+  });
+  it('formats ranges and closure by unit system', () => {
+    expect(formatRange(2400, 'metric')).toBe('2.4 KM');
+    expect(formatRange(24000, 'metric')).toBe('24 KM');
+    expect(formatRange(1852 * 3.25, 'imperial')).toBe('3.3 NM');
+    expect(formatClosure(100, 'metric')).toBe('+360 KM/H');
+    expect(formatClosure(-50, 'imperial')).toBe('-97 KT');
   });
 });

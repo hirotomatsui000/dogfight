@@ -29,3 +29,18 @@ export function formatClock(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
+
+/** Nautical miles (imperial) or kilometers (metric). */
+export const rangeValue = (m: number, units: UnitSystem) => (units === 'imperial' ? m / 1852 : m / 1000);
+export const rangeLabel = (units: UnitSystem) => (units === 'imperial' ? 'NM' : 'KM');
+
+export function formatRange(m: number, units: UnitSystem): string {
+  const v = rangeValue(m, units);
+  return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${rangeLabel(units)}`;
+}
+
+/** Closing speed with a sign: + closing, − opening. */
+export function formatClosure(ms: number, units: UnitSystem): string {
+  const v = Math.round(speedValue(ms, units));
+  return `${v >= 0 ? '+' : ''}${v} ${speedLabel(units)}`;
+}
