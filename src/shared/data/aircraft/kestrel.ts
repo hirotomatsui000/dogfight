@@ -20,7 +20,7 @@ export const kestrel: AircraftConfig = {
     gMax: 9,
     gMin: -3,
     maxPitchRateDegS: 30,
-    maxRollRateDegS: 280,
+    maxRollRateDegS: 180,
     maxYawRateDegS: 20,
     thrustVectoring: 0,
   },

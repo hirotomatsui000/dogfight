@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { kestrel } from '../data/aircraft/kestrel.ts';
 import { DEG, RAD } from '../math/units.ts';
 import { neutralInput } from '../physics/controls.ts';
-import { createFlightState, stepFlight } from '../physics/flight-model.ts';
+import { createFlightState, type FlightState, stepFlight } from '../physics/flight-model.ts';
 import { steerToward } from './steering.ts';
 
 const northbound = () => createFlightState({ position: new Vector3(0, 3000, 0), headingRad: 0, speed: 200, throttle: 1 });
@@ -51,5 +51,44 @@ describe('steerToward (closed loop with the flight model)', () => {
   });
   it('reverses toward a target behind and below', () => {
     expect(converge(dirFrom(-170, -20), 15)).toBeLessThan(3);
+  });
+});
+
+describe('steerToward (how the turn feels)', () => {
+  /** Bank angle, + = right wing down. */
+  const bankOf = (s: FlightState) => {
+    const fwd = new Vector3(0, 0, -1).applyQuaternion(s.quat);
+    const up = new Vector3(0, 1, 0).applyQuaternion(s.quat);
+    const right = new Vector3().crossVectors(fwd, new Vector3(0, 1, 0)).normalize();
+    const levelUp = new Vector3().crossVectors(right, fwd);
+    return Math.atan2(up.dot(right), up.dot(levelUp)) * RAD;
+  };
+  const fly = (target: Vector3, seconds: number, onStep: (s: FlightState) => void) => {
+    const s = createFlightState({ position: new Vector3(0, 3000, 0), headingRad: 0, speed: 230, throttle: 0.9 });
+    const steer = { pitch: 0, roll: 0, yaw: 0 };
+    for (let i = 0; i < seconds * 60; i++) {
+      steerToward(s, target, {}, steer);
+      stepFlight(s, { ...neutralInput(0.9), ...steer }, kestrel.physics, 1 / 60);
+      onStep(s);
+    }
+    return s;
+  };
+
+  it('rolls into a hard turn without overshooting its bank', () => {
+    let peak = 0;
+    fly(dirFrom(90, 0), 3, (st) => (peak = Math.max(peak, bankOf(st))));
+    // Rolling the target into the lift plane needs 90 degrees; the old undamped autopilot swung to 109.
+    expect(peak).toBeLessThan(100);
+  });
+
+  it('still makes a small correction quickly', () => {
+    let reached = -1;
+    let t = 0;
+    fly(dirFrom(12, 0), 4, (st) => {
+      t += 1 / 60;
+      if (reached < 0 && new Vector3(0, 0, -1).applyQuaternion(st.quat).angleTo(dirFrom(12, 0)) * RAD < 3) reached = t;
+    });
+    expect(reached).toBeGreaterThan(0);
+    expect(reached).toBeLessThan(2.5);
   });
 });

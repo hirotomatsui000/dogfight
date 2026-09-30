@@ -22,6 +22,8 @@ const K_FINE_BANK = 8;
 const MAX_FINE_BANK = 45 * DEG;
 const NEAR_NOSE = 2 * DEG;
 const FAR_FROM_NOSE = 8 * DEG;
+/** Stick per rad/s of roll rate: damps the roll so the bank settles without overshooting. */
+const K_ROLL_DAMP = 0.45;
 
 const d = new Vector3();
 const worldUpBody = new Vector3();
@@ -51,7 +53,9 @@ export function steerToward(
   const lateral = Math.atan2(d.x, ahead);
   const fineBank = clamp(K_FINE_BANK * lateral, -MAX_FINE_BANK, MAX_FINE_BANK);
 
-  const roll = w * K_ROLL * rollError + (1 - w) * K_BANK_HOLD * (fineBank - bank);
+  // body roll rate, + = rolling right (angVel.z is roll left)
+  const rollRate = -s.angVel.z;
+  const roll = w * K_ROLL * rollError + (1 - w) * K_BANK_HOLD * (fineBank - bank) - K_ROLL_DAMP * rollRate;
   let pitch = K_PITCH * Math.atan2(d.y, ahead);
   if (w > 0.5) pitch = Math.max(pitch, -0.3);
 

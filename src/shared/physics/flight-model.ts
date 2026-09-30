@@ -52,9 +52,10 @@ const ALPHA_NEG_LIMIT = -10 * DEG;
 const K_ALPHA = 5;
 const K_BETA = 3;
 const BETA_MAX = 6 * DEG;
-const TAU_PITCH = 0.05;
+// Slow enough that the jet rolls and pitches smoothly rather than snapping (spec §9.2, revision 5).
+const TAU_PITCH = 0.15;
 const TAU_YAW = 0.08;
-const TAU_ROLL = 0.12;
+const TAU_ROLL = 0.35;
 const MIN_SPEED = 1;
 
 export function createFlightState(init: FlightStateInit): FlightState {

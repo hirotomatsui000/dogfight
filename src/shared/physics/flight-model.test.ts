@@ -102,10 +102,30 @@ describe.each(listAircraft().map((c) => [c.id, c] as const))('flight model: %s',
     expect(maxAlt - 1000).toBeLessThan(4600);
   });
 
-  it('rolls quickly', () => {
+  it('builds up its roll rate smoothly instead of snapping', () => {
     const s = level(200, 3000, 0.8);
-    fly(s, c, 0.5, { roll: 1 });
+    fly(s, c, 0.1, { roll: 1 });
+    expect(s.angVel.length()).toBeLessThan(0.4 * p.maxRollRateDegS * DEG);
+    fly(s, c, 0.7, { roll: 1 });
     expect(s.angVel.length()).toBeGreaterThan(0.8 * p.maxRollRateDegS * DEG);
+  });
+
+  it('takes 1.2 to 2 seconds to roll inverted with full stick', () => {
+    const s = level(250, 3000, 0.8);
+    const up = new Vector3();
+    let t = 0;
+    while (up.set(0, 1, 0).applyQuaternion(s.quat).y > Math.cos(170 * DEG) && t < 4) {
+      fly(s, c, DT, { roll: 1 });
+      t += DT;
+    }
+    expect(t).toBeGreaterThan(1.2);
+    expect(t).toBeLessThan(2);
+  });
+
+  it('starts a pull smoothly', () => {
+    const s = level(250, 3000, 0.8);
+    fly(s, c, 0.05, { pitch: 1 });
+    expect(s.angVel.x).toBeLessThan(0.4 * p.maxPitchRateDegS * DEG);
   });
 
   it('meets its top-speed target at 11 km', () => {
