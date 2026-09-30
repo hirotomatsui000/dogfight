@@ -508,7 +508,9 @@ on the runway, as the player chooses.
   1. **Ground avoidance:** if the flight path predicted 5 s ahead gets closer than 150 m to the surface, pull up.
   2. **Boundary:** turn back inside the area.
   3. **Defend:** a missile is guiding on the bot → release countermeasures once it is within 3 s of impact; beam it
-     and pull hard once it is within (2 s − reaction delay) of impact, so slower pilots break late and get hit more.
+     and pull as hard as the profile allows once it is within (2 s − reaction delay) of impact. The bot judges each
+     missile's time to impact with a per-missile error (spread in the table below), so weaker pilots mistime the
+     break and get hit more.
   4. **Engage:**
      - Choose a target. Fire MRM within 60% of the lock range, SRM within 0.5–7 km, at most one missile per target
        per 5 s.
@@ -523,6 +525,7 @@ on the runway, as the player chooses.
 | Aim noise | 3° | 1.5° | 0.5° |
 | Max pull used | 70% | 85% | 100% |
 | Countermeasure discipline | 0.4 | 0.8 | 1.0 |
+| Time-to-impact judgement spread | 45% | 20% | 7% |
 | Gun range | 500 m | 700 m | 900 m |
 | Fire threshold | 2.5° | 1.5° | 0.8° |
 
@@ -682,7 +685,8 @@ pane at each stage.
 - **AI:**
   - Steering converges on a direction (< 3° within 5 s); ground avoidance recovers from a low dive.
   - Fires only when aligned; defends against inbound missiles.
-  - Ace beats rookie in > 80% of seeded 1v1s.
+  - Ace beats rookie in > 80% of the seeded 1v1s that end in a kill, and ≥ 70% end in a kill within 3 minutes.
+    (Revision 5: with dodgeable missiles, some duels outlast the limit once both sides have spent their missiles.)
 - **Balance (M3):** the tournament per §9.4.
 - **Networking (M2):**
   - Codec round-trips and quantization bounds; garbage input raises a typed error.

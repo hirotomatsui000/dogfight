@@ -42,6 +42,12 @@ const MISSILES_PER_TARGET_INTERVAL_S = 5;
 const AIM_NOISE_HOLD_S = 0.5;
 const LEAD_PURSUIT_RANGE_M = 2500;
 const DEFEND_DIVE_ABOVE_M = 1500;
+/** Flares only help near the end, so save them until the missile is this close in time. */
+const FLARES_FROM_S = 3;
+/** A break this long before impact beats the missile's response lag (spec §10.2); slower pilots see it late. */
+const IDEAL_BREAK_S = 2;
+/** Even a badly misjudged missile still looks like it is coming. */
+const MIN_IMPACT_JUDGEMENT = 0.3;
 /** Break away from a target this close that is still closing fast, instead of flying into it. */
 const COLLISION_BREAK_RANGE_M = 350;
 const COLLISION_BREAK_CLOSURE_MS = 100;
@@ -63,8 +69,9 @@ export class BotPilot {
   private aimYaw = 0;
   private aimPitch = 0;
   private aimHoldUntilTick = 0;
-  private warnedSinceTick = -1;
   private nextFlareDecisionTick = 0;
+  /** per inbound missile: how far off this pilot's sense of its time to impact is (a factor) */
+  private readonly impactJudgement = new Map<number, number>();
   private readonly lastLaunchTick = new Map<number, number>();
   private readonly steer: SteerOutput = { pitch: 0, roll: 0, yaw: 0 };
   private readonly air: AirData = { density: 0, temperature: 0, speedOfSound: 0, sigma: 0 };
@@ -102,14 +109,13 @@ export class BotPilot {
       this.aimHoldUntilTick = world.tick + Math.round(AIM_NOISE_HOLD_S * world.tickRate);
     }
     const warning = incomingMissileWarning(self, world.missileList());
-    if (!warning) this.warnedSinceTick = -1;
-    else if (this.warnedSinceTick < 0) this.warnedSinceTick = world.tick;
-    const reacting = warning !== null && world.tick - this.warnedSinceTick >= reactionTicks;
-    out.countermeasures = reacting && this.decideFlares(world, self);
+    const impactS = warning ? warning.timeToImpactS * this.judgeImpact(warning.missileId) : Infinity;
+    if (!warning) this.impactJudgement.clear();
+    out.countermeasures = impactS <= FLARES_FROM_S && this.decideFlares(world, self);
 
     if (this.avoidGround(world, self.flight, out)) return out;
     if (this.returnToArea(world, self.flight, out)) return out;
-    if (reacting && warning && this.defend(world, self.flight, warning, out)) return out;
+    if (warning && impactS <= IDEAL_BREAK_S - this.profile.reactionS && this.defend(world, self.flight, warning, out)) return out;
     const target = this.perceiveTarget(world, self, reactionTicks);
     if (target) this.engage(world, self, target, out);
     else this.patrol(world, self, reactionTicks, out);
@@ -122,6 +128,16 @@ export class BotPilot {
     out.roll = this.steer.roll;
     out.yaw = this.steer.yaw;
     out.throttle = throttle;
+  }
+
+  /** Drawn once per missile: a pilot who misreads one missile's closure keeps misreading it. */
+  private judgeImpact(missileId: number): number {
+    let factor = this.impactJudgement.get(missileId);
+    if (factor === undefined) {
+      factor = Math.max(MIN_IMPACT_JUDGEMENT, 1 + this.rng.gaussian() * this.profile.impactJudgementError);
+      this.impactJudgement.set(missileId, factor);
+    }
+    return factor;
   }
 
   private decideFlares(world: BotWorld, self: AircraftEntity): boolean {
@@ -153,7 +169,7 @@ export class BotPilot {
     return true;
   }
 
-  /** Turns to put the missile on the beam and pulls hard; the flares are decided separately. */
+  /** Turns to put the missile on the beam and pulls as hard as this pilot dares; the flares are decided separately. */
   private defend(world: BotWorld, f: FlightState, warning: MissileWarning, out: ControlInput): boolean {
     let missile: Missile | null = null;
     for (const m of world.missileList()) if (m.id === warning.missileId) missile = m;
@@ -165,7 +181,7 @@ export class BotPilot {
     if (this.desired.dot(f.vel) < 0) this.desired.negate();
     if (f.pos.y - world.terrain.surfaceAt(f.pos.x, f.pos.z) > DEFEND_DIVE_ABOVE_M) this.desired.setY(-0.25).normalize();
     // Disciplined pilots come off afterburner, which makes flares twice as effective.
-    this.fly(f, this.desired, 1, this.profile.countermeasureDiscipline >= 0.8 ? 0.85 : 1, out);
+    this.fly(f, this.desired, this.profile.maxPull, this.profile.countermeasureDiscipline >= 0.8 ? 0.85 : 1, out);
     return true;
   }
 

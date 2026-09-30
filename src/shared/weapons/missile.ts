@@ -15,7 +15,9 @@ export interface Missile {
   prevPos: Vector3;
   vel: Vector3;
   ageS: number;
-  /** turning acceleration of the last step, m/s² */
+  /** turning acceleration, lagging the guidance command (spec §10.2), m/s² */
+  accel: Vector3;
+  /** magnitude of `accel` in the last step, m/s² */
   lateralAccel: number;
 }
 
@@ -44,6 +46,7 @@ export function launchMissile(id: number, launcher: MissileLauncher, targetId: n
     prevPos: f.pos.clone(),
     vel,
     ageS: 0,
+    accel: new Vector3(),
     lateralAccel: 0,
   };
 }
@@ -56,8 +59,8 @@ const vHat = new Vector3();
 
 /**
  * One step of guidance and flight. Guidance is pure proportional navigation (a = N·Ω×V) with gravity
- * compensation, perpendicular to the flight path and limited to maxAccelG. Motor thrust, air drag and turning
- * drag act along the flight path.
+ * compensation, perpendicular to the flight path and limited to maxAccelG. The turning acceleration follows that
+ * command with a first-order lag. Motor thrust, air drag and turning drag act along the flight path.
  */
 export function stepMissile(m: Missile, target: GuidanceTarget | null, density: number, dt: number): void {
   const s = m.spec;
@@ -75,6 +78,10 @@ export function stepMissile(m: Missile, target: GuidanceTarget | null, density: 
     const len = acc.length();
     if (len > max) acc.multiplyScalar(max / len);
   }
+  // Blending between commands within the limit never exceeds it; the flight path turns, so re-square it.
+  m.accel.lerp(acc, s.responseLagS > 0 ? 1 - Math.exp(-dt / s.responseLagS) : 1);
+  m.accel.addScaledVector(vHat, -m.accel.dot(vHat));
+  acc.copy(m.accel);
   m.lateralAccel = acc.length();
   const thrust = m.ageS < s.burnTimeS ? s.motorAccelMs2 : 0;
   const drag = s.dragCoef * density * speed * speed + s.maneuverDragFactor * m.lateralAccel;

@@ -71,6 +71,11 @@ export interface MissileSpec {
   lockKeepRangeFactor: number;
   navigationConstant: number;
   maxAccelG: number;
+  /**
+   * The turning acceleration follows the guidance command with this first-order lag, so a hard break timed shortly
+   * before impact makes the missile miss (spec §10.2).
+   */
+  responseLagS: number;
   motorAccelMs2: number;
   burnTimeS: number;
   maxFlightTimeS: number;
@@ -108,13 +113,14 @@ export const SRM_DART: MissileSpec = {
   lockRangeHeadOnM: 4000,
   afterburnerRangeFactor: 1.3,
   lockKeepRangeFactor: 1.2,
-  navigationConstant: 4,
-  maxAccelG: 40,
+  navigationConstant: 3,
+  maxAccelG: 20,
+  responseLagS: 0.5,
   motorAccelMs2: 150,
   burnTimeS: 5,
   maxFlightTimeS: 25,
   dragCoef: 1.2e-4,
-  maneuverDragFactor: 0.08,
+  maneuverDragFactor: 0.1,
   gimbalLimitDeg: 60,
   armTimeS: 0.3,
   fuzeRadiusM: 9,
