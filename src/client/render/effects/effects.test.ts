@@ -28,7 +28,7 @@ describe('Effects', () => {
     for (let i = 0; i < 20; i++) {
       session.update(1 / 60, { ...neutralInput(0.8), fireCannon: true, countermeasures: i === 0 });
       for (const e of session.drainEvents()) fx.onEvent(e, session);
-      fx.update(1 / 60, session, frame, false);
+      fx.update(1 / 60, session, frame);
     }
     const tracers = scene.children.find((o): o is LineSegments => o instanceof LineSegments);
     expect(tracers?.geometry.drawRange.count).toBeGreaterThan(0);

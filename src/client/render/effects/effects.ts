@@ -65,8 +65,7 @@ export class Effects {
     }
   }
 
-  /** `firstPerson`: the camera sits in the local cockpit, so its own muzzle flash would fill the screen. */
-  update(dt: number, session: GameSession, frame: ParticleFrame, firstPerson: boolean): void {
+  update(dt: number, session: GameSession, frame: ParticleFrame): void {
     if (dt > 0) {
       for (const m of session.missiles()) this.missileTrail(m);
       for (const id of this.trailFrom.keys()) if (!this.hasMissile(session, id)) this.trailFrom.delete(id);
@@ -77,7 +76,7 @@ export class Effects {
       for (const v of session.views()) {
         if (!v.alive) continue;
         if (emitDamage) this.damageSmoke(v);
-        if (v.firingCannon && !(firstPerson && v.isLocal)) this.muzzleFlash(v);
+        if (v.firingCannon) this.muzzleFlash(v);
       }
     }
     this.missileModels.update(session.missiles());

@@ -18,7 +18,7 @@ export class SceneSync {
     this.scene = scene;
   }
 
-  update(views: Iterable<AircraftView>, hideLocal: boolean, timeS: number): void {
+  update(views: Iterable<AircraftView>, timeS: number): void {
     const seen = new Set<number>();
     for (const v of views) {
       seen.add(v.id);
@@ -30,7 +30,7 @@ export class SceneSync {
         this.scene.add(entry.model.root);
       }
       const root = entry.model.root;
-      root.visible = v.alive && !(hideLocal && v.isLocal);
+      root.visible = v.alive;
       root.position.copy(v.position);
       root.quaternion.copy(v.quaternion);
 

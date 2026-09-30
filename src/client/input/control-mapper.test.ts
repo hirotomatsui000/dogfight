@@ -8,8 +8,8 @@ const snap = (over: Partial<InputSnapshot>): InputSnapshot => ({ ...emptySnapsho
 const hold = (...codes: string[]) => snap({ keys: new Set(codes) });
 /** Feeds `frames` frames of 1/60 s; mouse deltas, wheel and key edges only on the first frame. */
 const run = (m: ControlMapper, s: InputSnapshot, frames: number, flight = northbound()) => {
-  let out = m.map(s, flight, 1 / 60, false);
-  for (let i = 1; i < frames; i++) out = m.map({ ...s, mouseDX: 0, mouseDY: 0, wheel: 0, pressed: new Set() }, flight, 1 / 60, false);
+  let out = m.map(s, flight, 1 / 60);
+  for (let i = 1; i < frames; i++) out = m.map({ ...s, mouseDX: 0, mouseDY: 0, wheel: 0, pressed: new Set() }, flight, 1 / 60);
   return out;
 };
 
@@ -18,7 +18,7 @@ describe('ControlMapper', () => {
     const m = new ControlMapper();
     expect(run(m, hold('ShiftLeft'), 60).throttle).toBeCloseTo(1, 6);
     expect(run(m, hold('KeyZ'), 30).throttle).toBeCloseTo(0.7, 2);
-    expect(m.map(snap({ wheel: -100 }), northbound(), 1 / 60, false).throttle).toBeCloseTo(0.75, 2);
+    expect(m.map(snap({ wheel: -100 }), northbound(), 1 / 60).throttle).toBeCloseTo(0.75, 2);
   });
 
   it('ramps keyboard axes over 0.15 s (9 frames) in direct mode', () => {
@@ -33,7 +33,7 @@ describe('ControlMapper', () => {
     const m = new ControlMapper({ mouseSensitivity: 0.002 });
     const flight = northbound();
     m.resetAim(flight);
-    const out = m.map(snap({ mouseDX: 500 }), flight, 1 / 60, false);
+    const out = m.map(snap({ mouseDX: 500 }), flight, 1 / 60);
     expect(m.aimDirection.x).toBeGreaterThan(0.5);
     expect(out.roll).toBeGreaterThan(0.5);
   });
@@ -41,18 +41,18 @@ describe('ControlMapper', () => {
   it('pitches the aim up when the mouse moves up, and honours invertY', () => {
     const m = new ControlMapper({ mouseSensitivity: 0.002 });
     m.resetAim(northbound());
-    m.map(snap({ mouseDY: -100 }), northbound(), 1 / 60, false);
+    m.map(snap({ mouseDY: -100 }), northbound(), 1 / 60);
     expect(m.aimDirection.y).toBeGreaterThan(0.1);
     const inv = new ControlMapper({ mouseSensitivity: 0.002, invertY: true });
     inv.resetAim(northbound());
-    inv.map(snap({ mouseDY: -100 }), northbound(), 1 / 60, false);
+    inv.map(snap({ mouseDY: -100 }), northbound(), 1 / 60);
     expect(inv.aimDirection.y).toBeLessThan(-0.1);
   });
 
   it('lets the keyboard override the autopilot axis', () => {
     const m = new ControlMapper({ mouseSensitivity: 0.002 });
     m.resetAim(northbound());
-    m.map(snap({ mouseDY: -150 }), northbound(), 1 / 60, false);
+    m.map(snap({ mouseDY: -150 }), northbound(), 1 / 60);
     expect(run(m, hold('KeyW'), 18).pitch).toBe(-1);
   });
 
@@ -61,7 +61,7 @@ describe('ControlMapper', () => {
     const flight = northbound();
     m.resetAim(flight);
     const before = m.aimDirection.clone();
-    const out = m.map(snap({ keys: new Set(['KeyC']), mouseDX: 300 }), flight, 1 / 60, false);
+    const out = m.map(snap({ keys: new Set(['KeyC']), mouseDX: 300 }), flight, 1 / 60);
     expect(out.helmetSight).toBe(true);
     expect(out.lookYaw).toBeGreaterThan(0.5);
     expect(m.aimDirection.distanceTo(before)).toBeLessThan(1e-9);
@@ -69,19 +69,12 @@ describe('ControlMapper', () => {
     expect(Math.abs(m.lookYaw)).toBeLessThan(0.01);
   });
 
-  it('gives a neutral stick but keeps the throttle while the free camera is active', () => {
-    const m = new ControlMapper({ mode: 'direct' });
-    const out = m.map(hold('KeyS', 'ShiftLeft'), northbound(), 0.5, true);
-    expect(out.pitch).toBe(0);
-    expect(out.throttle).toBeGreaterThan(0.8);
-  });
-
   it('reports weapon edges and holds', () => {
     const m = new ControlMapper();
-    const out = m.map(snap({ keys: new Set(['Space', 'KeyB', 'KeyF']), pressed: new Set(['KeyF', 'KeyR', 'KeyX', 'Digit2']) }), northbound(), 1 / 60, false);
+    const out = m.map(snap({ keys: new Set(['Space', 'KeyB', 'KeyF']), pressed: new Set(['KeyF', 'KeyR', 'KeyX', 'Digit2']) }), northbound(), 1 / 60);
     expect(out.fireCannon && out.airbrake && out.fireMissile && out.cycleTarget && out.countermeasures).toBe(true);
     expect(out.weapon).toBe('mrm');
-    const next = m.map(snap({ keys: new Set(['KeyF']) }), northbound(), 1 / 60, false);
+    const next = m.map(snap({ keys: new Set(['KeyF']) }), northbound(), 1 / 60);
     expect(next.cycleTarget || next.countermeasures || next.fireMissile).toBe(false);
     expect(next.weapon).toBe('mrm');
   });

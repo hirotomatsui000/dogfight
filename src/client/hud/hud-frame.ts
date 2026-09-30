@@ -1,6 +1,5 @@
 import type { PerspectiveCamera, Vector3 } from 'three';
 import type { ModeStatus } from '../../shared/modes/mode.ts';
-import type { CameraMode } from '../camera/camera-rig.ts';
 import type { AircraftView, MissileView } from '../session/game-session.ts';
 import type { KillFeedLine } from './kill-feed.ts';
 
@@ -15,7 +14,6 @@ export interface HudFrame {
   /** gun aim point for the designated target, when it is within gun range */
   leadDirection: Vector3 | null;
   camera: PerspectiveCamera;
-  cameraMode: CameraMode;
   aimDirection: Vector3 | null;
   status: ModeStatus;
   radarAltitudeM: number;

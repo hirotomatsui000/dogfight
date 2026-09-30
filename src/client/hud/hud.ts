@@ -23,9 +23,6 @@ export type { HudFrame } from './hud-frame.ts';
 const RADAR_ALT_SHOW_M = 1500;
 const SCOPE_RADIUS_PX = 80;
 
-const dirFrom = (heading: number, elevation: number, out: Vector3) =>
-  out.set(Math.sin(heading) * Math.cos(elevation), Math.sin(elevation), -Math.cos(heading) * Math.cos(elevation));
-
 /** Canvas 2-D fighter HUD overlay. */
 export class Hud {
   readonly canvas: HTMLCanvasElement;
@@ -78,7 +75,6 @@ export class Hud {
     ctx.shadowColor = SHADOW;
     ctx.shadowBlur = 3;
     if (f.view.alive) {
-      if (f.cameraMode === 'hud') this.drawPitchLadder(f);
       this.drawBoresight(f);
       this.drawFlightPathMarker(f);
       this.drawAimReticle(f);
@@ -110,39 +106,6 @@ export class Hud {
     this.canvas.style.width = `${this.width}px`;
     this.canvas.style.height = `${this.height}px`;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-
-  private drawPitchLadder(f: HudFrame): void {
-    const ctx = this.ctx;
-    const nose = this.dir.set(0, 0, -1).applyQuaternion(f.view.quaternion);
-    const heading = Math.atan2(nose.x, -nose.z);
-    const pitchNow = Math.asin(clamp(nose.y, -1, 1)) * RAD;
-    const a: ScreenPoint = { x: 0, y: 0 };
-    const b: ScreenPoint = { x: 0, y: 0 };
-    const tmp = new Vector3();
-    for (let p = -85; p <= 85; p += 5) {
-      if (Math.abs(p - pitchNow) > 28) continue;
-      const half = (p === 0 ? 10 : 4.5) * DEG;
-      if (!this.projector.direction(f.camera, dirFrom(heading - half, p * DEG, tmp), a)) continue;
-      if (!this.projector.direction(f.camera, dirFrom(heading + half, p * DEG, tmp), b)) continue;
-      const gap = p === 0 ? 0.12 : 0.32;
-      const mx = (a.x + b.x) / 2;
-      const my = (a.y + b.y) / 2;
-      ctx.setLineDash(p < 0 ? [7, 5] : []);
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(a.x + (mx - a.x) * (1 - gap), a.y + (my - a.y) * (1 - gap));
-      ctx.moveTo(b.x, b.y);
-      ctx.lineTo(b.x + (mx - b.x) * (1 - gap), b.y + (my - b.y) * (1 - gap));
-      ctx.stroke();
-      if (p !== 0) {
-        ctx.font = FONT_SMALL;
-        ctx.fillText(String(Math.abs(p)), b.x + 6, b.y + 4);
-        ctx.fillText(String(Math.abs(p)), a.x - 22, a.y + 4);
-      }
-    }
-    ctx.setLineDash([]);
-    ctx.font = FONT;
   }
 
   private drawBoresight(f: HudFrame): void {

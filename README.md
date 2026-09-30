@@ -42,8 +42,7 @@ Other devices on the same network can open the "Network" URL that Vite prints.
 | Missile (needs the lock tone) | F |
 | Flares | X |
 | Next target | R |
-| Look around | C or right mouse (hold) |
-| Camera: HUD → chase → free | V |
+| Look around (swings the camera round your jet) | C or right mouse (hold) |
 | Scoreboard | Tab (hold) |
 | Pause / settings | P or Esc |
 
@@ -53,7 +52,7 @@ In a fight:
 - Inside 2 km a gun aim circle appears. Put the nose on it and fire.
 - When the HUD shows MISSILE, turn hard and press X for flares. Flares work better off afterburner.
 
-The free camera is for testing: W/A/S/D move, Q/E go down/up, Shift is fast, and the mouse looks around.
+The camera always follows from behind and above your jet (third person).
 
 ## Test and build
 

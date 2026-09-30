@@ -13,7 +13,7 @@ import { leadDirection } from '../shared/weapons/lead.ts';
 import type { DeathCause, GameEvent } from '../shared/world/events.ts';
 import { AudioEngine } from './audio/audio-engine.ts';
 import { explosionGain, seekerTone } from './audio/sound-mix.ts';
-import { CameraRig, type CameraTarget, type FreeCamInput, NO_FREE_INPUT, pilotEyeOffset } from './camera/camera-rig.ts';
+import { CameraRig, type CameraTarget } from './camera/camera-rig.ts';
 import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
 import { ControlMapper, type ControlMode } from './input/control-mapper.ts';
@@ -33,17 +33,15 @@ import type { StartOptions } from './ui/menu.ts';
 import { PauseMenu } from './ui/pause.ts';
 import { loadSetting, saveSetting } from './ui/storage.ts';
 
-const FREE_CAM_KEY_TURN_RAD_S = 1.2;
 /** The gun lead marker shows for a designated target inside this range. */
 const LEAD_MARKER_RANGE_M = 2000;
 const HIT_MARKER_S = 0.25;
 const BANNER_S = 1.5;
 const EXPLOSION_SHAKE_RANGE_M = 1500;
 
-const HINTS: Record<ControlMode | 'free', string> = {
-  'mouse-aim': 'MOUSE aim · SPACE gun · F missile · X flares · R target · SHIFT/Z throttle · C look · V camera · TAB scores · P pause',
-  direct: 'W/S pitch · A/D roll · Q/E rudder · SPACE gun · F missile · X flares · R target · SHIFT/Z throttle · V camera · P pause',
-  free: 'FREE CAMERA · W/A/S/D move · Q/E down/up · SHIFT fast · mouse or arrow keys look · V next camera',
+const HINTS: Record<ControlMode, string> = {
+  'mouse-aim': 'MOUSE aim · SPACE gun · F missile · X flares · R target · SHIFT/Z throttle · C look · TAB scores · P pause',
+  direct: 'W/S pitch · A/D roll · Q/E rudder · SPACE gun · F missile · X flares · R target · SHIFT/Z throttle · C look · P pause',
 };
 
 export interface GameHandlers {
@@ -145,11 +143,9 @@ export async function startGame(root: HTMLElement, options: StartOptions, handle
     gLoad: 1,
     mach: 0,
     throttle: 0,
-    eyeOffset: new Vector3(),
     lookYaw: 0,
     lookPitch: 0,
   };
-  const free: FreeCamInput = { ...NO_FREE_INPUT };
 
   const pause = new PauseMenu(root, {
     onResume: () => {
@@ -278,15 +274,15 @@ export async function startGame(root: HTMLElement, options: StartOptions, handle
 
     const active = !paused && !matchOver;
     if (active) {
-      if (snap.pressed.has('KeyV')) cameraRig.cycle();
       const me = session.localView();
       if (me && me.spawnGen !== spawnGen) {
         spawnGen = me.spawnGen;
         mapper.resetAim(me.flight);
+        cameraRig.reset();
         hud.resetMaxG();
         deathMessage = null;
       }
-      const controls = mapper.map(snap, me && me.alive ? me.flight : null, dt, cameraRig.mode === 'free');
+      const controls = mapper.map(snap, me && me.alive ? me.flight : null, dt);
       session.update(dt, controls);
       for (const e of session.drainEvents()) handleEvent(e, nowS);
       killFeed.update(dt);
@@ -301,7 +297,6 @@ export async function startGame(root: HTMLElement, options: StartOptions, handle
         target.gLoad = local.flight.gLoad;
         target.mach = local.flight.mach;
         target.throttle = local.flight.throttle;
-        pilotEyeOffset(local.config.visual, target.eyeOffset);
       } else {
         target.gLoad = 1;
         target.mach = 0;
@@ -310,26 +305,12 @@ export async function startGame(root: HTMLElement, options: StartOptions, handle
       target.lookYaw = mapper.lookYaw;
       target.lookPitch = mapper.lookPitch;
     }
-    if (cameraRig.mode === 'free' && active) {
-      const k = snap.keys;
-      free.forward = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
-      free.right = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
-      free.up = (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0);
-      free.fast = k.has('ShiftLeft') || k.has('ShiftRight');
-      // Arrow keys turn the free camera too, for trackpads and when the browser refuses mouse capture.
-      const arrowYaw = (k.has('ArrowRight') ? 1 : 0) - (k.has('ArrowLeft') ? 1 : 0);
-      const arrowPitch = (k.has('ArrowUp') ? 1 : 0) - (k.has('ArrowDown') ? 1 : 0);
-      free.yawDelta = snap.mouseDX * mapper.settings.mouseSensitivity + arrowYaw * FREE_CAM_KEY_TURN_RAD_S * dt;
-      free.pitchDelta = -snap.mouseDY * mapper.settings.mouseSensitivity + arrowPitch * FREE_CAM_KEY_TURN_RAD_S * dt;
-    } else {
-      Object.assign(free, NO_FREE_INPUT);
-    }
     const aim = mapper.settings.mode === 'mouse-aim' ? mapper.aimDirection : null;
-    cameraRig.update(active ? dt : 0, local ? target : null, aim, free);
-    sceneSync.update(session.views(), cameraRig.mode === 'hud', nowS);
+    cameraRig.update(active ? dt : 0, local ? target : null, aim);
+    sceneSync.update(session.views(), nowS);
     renderer.webgl.getDrawingBufferSize(bufferSize);
     particleFrame.pixelScale = bufferSize.y / (2 * Math.tan((renderer.camera.fov * DEG) / 2));
-    effects.update(active ? dt : 0, session, particleFrame, cameraRig.mode === 'hud');
+    effects.update(active ? dt : 0, session, particleFrame);
     sea.update(nowS);
     renderer.render();
 
@@ -351,14 +332,13 @@ export async function startGame(root: HTMLElement, options: StartOptions, handle
         target: targetView,
         leadDirection: leadDir,
         camera: renderer.camera,
-        cameraMode: cameraRig.mode,
-        aimDirection: cameraRig.mode === 'free' ? null : aim,
+        aimDirection: aim,
         status: session.modeStatus(),
         radarAltitudeM: f.pos.y - terrain.surfaceAt(f.pos.x, f.pos.z),
         pullUp: local.alive && timeToImpact(f, terrain) !== null,
         message,
         banner: nowS < bannerUntil ? banner : null,
-        hint: HINTS[cameraRig.mode === 'free' ? 'free' : mapper.settings.mode],
+        hint: HINTS[mapper.settings.mode],
         killFeed: killFeed.lines,
         hitMarker: nowS < hitMarkerUntil,
         showScoreboard: snap.keys.has('Tab') && !paused,

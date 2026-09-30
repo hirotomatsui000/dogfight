@@ -76,7 +76,7 @@ export class ControlMapper {
     this.throttle = flight.throttle;
   }
 
-  map(snap: InputSnapshot, flight: FlightState | null, dt: number, cameraFree: boolean): ControlInput {
+  map(snap: InputSnapshot, flight: FlightState | null, dt: number): ControlInput {
     const keys = snap.keys;
     const out = this.out;
 
@@ -91,7 +91,7 @@ export class ControlMapper {
     this.yawAxis = moveToward(this.yawAxis, axisTarget(keys, ['KeyE'], ['KeyQ']), step);
 
     // Head / free look.
-    this.freeLook = !cameraFree && (keys.has('KeyC') || snap.rightButton);
+    this.freeLook = keys.has('KeyC') || snap.rightButton;
     const ySign = this.settings.invertY ? -1 : 1;
     const sens = this.settings.mouseSensitivity;
     if (this.freeLook) {
@@ -100,7 +100,7 @@ export class ControlMapper {
     } else {
       this.lookYaw = approach(this.lookYaw, 0, dt, LOOK_RETURN_TAU);
       this.lookPitch = approach(this.lookPitch, 0, dt, LOOK_RETURN_TAU);
-      if (!cameraFree && this.settings.mode === 'mouse-aim') {
+      if (this.settings.mode === 'mouse-aim') {
         this.aimHeading += snap.mouseDX * sens;
         this.aimPitch = clamp(this.aimPitch - snap.mouseDY * sens * ySign, -AIM_PITCH_LIMIT, AIM_PITCH_LIMIT);
         this.updateAimDirection();
@@ -108,11 +108,7 @@ export class ControlMapper {
     }
 
     // Stick.
-    if (cameraFree) {
-      out.pitch = 0;
-      out.roll = 0;
-      out.yaw = 0;
-    } else if (this.settings.mode === 'mouse-aim' && flight) {
+    if (this.settings.mode === 'mouse-aim' && flight) {
       steerToward(flight, this.aimDirection, {}, this.steer);
       out.pitch = Math.abs(this.pitchAxis) > OVERRIDE_THRESHOLD ? this.pitchAxis : this.steer.pitch;
       out.roll = Math.abs(this.rollAxis) > OVERRIDE_THRESHOLD ? this.rollAxis : this.steer.roll;
@@ -128,8 +124,8 @@ export class ControlMapper {
     if (snap.pressed.has('Digit2')) this.weapon = 'mrm';
     out.throttle = this.throttle;
     out.airbrake = keys.has('KeyB');
-    out.fireCannon = !cameraFree && (keys.has('Space') || snap.leftButton);
-    out.fireMissile = !cameraFree && snap.pressed.has('KeyF');
+    out.fireCannon = keys.has('Space') || snap.leftButton;
+    out.fireMissile = snap.pressed.has('KeyF');
     out.countermeasures = snap.pressed.has('KeyX');
     out.cycleTarget = snap.pressed.has('KeyR');
     out.weapon = this.weapon;
