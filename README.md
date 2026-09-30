@@ -4,11 +4,13 @@ A browser-based flight-combat prototype. Two teams, **USA** and **Russia**, fly 
 real aircraft over a fictional landscape inspired by Poland. This repository is being built in milestones (see
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
-**Current milestone: M1a "Fly"**
-- One aircraft: the Kestrel light fighter.
-- Sim-lite flight physics.
-- A 60 × 60 km procedural test range.
-- HUD, chase and free cameras; Free Flight mode.
+**Current milestone: M1b "Fight"**
+- Two aircraft: the Kestrel (USA) and the Kobchik (Russia).
+- Dogfight an AI pilot (Rookie, Veteran or Ace) in Team Deathmatch: first to 15 kills, or the most after 10 minutes.
+- Weapons: a cannon with a lead marker, heat-seeking missiles that need a lock, and flares.
+- Damage, kill credit and respawns; tracers, missile trails, flares, explosions and smoke; synthesized sound.
+- A combat HUD with target box, missile lock, missile warning, radar display, kill feed and scoreboard.
+- Sim-lite flight physics over a 60 × 60 km test range with photo scenery; Free Flight is still available.
 - Everything runs locally in the browser.
 
 ## Requirements
@@ -23,7 +25,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173, choose an aircraft and press **Take off**.
+Open http://localhost:5173, choose a mission, an opponent and an aircraft, and press **Take off**.
 Click the view to capture the mouse, then fly with the mouse.
 
 Other devices on the same network can open the "Network" URL that Vite prints.
@@ -36,9 +38,20 @@ Other devices on the same network can open the "Network" URL that Vite prints.
 | Pitch / roll / rudder | W/S (W = nose down) · A/D · Q/E |
 | Throttle (top 10% = afterburner) | Shift up · Z down · mouse wheel |
 | Airbrake | B (hold) |
+| Cannon | Space or left mouse (hold) |
+| Missile (needs the lock tone) | F |
+| Flares | X |
+| Next target | R |
 | Look around | C or right mouse (hold) |
 | Camera: HUD → chase → free | V |
+| Scoreboard | Tab (hold) |
 | Pause / settings | P or Esc |
+
+In a fight:
+- The nearest enemy ahead is targeted automatically; R picks the next one.
+- The missile seeker growls while it tracks and gives a steady tone when locked. Then press F.
+- Inside 2 km a gun aim circle appears. Put the nose on it and fire.
+- When the HUD shows MISSILE, turn hard and press X for flares. Flares work better off afterburner.
 
 The free camera is for testing: W/A/S/D move, Q/E go down/up, Shift is fast, and the mouse looks around.
 
