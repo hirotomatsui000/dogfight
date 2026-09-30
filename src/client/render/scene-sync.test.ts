@@ -1,16 +1,12 @@
-import { Quaternion, Scene, Vector3 } from 'three';
+import { Scene } from 'three';
 import { describe, expect, it } from 'vitest';
-import { kestrel } from '../../shared/data/aircraft/kestrel.ts';
-import { createFlightState } from '../../shared/physics/flight-model.ts';
-import type { AircraftView } from '../session/game-session.ts';
+import { testView } from '../testing/views.ts';
 import { SceneSync } from './scene-sync.ts';
 
-const view = (id: number, alive = true, isLocal = false, throttle = 0.5): AircraftView => {
-  const flight = createFlightState({ position: new Vector3(id * 100, 1000, 0), headingRad: 0, speed: 200, throttle });
-  return {
-    id, callsign: `P${id}`, team: 'usa', config: kestrel, isLocal, isBot: false, alive, hp: 80, spawnGen: 1,
-    position: flight.pos.clone(), quaternion: new Quaternion(), flight, boundarySecondsLeft: null,
-  };
+const view = (id: number, alive = true, isLocal = false, throttle = 0.5) => {
+  const v = testView(id, { alive, isLocal });
+  v.flight.throttle = throttle;
+  return v;
 };
 
 describe('SceneSync', () => {

@@ -78,11 +78,11 @@ describe('ControlMapper', () => {
 
   it('reports weapon edges and holds', () => {
     const m = new ControlMapper();
-    const out = m.map(snap({ keys: new Set(['Space', 'KeyB', 'KeyF']), pressed: new Set(['KeyR', 'KeyX', 'Digit2']) }), northbound(), 1 / 60, false);
+    const out = m.map(snap({ keys: new Set(['Space', 'KeyB', 'KeyF']), pressed: new Set(['KeyF', 'KeyR', 'KeyX', 'Digit2']) }), northbound(), 1 / 60, false);
     expect(out.fireCannon && out.airbrake && out.fireMissile && out.cycleTarget && out.countermeasures).toBe(true);
     expect(out.weapon).toBe('mrm');
-    const next = m.map(emptySnapshot(), northbound(), 1 / 60, false);
-    expect(next.cycleTarget || next.countermeasures).toBe(false);
+    const next = m.map(snap({ keys: new Set(['KeyF']) }), northbound(), 1 / 60, false);
+    expect(next.cycleTarget || next.countermeasures || next.fireMissile).toBe(false);
     expect(next.weapon).toBe('mrm');
   });
 });

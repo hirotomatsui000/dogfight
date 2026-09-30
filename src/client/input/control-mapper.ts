@@ -129,7 +129,7 @@ export class ControlMapper {
     out.throttle = this.throttle;
     out.airbrake = keys.has('KeyB');
     out.fireCannon = !cameraFree && (keys.has('Space') || snap.leftButton);
-    out.fireMissile = !cameraFree && keys.has('KeyF');
+    out.fireMissile = !cameraFree && snap.pressed.has('KeyF');
     out.countermeasures = snap.pressed.has('KeyX');
     out.cycleTarget = snap.pressed.has('KeyR');
     out.weapon = this.weapon;

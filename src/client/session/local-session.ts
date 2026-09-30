@@ -1,13 +1,22 @@
 import { Quaternion, Vector3 } from 'three';
-import { getAircraft } from '../../shared/data/aircraft/registry.ts';
+import type { DifficultyProfile } from '../../shared/ai/difficulty.ts';
+import { getAircraft, listAircraft, opposingTeam } from '../../shared/data/aircraft/registry.ts';
+import type { TeamId } from '../../shared/data/aircraft/types.ts';
 import { buildTerrain, type MapDefinition } from '../../shared/data/maps/map-definition.ts';
 import type { Terrain } from '../../shared/map/terrain.ts';
 import type { GameMode, ModeStatus } from '../../shared/modes/mode.ts';
-import type { ControlInput } from '../../shared/physics/controls.ts';
+import { type ControlInput, neutralInput } from '../../shared/physics/controls.ts';
+import { incomingMissileWarning } from '../../shared/targeting/warnings.ts';
+import { projectileVelocity } from '../../shared/weapons/cannon.ts';
 import type { GameEvent } from '../../shared/world/events.ts';
 import { DT, World } from '../../shared/world/world.ts';
 import { FixedStepper } from './fixed-stepper.ts';
-import type { AircraftView, GameSession } from './game-session.ts';
+import type { AircraftView, GameSession, MissileView, ProjectileView } from './game-session.ts';
+
+export interface OpponentOptions {
+  count: number;
+  profile: DifficultyProfile;
+}
 
 export interface LocalSessionOptions {
   map: MapDefinition;
@@ -17,7 +26,15 @@ export interface LocalSessionOptions {
   seed?: number;
   /** reuse an already built terrain (tests, restarts) */
   terrain?: Terrain;
+  /** AI bots on the other team */
+  opponents?: OpponentOptions;
 }
+
+/** Fictional bot callsigns per team. */
+export const BOT_CALLSIGNS: Readonly<Record<TeamId, readonly string[]>> = {
+  usa: ['Ranger', 'Saber', 'Comet', 'Atlas'],
+  russia: ['Grom', 'Burya', 'Sokol', 'Vityaz'],
+};
 
 interface PreviousPose {
   pos: Vector3;
@@ -33,8 +50,14 @@ export class LocalSession implements GameSession {
   readonly localId: number;
   private readonly stepper = new FixedStepper(DT);
   private readonly inputs = new Map<number, ControlInput>();
+  private readonly stepInput = neutralInput();
+  /** button presses wait here until a simulation step consumes them (frames can run 0 or several steps) */
+  private readonly latched = { cycleTarget: false, countermeasures: false, fireMissile: false };
   private readonly previous = new Map<number, PreviousPose>();
   private readonly viewCache = new Map<number, AircraftView>();
+  private readonly missileViews = new Map<number, MissileView>();
+  private readonly projectilePool: ProjectileView[] = [];
+  private readonly projectileViews: ProjectileView[] = [];
   private pendingEvents: GameEvent[] = [];
 
   constructor(opts: LocalSessionOptions) {
@@ -43,12 +66,29 @@ export class LocalSession implements GameSession {
     this.world = new World({ map: opts.map, terrain: this.terrain, mode: opts.mode, seed: opts.seed ?? 1 });
     const config = getAircraft(opts.aircraftId);
     this.localId = this.world.addAircraft({ callsign: opts.callsign, team: config.team, aircraftId: config.id }).id;
+    if (opts.opponents) {
+      const team = opposingTeam(config.team);
+      const [enemyAircraft] = listAircraft(team);
+      if (!enemyAircraft) throw new Error(`No aircraft is registered for team ${team}`);
+      const names = BOT_CALLSIGNS[team];
+      for (let i = 0; i < opts.opponents.count; i++) {
+        this.world.addAircraft({ callsign: `[BOT] ${names[i % names.length]}`, team, aircraftId: enemyAircraft.id, bot: opts.opponents.profile });
+      }
+    }
     this.pendingEvents.push(...this.world.drainEvents());
   }
 
   update(frameDtS: number, input: ControlInput): void {
-    this.inputs.set(this.localId, input);
+    const l = this.latched;
+    l.cycleTarget ||= input.cycleTarget;
+    l.countermeasures ||= input.countermeasures;
+    l.fireMissile ||= input.fireMissile;
     this.stepper.advance(frameDtS, () => {
+      Object.assign(this.stepInput, input, l);
+      l.cycleTarget = false;
+      l.countermeasures = false;
+      l.fireMissile = false;
+      this.inputs.set(this.localId, this.stepInput);
       this.capturePrevious();
       this.world.step(this.inputs);
       this.pendingEvents.push(...this.world.drainEvents());
@@ -64,6 +104,18 @@ export class LocalSession implements GameSession {
     return this.viewCache.get(this.localId) ?? null;
   }
 
+  view(id: number): AircraftView | null {
+    return this.viewCache.get(id) ?? null;
+  }
+
+  missiles(): Iterable<MissileView> {
+    return this.missileViews.values();
+  }
+
+  projectiles(): Iterable<ProjectileView> {
+    return this.projectileViews;
+  }
+
   drainEvents(): GameEvent[] {
     const drained = this.pendingEvents;
     this.pendingEvents = [];
@@ -77,6 +129,8 @@ export class LocalSession implements GameSession {
   dispose(): void {
     this.viewCache.clear();
     this.previous.clear();
+    this.missileViews.clear();
+    this.projectileViews.length = 0;
   }
 
   private capturePrevious(): void {
@@ -113,6 +167,14 @@ export class LocalSession implements GameSession {
           quaternion: a.flight.quat.clone(),
           flight: a.flight,
           boundarySecondsLeft: null,
+          kills: 0,
+          deaths: 0,
+          firingCannon: false,
+          stores: a.stores,
+          targetId: null,
+          contacts: a.contacts,
+          seeker: a.seeker,
+          incoming: null,
         };
         this.viewCache.set(a.id, view);
       }
@@ -129,7 +191,42 @@ export class LocalSession implements GameSession {
       view.spawnGen = a.spawnGen;
       view.flight = a.flight;
       view.boundarySecondsLeft = this.world.boundarySecondsLeft(a);
+      view.kills = a.kills;
+      view.deaths = a.deaths;
+      view.firingCannon = a.firingCannon;
+      view.targetId = a.targetId;
+      view.incoming = a.alive ? incomingMissileWarning(a, this.world.missileList()) : null;
     }
     for (const id of this.viewCache.keys()) if (!seen.has(id)) this.viewCache.delete(id);
+
+    const liveMissiles = new Set<number>();
+    for (const m of this.world.missileList()) {
+      liveMissiles.add(m.id);
+      let v = this.missileViews.get(m.id);
+      if (!v) {
+        v = { id: m.id, team: m.team, ownerId: m.ownerId, targetId: m.targetId, position: new Vector3(), velocity: new Vector3(), motorBurning: true };
+        this.missileViews.set(m.id, v);
+      }
+      v.targetId = m.targetId;
+      v.position.lerpVectors(m.prevPos, m.pos, alpha);
+      v.velocity.copy(m.vel);
+      v.motorBurning = m.ageS < m.spec.burnTimeS;
+    }
+    for (const id of this.missileViews.keys()) if (!liveMissiles.has(id)) this.missileViews.delete(id);
+
+    this.projectileViews.length = 0;
+    let i = 0;
+    for (const p of this.world.projectileList()) {
+      let v = this.projectilePool[i];
+      if (!v) {
+        v = { team: p.team, position: new Vector3(), velocity: new Vector3() };
+        this.projectilePool.push(v);
+      }
+      v.team = p.team;
+      v.position.lerpVectors(p.prevPos, p.pos, alpha);
+      projectileVelocity(p, v.velocity);
+      this.projectileViews.push(v);
+      i++;
+    }
   }
 }

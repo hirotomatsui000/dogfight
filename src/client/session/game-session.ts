@@ -5,6 +5,10 @@ import type { Terrain } from '../../shared/map/terrain.ts';
 import type { ModeStatus } from '../../shared/modes/mode.ts';
 import type { ControlInput } from '../../shared/physics/controls.ts';
 import type { FlightState } from '../../shared/physics/flight-model.ts';
+import type { SeekerState } from '../../shared/targeting/ir-seeker.ts';
+import type { Contact } from '../../shared/targeting/sensors.ts';
+import type { MissileWarning } from '../../shared/targeting/warnings.ts';
+import type { StoresState } from '../../shared/world/entities.ts';
 import type { GameEvent } from '../../shared/world/events.ts';
 
 /** What the renderer and HUD may know about an aircraft. Local and network sessions both provide it. */
@@ -25,6 +29,34 @@ export interface AircraftView {
   /** latest simulated state, for HUD readouts */
   flight: FlightState;
   boundarySecondsLeft: number | null;
+  kills: number;
+  deaths: number;
+  firingCannon: boolean;
+  stores: Readonly<StoresState>;
+  /** designated target */
+  targetId: number | null;
+  contacts: readonly Contact[];
+  seeker: Readonly<SeekerState>;
+  /** nearest missile guiding on this aircraft inside warning range */
+  incoming: MissileWarning | null;
+}
+
+export interface MissileView {
+  readonly id: number;
+  readonly team: TeamId;
+  readonly ownerId: number;
+  targetId: number | null;
+  /** interpolated for smooth rendering */
+  readonly position: Vector3;
+  readonly velocity: Vector3;
+  motorBurning: boolean;
+}
+
+export interface ProjectileView {
+  team: TeamId;
+  /** interpolated for smooth rendering */
+  readonly position: Vector3;
+  readonly velocity: Vector3;
 }
 
 export interface GameSession {
@@ -34,6 +66,9 @@ export interface GameSession {
   update(frameDtS: number, input: ControlInput): void;
   views(): Iterable<AircraftView>;
   localView(): AircraftView | null;
+  view(id: number): AircraftView | null;
+  missiles(): Iterable<MissileView>;
+  projectiles(): Iterable<ProjectileView>;
   drainEvents(): GameEvent[];
   modeStatus(): ModeStatus;
   dispose(): void;
