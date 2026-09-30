@@ -1,11 +1,16 @@
 import { kestrel } from './kestrel.ts';
+import { kobchik } from './kobchik.ts';
 import type { AircraftConfig, TeamId } from './types.ts';
 import { assertValidAircraftConfig } from './validate.ts';
 
 /** Add new aircraft here — no other code changes are needed. */
-const ALL: readonly AircraftConfig[] = [kestrel];
+const ALL: readonly AircraftConfig[] = [kestrel, kobchik];
 
 export const TEAM_NAMES: Record<TeamId, string> = { usa: 'USA', russia: 'Russia' };
+
+export function opposingTeam(team: TeamId): TeamId {
+  return team === 'usa' ? 'russia' : 'usa';
+}
 
 const byId = new Map<string, AircraftConfig>();
 for (const config of ALL) {
