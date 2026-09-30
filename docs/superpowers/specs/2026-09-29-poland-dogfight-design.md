@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 4)
+# Contested Skies — Design Spec (revision 5)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -7,6 +7,8 @@
     bindings (§15.3), and the photo scenery from `2026-09-29-realistic-graphics-design.md`.
   - Revision 4 applies the owner's feedback after playing M1b: the game is always third-person (§15.1), and the start
     menu becomes a minimal title screen over a live 3D background (§15.5).
+  - Revision 5 (2026-09-30) applies the owner's second round of feedback: smoother handling (§9.2), enemies and missiles
+    that stay visible (§15.2, §15.4), and missiles that a well-timed hard break can beat (§10.2).
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -46,6 +48,9 @@ A browser-based, online multiplayer flight-combat simulator prototype.
 | Roadmap additions | Public-website features (§24) and milestone M1c "Website basics"; gamepad and flight-stick support move from M5 to M1c | Roadmap review, 2026-09-29 |
 | Camera | Third-person chase camera only; the first-person HUD view, the cockpit view and the free camera are dropped | Owner feedback on M1b, 2026-09-29 |
 | Start screen | A minimal title screen over a live 3D showcase of the selected jet. The scenery photos preload there and the game reuses them | Owner feedback on M1b, 2026-09-29 |
+| Handling | Slower, smoother rotation: max roll rates ×0.64, roll response lag 0.35 s, pitch response lag 0.15 s | Owner feedback, 2026-09-30 |
+| Missile evasion | Short-range missiles guide with N = 3, a 20 g limit and a 0.5 s response lag, so a hard break timed shortly before impact beats them. Missile warnings start at launch | Owner feedback, 2026-09-30 |
+| Visibility | Distant aircraft and missiles keep a minimum apparent size; missiles get HUD markers, a motor flame and a thicker smoke trail | Owner feedback, 2026-09-30 |
 
 ## 3. Goals and non-goals
 
@@ -257,8 +262,9 @@ State: `{pos, vel, quat, angVel, throttle, airbrake}`, plus derived `alpha, beta
   `β_cmd = −yaw·6°`.
 - **Authority:** `authority = clamp(q̄/5 kPa, 0.05, 1)`. Thrust-vectoring aircraft add `tvc·thrustFraction` to pitch/yaw
   authority and have higher AoA limiters (supermaneuverability).
-- **Lags:** body rates follow commands with first-order lags (pitch 0.05 s, yaw 0.08 s, roll 0.12 s). The quaternion is
-  integrated from body rates and renormalized every step.
+- **Lags:** body rates follow commands with first-order lags (pitch 0.15 s, yaw 0.08 s, roll 0.35 s). Since revision 5
+  these are slow enough that the jet rolls and pitches smoothly instead of snapping. The quaternion is integrated from
+  body rates and renormalized every step.
 - **Airbrake** deploys and stows over 1 s.
 - **Crash rule:** ground/sea contact when `pos.y < surfaceAt(x, z) + 2 m`, where `surfaceAt = max(heightAt, 0)` (sea at 0 m).
 - **Derived outputs** for HUD and effects: `gLoad = ((F_aero + F_thrust)/m · up_b)/g`, Mach, α, β.
@@ -313,7 +319,7 @@ All names and numbers are fictional. The "inspired by" column is for design refe
 | CD0 / K | .024 / .14 | .019 / .11 | .020 / .13 | .021 / .12 | .020 / .11 | .022 / .12 | .023 / .13 | .022 / .13 |
 | CLα (/rad) / α_max / AoA limiter (°) | 4.0 / 26 / 28 | 4.1 / 28 / 30 | 4.2 / 25 / 26 | 3.9 / 25 / 26 | 4.1 / 28 / 38 | 4.1 / 28 / 38 | 4.0 / 26 / 28 | 4.2 / 26 / 28 |
 | Thrust vectoring | 0 | 0.5 (pitch) | 0 | 0 | 1 | 1 | 0 | 0 |
-| Max roll (°/s) | 200 | 240 | 280 | 210 | 250 | 220 | 190 | 250 |
+| Max roll (°/s) | 130 | 155 | 180 | 135 | 160 | 140 | 120 | 160 |
 | Hit points | 100 | 85 | 80 | 120 | 95 | 115 | 130 | 85 |
 | Radar range (km) / cone (±°) | 60 / 60 | 50 / 60 | 35 / 60 | 55 / 60 | 50 / 75 | 55 / 60 | 60 / 60 | 30 / 60 |
 | Stealth | 0.85 | 0.80 | 0.15 | 0 | 0.60 | 0.05 | 0 | 0.15 |
@@ -362,7 +368,7 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
 | Off-boresight limit | ±60° (±75° with helmet sight) | inside the launcher's radar cone |
 | Lock time | 0.8 s (×0.7 with helmet sight) | 1.5 s (×0.7 two-seat, ×0.8 sensor fusion) |
 | Lock range | 9 km tail aspect, 4 km head-on, ×1.3 vs afterburner | the launcher's radar detection range for that target |
-| Guidance | proportional navigation (N = 4), 40 g limit | launcher-supported mid-course (target must stay in radar cone), independent when within 10 km × (1 − 0.5·stealth); 30 g limit |
+| Guidance | proportional navigation (N = 3), 20 g limit, 0.5 s response lag | launcher-supported mid-course (target must stay in radar cone), independent when within 10 km × (1 − 0.5·stealth); N = 3, 20 g limit, 0.5 s response lag |
 | Motor | 150 m/s² for 5 s | 110 m/s² for 8 s |
 | Max flight time | 25 s | 60 s |
 | Countermeasure | flares: 35% decoy chance per salvo (×0.5 if the target is on afterburner) | chaff: 30% break chance per salvo (×1.3 vs stealthy targets) |
@@ -374,7 +380,10 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
   - Missiles lose their target on leaving the seeker limit, terrain occlusion, or a successful countermeasure roll;
     they then fly ballistic.
   - Self-destruct below 250 m/s after burnout or at max flight time.
-  - Missile drag: `C·ρ·V²` plus maneuver drag `0.08·|a_lat|`.
+  - Missile drag: `C·ρ·V²` plus maneuver drag `0.1·|a_lat|`.
+  - **Response lag:** the turning acceleration follows the guidance command with a first-order lag. A hard break
+    started shortly before impact (roughly 1–2 s, depending on aspect) makes the missile miss; flying straight,
+    turning gently, or breaking at launch does not. This gives skilled pilots a way to beat a missile without flares.
 - **Countermeasures:** one key press releases a salvo (one flare plus one chaff; chaff arrives with the MRM in M3), at
   most one salvo per 0.4 s. Each missile guiding on that aircraft rolls once per salvo against the matching
   countermeasure. Flares burn 3 s; chaff lasts 4 s.
@@ -400,8 +409,8 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
   time and is kept while detected.
 - **Warnings:**
   - `LOCK` when an enemy radar lock is on you.
-  - `MISSILE` (with bearing) when an SRM guiding on you is within 3 km, or an MRM guiding on you is active or within
-    15 km.
+  - `MISSILE` (with bearing, range and time to impact) from the moment a missile guides on you. When the time to
+    impact drops below 2 s the HUD tells you to turn hard.
 
 ## 11. Damage model
 
@@ -498,7 +507,8 @@ on the runway, as the player chooses.
 - **Behavior priority** (highest first):
   1. **Ground avoidance:** if the flight path predicted 5 s ahead gets closer than 150 m to the surface, pull up.
   2. **Boundary:** turn back inside the area.
-  3. **Defend:** a missile is guiding on the bot → beam it, pull hard, release countermeasures while it is inside 3 km.
+  3. **Defend:** a missile is guiding on the bot → release countermeasures once it is within 3 s of impact; beam it
+     and pull hard once it is within (2 s − reaction delay) of impact, so slower pilots break late and get hit more.
   4. **Engage:**
      - Choose a target. Fire MRM within 60% of the lock range, SRM within 0.5–7 km, at most one missile per target
        per 5 s.
@@ -542,8 +552,10 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   marker on the designated target within 2 km.
 - **Targeting:**
   - Target box and target info (type, range, closure, aspect); lock status (SRCH / TRK / LOCK).
-  - Contact markers (friendly blue, enemy red) and off-screen arrows.
-- **Warnings:** `LOCK` and `MISSILE` with a bearing arrow.
+  - Contact markers (friendly blue, enemy red) and an off-screen arrow for every enemy contact.
+- **Warnings:** `LOCK` and `MISSILE` with a bearing arrow. Each missile guiding on you gets a red marker with its range
+  (an edge arrow when off-screen); your own missiles get a small white marker. `TURN HARD NOW` flashes under 2 s to
+  impact.
 - **Radar display:** a top-down scope, heading-up, with range scales 10 / 20 / 40 / 80 km. It shows own-radar contacts,
   datalink contacts and missiles in flight.
 - **Game:** mode status (scores, zones, time), kill feed, hit markers, scoreboard (Tab), map (M), respawn countdown.
@@ -580,6 +592,9 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   - A photographed sky that also lights the scene, satellite-photo terrain, an animated sea and distance haze
     (`2026-09-29-realistic-graphics-design.md`).
   - Simple effects: afterburner, tracers, missile trails, flares, explosions, smoke.
+  - Visibility (revision 5): an aircraft farther away than where it would shrink below about 0.7° is drawn larger in
+    proportion to distance (up to 8×), and a missile likewise below about 0.4°, so neither fades to a single pixel. A
+    missile shows a bright motor flame while its motor burns and leaves a thick smoke trail. Hit detection is unaffected.
 - **M4/M5 target (a modern military-sim look):**
   - Lighting: PBR aircraft materials; shadows near the camera; bloom for afterburners and explosions.
   - Atmosphere: haze and height fog with aerial perspective; cloud layers.
@@ -646,12 +661,14 @@ pane at each stage.
 - **Flight model** (every registered aircraft):
   - Level trim holds altitude within 30 m over 10 s.
   - Full aft stick at 300 m/s: peak n in [8.0, 9.5]. Low speed is lift-limited; very low speed sinks.
-  - Roll rate reaches 80% of max within 0.5 s.
+  - Roll builds up smoothly: under 40% of the max rate after 0.1 s, over 80% after 0.8 s; a full-stick half roll takes
+    1.2–2.0 s.
   - 60 s of random inputs never produces NaN; identical inputs give identical states.
   - Each aircraft's performance targets (§9.3) are met.
 - **Weapons:**
   - Ballistics and damage; the lead-marker solution hits a constant-velocity target.
-  - Proportional navigation hits a non-maneuvering target and runs out of energy at long range.
+  - Proportional navigation hits a non-maneuvering target and runs out of energy at long range. A hard break timed
+    shortly before impact makes it miss; flying straight, a gentle turn or a break at launch does not.
   - Fuze closest-approach math.
   - Countermeasure rates over 1,000 seeded trials within ±5% of expected.
 - **Targeting:**
