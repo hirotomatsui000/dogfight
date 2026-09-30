@@ -1,7 +1,10 @@
-# Contested Skies — Design Spec (revision 2)
+# Contested Skies — Design Spec (revision 3)
 
 - **Date:** 2026-09-29
-- **Status:** Approved. Revision 2 incorporates the owner's project brief, which supersedes revision 1 where they differ.
+- **Status:** Approved.
+  - Revision 2 incorporated the owner's project brief, which supersedes revision 1 where they differ.
+  - Revision 3 adds the public-website roadmap approved on 2026-09-29 (§24), a new milestone M1c, the current key
+    bindings (§15.3), and the photo scenery from `2026-09-29-realistic-graphics-design.md`.
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -36,6 +39,9 @@ A browser-based, online multiplayer flight-combat simulator prototype.
 | Modes | Team Deathmatch, Air Superiority, Team Objective, Free Flight | Brief |
 | Environment | Clouds, weather presets, day/night cycle | Brief |
 | Development order | Playable single-player prototype first (one aircraft, test map, one AI opponent, combat, HUD), then multiplayer, then roster/map expansion, then modes/polish | Brief |
+| Scenery | Photographed sky with image-based lighting, and Sentinel-2 satellite photos blended by land class, replace the sky shader and vertex-colored terrain | Owner request; `2026-09-29-realistic-graphics-design.md` |
+| Public website | Single-player builds publish as one self-contained HTML file on static hosting (Netlify). Online play (M2) needs a Node host with WebSockets; the owner chooses and pays for it | Owner request + roadmap review, 2026-09-29 |
+| Roadmap additions | Public-website features (§24) and milestone M1c "Website basics"; gamepad and flight-stick support move from M5 to M1c | Roadmap review, 2026-09-29 |
 
 ## 3. Goals and non-goals
 
@@ -49,6 +55,8 @@ A browser-based, online multiplayer flight-combat simulator prototype.
    clouds/weather, day/night.
 6. Four game modes; a modern, readable fighter HUD; HUD, cockpit, chase and free cameras.
 7. 60 fps on a 2020+ laptop at 1080p in a current desktop browser.
+8. A first-time visitor is flying within one minute, learns the basics from a guided training flight, and gets
+   graphics settings that suit their hardware automatically (§24).
 
 **Non-goals:** see §23.
 
@@ -128,8 +136,8 @@ The renderer, HUD and input depend only on the `GameSession` interface. M1 uses 
 ## 6. Folder structure
 
 ```
-DOG/
-├── index.html · package.json · tsconfig.json · vite.config.ts · README.md · .gitignore · Dockerfile (M5)
+contested-skies/
+├── index.html · package.json · tsconfig.json · vite.config.ts · README.md · .gitignore · Dockerfile (M2)
 ├── docs/superpowers/{specs,plans}/
 └── src/
     ├── shared/
@@ -363,8 +371,10 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
     they then fly ballistic.
   - Self-destruct below 250 m/s after burnout or at max flight time.
   - Missile drag: `C·ρ·V²` plus maneuver drag `0.08·|a_lat|`.
-- **Countermeasures:** one key releases a salvo (one flare plus one chaff). Each missile guiding on that aircraft
-  rolls once per salvo against the matching countermeasure. Flares burn 3 s; chaff lasts 4 s.
+- **Countermeasures:** one key press releases a salvo (one flare plus one chaff; chaff arrives with the MRM in M3), at
+  most one salvo per 0.4 s. Each missile guiding on that aircraft rolls once per salvo against the matching
+  countermeasure. Flares burn 3 s; chaff lasts 4 s.
+- **Launch input:** one key press launches one missile, and only with a lock.
 
 ### 10.3 Targeting and sensors
 
@@ -375,7 +385,10 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
     and not lockable).
 - **Designation:** the target-cycle key cycles through spotted and radar contacts ahead, sorted by angle and range.
   The designated target gets the target box and the target-info readout (type, range, closure, aspect).
-- **IR seeker (SRM)** has states `SEARCH → TRACK (growl) → LOCKED (tone)`, evaluated at 20 Hz.
+  - When nothing is designated, the contact closest to the nose (within 60°) is designated automatically at each
+    radar scan. This helps new players, and bots use the same rule.
+  - A designation is dropped when the target dies or is no longer a contact.
+- **IR seeker (SRM)** has states `SEARCH → TRACK (growl) → LOCKED (tone)`, evaluated every tick.
   - It looks toward the designated target when that is inside the off-boresight limit; otherwise along the nose, or
     along the helmet-sight direction when active.
   - Its lock is kept while the target stays inside the limit, within 1.2× range, and visible.
@@ -420,7 +433,8 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
 - 60 × 60 km, grid 512² (~117 m cells).
 - **Terrain:** rolling farmland in the center, a lake, a river valley, a hill ridge in the south rising to about
   1,200 m, and sea along the north edge.
-- **Shading:** vertex colors by height, slope and land cover (fields, forest, rock, sand).
+- **Shading:** satellite photos blended by land class (farmland, forest, mountain, sand, water, snow), per
+  `2026-09-29-realistic-graphics-design.md`.
 - **Combat area:** a 25 km radius circle.
 - **Spawns:** the two teams spawn airborne 15 km apart, facing each other.
 
@@ -472,7 +486,9 @@ on the runway, as the player chooses.
 
 - **`BotPilot`** (shared, pure) maps a perception to a `ControlInput`, the same interface humans use, so bots obey the
   same physics.
-  - Perception is world truth, delayed by the difficulty's reaction time and filtered by the bot's own sensors.
+  - Perception is world truth, delayed by the difficulty's reaction time and filtered by the bot's own sensors. A bot
+    sees where a target was one reaction time ago, extrapolated along the velocity it had then, so it reacts late to
+    new maneuvers but not to straight flight.
 - **Steering primitive:** `steerToward(state, desiredDirection)`. It banks until the target direction lies in the lift
   plane, pulls, and uses rudder and wing-leveling for fine alignment. The same function drives the human mouse-aim mode.
 - **Behavior priority** (highest first):
@@ -534,28 +550,34 @@ on the runway, as the player chooses.
 ### 15.3 Controls
 
 - **Mouse-aim (default):** the mouse sets an aim direction and `steerToward` flies the jet there; the keyboard adds on top.
-- **Keyboard direct:** W/S pitch, A/D roll, Q/E yaw, with input ramping over 0.15 s.
-- **Gamepad:** standard mapping (M5).
+- **Keyboard direct:** W/S pitch (W = nose down), A/D roll, Q/E yaw, with input ramping over 0.15 s. Arrow keys also
+  pitch and roll.
+- **Gamepad and flight stick:** the browser Gamepad API with the standard mapping and axis calibration (M1c).
+- No `Ctrl` bindings: browsers reserve shortcuts such as `Ctrl+W`, which would close the tab mid-flight.
 
 | Key | Action |
 |---|---|
-| Shift / Ctrl, mouse wheel | Throttle |
-| Space | Cannon |
-| F | Fire missile |
-| 1 / 2 | Select SRM / MRM |
+| Mouse | Aim (mouse-aim mode; click the view to capture the mouse) |
+| W/S · A/D · Q/E | Pitch · roll · rudder (overrides the mouse aim while held) |
+| Shift / Z, mouse wheel | Throttle up / down (top 10% = afterburner) |
+| Space or left mouse | Cannon |
+| F | Fire missile (one per press, needs a lock) |
+| 1 / 2 | Select SRM / MRM (MRM from M3) |
 | R | Cycle target |
 | X | Countermeasures |
-| B | Airbrake |
-| V | Padlock |
-| C | Cycle camera |
-| Tab | Scoreboard |
-| M | Map |
-| Esc | Pause |
+| B | Airbrake (hold) |
+| C or right mouse | Look around (hold); also aims the helmet sight |
+| V | Cycle camera |
+| Tab | Scoreboard (hold) |
+| M | Map (M4) |
+| P / Esc | Pause |
 
 ### 15.4 Graphics
 
 - **M1 prototype:**
-  - Procedural parametric aircraft models; vertex-colored terrain; Three.js `Sky` shader with fog.
+  - Procedural parametric aircraft models.
+  - A photographed sky that also lights the scene, satellite-photo terrain, an animated sea and distance haze
+    (`2026-09-29-realistic-graphics-design.md`).
   - Simple effects: afterburner, tracers, missile trails, flares, explosions, smoke.
 - **M4/M5 target (a modern military-sim look):**
   - Lighting: PBR aircraft materials; shadows near the camera; bloom for afterburners and explosions.
@@ -654,11 +676,12 @@ brief (§11 of the brief: steps 1–11).
 | # | Milestone | Brief steps | Scope | Accepted when |
 |---|---|---|---|---|
 | M1a | **Fly** | 1–6 (+ basic HUD) | Scaffold; math; atmosphere; data-driven aircraft config (Kestrel); flight model; steering; test-range terrain; local World and session; renderer, sky, terrain mesh, parametric model; keyboard + mouse-aim; HUD and chase cameras with transitions/shake; free camera; basic flight HUD; start menu with Free Flight | One aircraft is flyable at 60 fps; stall, G-limit, energy bleed and altitude effects observable; tests green |
-| M1b | **Fight** | 7–9 | Second aircraft (Kobchik) as the AI opponent; cannon + lead; SRM + IR seeker; flares; basic radar detection and designation; damage model; destruction and respawn; Team Deathmatch vs 1 AI; bot pilot; effects (tracers, missile trails, flares, explosions, smoke); full combat HUD (target info, lock, missile warning, radar display, ammo, kill feed); minimal audio | A 1v1 dogfight against the AI is playable end to end with both weapons and countermeasures |
-| M2 | **Multiplayer** | 10 | Node server, rooms, protocol and codecs, authoritative World, NetworkSession (prediction, reconciliation, interpolation, clock sync, lag compensation), lobby (team + aircraft), bots fill, LAN URLs, lag simulator | Two tabs plus a second LAN machine fight each other smoothly at `?lag=150`; integration tests green |
-| M3 | **Roster & weapons** | 11 | The remaining 6 aircraft (data + parametric models); radar/stealth model; MRM "Lance" + chaff; RWR `LOCK` warning; damage states; balance tournament | All 8 aircraft selectable; tournament win rates within 35–65% |
+| M1b | **Fight** | 7–9 | Second aircraft (Kobchik) as the AI opponent; cannon + lead; SRM + IR seeker; flares; basic radar detection and designation; damage model; destruction and respawn; Team Deathmatch vs 1 AI; bot pilot; effects (tracers, missile trails, flares, explosions, smoke); full combat HUD (target info, lock, missile warning, radar display, ammo, kill feed, hit markers, scoreboard); minimal audio | A 1v1 dogfight against the AI is playable end to end with both weapons and countermeasures |
+| M1c | **Website basics** | — (§24) | Guided training flight; controls card; settings screen (volume, mouse sensitivity, invert, HUD color and size, key remapping); gamepad and flight-stick support; Low/Medium/High graphics presets chosen from the frame rate; loading progress; title screen, page metadata, social-preview image and icon; color-blind-safe team markers; every sound warning also shown as text | A first-time visitor completes the training flight and a fight on a mid-range laptop without reading the README |
+| M2 | **Multiplayer** | 10 | Node server, rooms, protocol and codecs, authoritative World, NetworkSession (prediction, reconciliation, interpolation, clock sync, lag compensation), lobby (team + aircraft), bots fill, LAN URLs, lag simulator; invite links and Quick play; preset quick-chat; callsign filter; page/server version check; error reporting and a health check; one browser smoke test; multi-file site build; Dockerfile for the owner's host | Two tabs plus a second LAN machine fight each other smoothly at `?lag=150`; integration tests green; `docker build`/`run` serves the game |
+| M3 | **Roster & weapons** | 11 | The remaining 6 aircraft (data + parametric models); upgraded model generator (smooth fuselage, canopy glass, panel lines, sky-reflecting paint, team paint schemes); radar/stealth model; MRM "Lance" + chaff; RWR `LOCK` warning; balance tournament | All 8 aircraft selectable; tournament win rates within 35–65% |
 | M4 | **World** | 11 | Lechovia map (terrain LOD in worker, geography, settlements, roads, airfields), runway spawns with ground handling, clouds and weather, day/night cycle | Take off from a fictional airfield and fight over recognizable Poland-inspired terrain at 60 fps, day and night |
-| M5 | **Modes & polish** | 11 | Air Superiority, Team Objective, Free Flight extras; cockpit camera; graphics upgrades; full audio; gamepad; settings; Dockerfile; README | All four modes playable online; `docker build`/`run` serves the game |
+| M5 | **Modes & polish** | 11 | Air Superiority, Team Objective, Free Flight extras; end-of-match summary; cockpit camera; graphics upgrades (contrails, wingtip vapor, damage fire); kill cam, spectating while respawning, changing jets on respawn; full audio; remaining accessibility options; README | All four modes playable online |
 
 ## 21. Risks and mitigations
 
@@ -684,13 +707,33 @@ brief (§11 of the brief: steps 1–11).
 
 ## 23. Out of scope (v1)
 
-- Accounts, persistence, stats history.
-- Text/voice chat.
+- Accounts, persistence, stats history, rankings and leaderboards.
+- Free-text and voice chat (preset quick-chat is in scope, M2).
 - Landing and rearming, fuel, spins/departures, wind.
 - Air-to-ground weapons.
 - Real-world map data.
 - Functional cockpit instruments/MFDs.
 - VR, mobile/touch.
 - Anti-cheat beyond server authority and input validation.
-- Automated browser (Playwright) test suite.
-- Public deployment itself (a Dockerfile is provided; deploying needs the owner's host account).
+- An automated browser test suite beyond one deploy smoke test (M2).
+- Choosing and paying for a server host: the owner's decision. The project provides the single-file static build and
+  a Dockerfile (M2).
+
+## 24. Public website (revision 3)
+
+The game is published as a public website. These features come from the roadmap review of 2026-09-29; each lists
+its milestone.
+
+| Area | Features | Milestone |
+|---|---|---|
+| First minute | A 2–3 minute guided training flight: fly with the mouse, shoot a target drone, lock and fire a missile, beat an incoming missile with flares. A controls card on the start screen | M1c |
+| Controllers | Gamepad and flight-stick support (Gamepad API, standard mapping, axis calibration); key remapping; mouse sensitivity and invert | M1c |
+| Hardware range | Low/Medium/High graphics presets (pixel ratio, texture size, draw distance, effects), chosen automatically from the measured frame rate and changeable in settings | M1c |
+| Loading | A loading progress bar. Once assets pass about 5 MB, publish the multi-file build (`dist/`) instead of one HTML file so browsers cache and load pieces in parallel | M1c (progress), M2 (multi-file) |
+| Sharing | A title screen with a screenshot and a Play button; page title, description, social-preview image and icon | M1c |
+| Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle | M2 |
+| Joining | An invite link per room, and "Quick play" that joins the busiest room. Bots fill empty seats so one human plus bots is a full match | M2 |
+| Safety | Server authority for all hits (§7); callsign filter; preset quick-chat messages only; rate limits; a short privacy note (no accounts, no tracking) | M2 |
+| Updates | A page/server version check that asks players to reload; browser error reporting; a server health check; one automated browser smoke test (load the site, fly 10 s) before each deploy | M2 |
+| Feedback | Hit markers, kill confirmation and kill feed (M1b); kill cam, spectating while respawning, changing jets on respawn (M5) | M1b, M5 |
+| Accessibility | Team markers that differ in shape as well as color; HUD color and size options; every sound warning also shown as text; reduce-motion also covers G-force effects | M1c, M5 |
