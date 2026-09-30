@@ -1,13 +1,18 @@
-import type { TeamId } from '../data/aircraft/types.ts';
+import { damageFlightEnv, damageState, maneuverKillCredit } from '../damage/damage.ts';
 import { getAircraft } from '../data/aircraft/registry.ts';
+import type { TeamId } from '../data/aircraft/types.ts';
 import type { MapDefinition } from '../data/maps/map-definition.ts';
 import type { Terrain } from '../map/terrain.ts';
+import { type Approach, closestApproach } from '../math/closest-approach.ts';
 import { Rng } from '../math/rng.ts';
 import type { GameMode, ModeContext } from '../modes/mode.ts';
-import { type ControlInput, neutralInput, sanitizeInput } from '../physics/controls.ts';
-import { stepFlight } from '../physics/flight-model.ts';
-import type { AircraftEntity } from './entities.ts';
-import type { DeathCause, GameEvent } from './events.ts';
+import { type ControlInput, sanitizeInput } from '../physics/controls.ts';
+import { type FlightEnv, stepFlight } from '../physics/flight-model.ts';
+import type { Projectile } from '../weapons/cannon.ts';
+import type { Missile } from '../weapons/missile.ts';
+import { Combat, type CombatHost } from './combat.ts';
+import { type AircraftEntity, createAircraftEntity, resetForSpawn } from './entities.ts';
+import type { DeathCause, GameEvent, WeaponKind } from './events.ts';
 import { spawnFlightState } from './spawns.ts';
 
 export const TICK_RATE = 60;
@@ -27,26 +32,30 @@ export interface AddAircraftOptions {
   callsign: string;
   team: TeamId;
   aircraftId: string;
-  isBot?: boolean;
 }
 
 /** Authoritative simulation. Pure: no I/O, no clocks, randomness only from `rng`. */
-export class World implements ModeContext {
+export class World implements ModeContext, CombatHost {
   readonly tickRate = TICK_RATE;
   readonly map: MapDefinition;
   readonly terrain: Terrain;
   readonly mode: GameMode;
   readonly rng: Rng;
+  readonly combat: Combat;
   tick = 0;
   private readonly aircraft = new Map<number, AircraftEntity>();
   private events: GameEvent[] = [];
   private nextId = 1;
+  private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1 };
+  private readonly approach: Approach = { distance: 0, fraction: 0 };
+  private readonly living: AircraftEntity[] = [];
 
   constructor(opts: WorldOptions) {
     this.map = opts.map;
     this.terrain = opts.terrain;
     this.mode = opts.mode;
     this.rng = new Rng(opts.seed);
+    this.combat = new Combat(this);
   }
 
   aircraftList(): IterableIterator<AircraftEntity> {
@@ -57,6 +66,14 @@ export class World implements ModeContext {
     return this.aircraft.get(id);
   }
 
+  missileList(): readonly Missile[] {
+    return this.combat.missiles;
+  }
+
+  projectileList(): readonly Projectile[] {
+    return this.combat.projectiles;
+  }
+
   addAircraft(opts: AddAircraftOptions): AircraftEntity {
     const config = getAircraft(opts.aircraftId);
     if (config.team !== opts.team) {
@@ -64,30 +81,24 @@ export class World implements ModeContext {
     }
     let slot = 0;
     for (const other of this.aircraft.values()) if (other.team === opts.team) slot++;
-    const entity: AircraftEntity = {
+    const entity = createAircraftEntity({
       id: this.nextId++,
       callsign: opts.callsign,
       team: opts.team,
       config,
-      isBot: opts.isBot ?? false,
+      isBot: false,
       flight: spawnFlightState(this.map, this.terrain, opts.team, slot, config.physics),
-      input: neutralInput(0.8),
-      alive: true,
-      hp: config.damage.hitPoints,
-      spawnGen: 1,
-      respawnAtTick: -1,
-      outOfBoundsTicks: 0,
-      kills: 0,
-      deaths: 0,
       spawnSlot: slot,
-    };
+    });
     this.aircraft.set(entity.id, entity);
-    this.events.push({ type: 'spawned', aircraftId: entity.id, spawnGen: entity.spawnGen });
+    this.emit({ type: 'spawned', aircraftId: entity.id, spawnGen: entity.spawnGen });
     return entity;
   }
 
   removeAircraft(id: number): boolean {
-    return this.aircraft.delete(id);
+    if (!this.aircraft.delete(id)) return false;
+    this.combat.forget(id);
+    return true;
   }
 
   step(inputs: ReadonlyMap<number, ControlInput>): void {
@@ -95,13 +106,19 @@ export class World implements ModeContext {
       if (!a.alive) continue;
       const raw = inputs.get(a.id);
       if (raw) sanitizeInput(raw, a.input);
-      stepFlight(a.flight, a.input, a.config.physics, DT);
+      a.prevPos.copy(a.flight.pos);
+      damageFlightEnv(damageState(a.hp, a.config.damage.hitPoints), this.env);
+      stepFlight(a.flight, a.input, a.config.physics, DT, this.env);
+      a.history.record(a.flight.pos, a.flight.vel);
     }
+    if (this.mode.combatEnabled) this.combat.step(DT);
+    this.checkCollisions();
     for (const a of this.aircraft.values()) {
       if (!a.alive) continue;
       const p = a.flight.pos;
       if (p.y < this.terrain.surfaceAt(p.x, p.z) + GROUND_CLEARANCE_M) {
-        this.destroy(a, 'crash', null);
+        const credited = maneuverKillCredit(a, this.tick, TICK_RATE);
+        this.destroy(a, 'crash', credited === null ? null : (this.aircraft.get(credited) ?? null));
         continue;
       }
       if (this.isOutOfBounds(a)) {
@@ -112,16 +129,36 @@ export class World implements ModeContext {
       }
     }
     for (const a of this.aircraft.values()) {
+      // Button presses act once, even if no new input arrives next tick.
+      a.input.cycleTarget = false;
+      a.input.countermeasures = false;
+      a.input.fireMissile = false;
       if (!a.alive && a.respawnAtTick >= 0 && this.tick >= a.respawnAtTick) this.respawn(a);
     }
     this.mode.update(this);
     this.tick++;
   }
 
+  emit(event: GameEvent): void {
+    this.events.push(event);
+  }
+
   drainEvents(): GameEvent[] {
     const drained = this.events;
     this.events = [];
     return drained;
+  }
+
+  /** Weapon damage. Records the attacker for kill credit and destroys the victim at 0 hit points. */
+  applyDamage(victim: AircraftEntity, amount: number, attacker: AircraftEntity | null, weapon: WeaponKind): void {
+    if (!victim.alive || amount <= 0) return;
+    victim.hp = Math.max(0, victim.hp - amount);
+    if (attacker && attacker.team !== victim.team) {
+      victim.lastDamagedBy = attacker.id;
+      victim.lastDamagedTick = this.tick;
+    }
+    this.emit({ type: 'hit', aircraftId: victim.id, attackerId: attacker ? attacker.id : null, weapon, damage: amount });
+    if (victim.hp <= 0) this.destroy(victim, weapon, attacker);
   }
 
   isOutOfBounds(a: AircraftEntity): boolean {
@@ -137,23 +174,43 @@ export class World implements ModeContext {
     return (BOUNDARY_GRACE_S * TICK_RATE - a.outOfBoundsTicks) / TICK_RATE;
   }
 
+  /** Mid-air collisions destroy both aircraft (spec §11); swept so head-on passes can't tunnel. */
+  private checkCollisions(): void {
+    const list = this.living;
+    list.length = 0;
+    for (const a of this.aircraft.values()) if (a.alive) list.push(a);
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i];
+        const b = list[j];
+        if (!a.alive || !b.alive) continue;
+        const limit = 0.5 * (a.config.damage.hitRadiusM + b.config.damage.hitRadiusM);
+        if (closestApproach(a.prevPos, a.flight.pos, b.prevPos, b.flight.pos, this.approach).distance > limit) continue;
+        this.destroy(a, 'collision', null);
+        this.destroy(b, 'collision', null);
+      }
+    }
+  }
+
   private destroy(a: AircraftEntity, cause: DeathCause, killer: AircraftEntity | null): void {
     a.alive = false;
     a.deaths++;
     a.outOfBoundsTicks = 0;
+    a.firingCannon = false;
     a.respawnAtTick = this.tick + Math.round(this.mode.respawnDelayS * TICK_RATE);
-    if (killer) killer.kills++;
-    this.events.push({ type: 'destroyed', aircraftId: a.id, cause, killerId: killer ? killer.id : null });
+    if (killer && killer.team !== a.team) killer.kills++;
+    this.emit({ type: 'destroyed', aircraftId: a.id, cause, killerId: killer ? killer.id : null });
+    this.combat.forget(a.id);
     this.mode.onAircraftDestroyed(this, a, killer, cause);
   }
 
   private respawn(a: AircraftEntity): void {
     a.flight = spawnFlightState(this.map, this.terrain, a.team, a.spawnSlot, a.config.physics);
     a.alive = true;
-    a.hp = a.config.damage.hitPoints;
     a.spawnGen++;
     a.respawnAtTick = -1;
     a.outOfBoundsTicks = 0;
-    this.events.push({ type: 'spawned', aircraftId: a.id, spawnGen: a.spawnGen });
+    resetForSpawn(a);
+    this.emit({ type: 'spawned', aircraftId: a.id, spawnGen: a.spawnGen });
   }
 }

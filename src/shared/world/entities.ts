@@ -1,14 +1,32 @@
+import type { Vector3 } from 'three';
 import type { AircraftConfig, TeamId } from '../data/aircraft/types.ts';
-import type { ControlInput } from '../physics/controls.ts';
+import { clearCredit, type CreditRecord } from '../damage/damage.ts';
+import { type ControlInput, neutralInput } from '../physics/controls.ts';
 import type { FlightState } from '../physics/flight-model.ts';
+import { createSeeker, resetSeeker, type SeekerState } from '../targeting/ir-seeker.ts';
+import type { Contact } from '../targeting/sensors.ts';
+import { TRIGGER_AT_REST } from '../weapons/cannon.ts';
+import { MotionHistory } from './history.ts';
 
-export interface AircraftEntity {
+export interface StoresState {
+  cannonRounds: number;
+  srm: number;
+  mrm: number;
+  countermeasures: number;
+}
+
+/** Long ago: "never fired" for launch and countermeasure intervals. */
+export const NEVER = -1e9;
+
+export interface AircraftEntity extends CreditRecord {
   readonly id: number;
   readonly callsign: string;
   team: TeamId;
   config: AircraftConfig;
   readonly isBot: boolean;
   flight: FlightState;
+  /** position at the start of the current tick, for swept hit tests */
+  readonly prevPos: Vector3;
   /** last applied (sanitized) input */
   input: ControlInput;
   alive: boolean;
@@ -21,4 +39,81 @@ export interface AircraftEntity {
   kills: number;
   deaths: number;
   spawnSlot: number;
+  readonly stores: StoresState;
+  cannonAccumulator: number;
+  firingCannon: boolean;
+  lastMissileTick: number;
+  lastCountermeasureTick: number;
+  /** enemies this aircraft currently sees or has on radar */
+  readonly contacts: Contact[];
+  /** designated target */
+  targetId: number | null;
+  readonly seeker: SeekerState;
+  readonly history: MotionHistory;
+}
+
+export interface NewAircraft {
+  id: number;
+  callsign: string;
+  team: TeamId;
+  config: AircraftConfig;
+  isBot: boolean;
+  flight: FlightState;
+  spawnSlot: number;
+}
+
+export function createAircraftEntity(n: NewAircraft): AircraftEntity {
+  const entity: AircraftEntity = {
+    id: n.id,
+    callsign: n.callsign,
+    team: n.team,
+    config: n.config,
+    isBot: n.isBot,
+    flight: n.flight,
+    prevPos: n.flight.pos.clone(),
+    input: neutralInput(0.8),
+    alive: true,
+    hp: n.config.damage.hitPoints,
+    spawnGen: 1,
+    respawnAtTick: -1,
+    outOfBoundsTicks: 0,
+    kills: 0,
+    deaths: 0,
+    spawnSlot: n.spawnSlot,
+    stores: { cannonRounds: 0, srm: 0, mrm: 0, countermeasures: 0 },
+    cannonAccumulator: TRIGGER_AT_REST,
+    firingCannon: false,
+    lastMissileTick: NEVER,
+    lastCountermeasureTick: NEVER,
+    contacts: [],
+    targetId: null,
+    seeker: createSeeker(),
+    history: new MotionHistory(),
+    lastDamagedBy: null,
+    lastDamagedTick: -1,
+    lastLockedBy: null,
+    lastLockedTick: -1,
+  };
+  resetForSpawn(entity);
+  return entity;
+}
+
+/** Full hit points and stores, cleared targeting and credit: the state of a freshly spawned aircraft. */
+export function resetForSpawn(a: AircraftEntity): void {
+  const s = a.config.stores;
+  a.hp = a.config.damage.hitPoints;
+  a.stores.cannonRounds = s.cannonRounds;
+  a.stores.srm = s.srm;
+  a.stores.mrm = s.mrm;
+  a.stores.countermeasures = s.countermeasures;
+  a.cannonAccumulator = TRIGGER_AT_REST;
+  a.firingCannon = false;
+  a.lastMissileTick = NEVER;
+  a.lastCountermeasureTick = NEVER;
+  a.contacts.length = 0;
+  a.targetId = null;
+  resetSeeker(a.seeker, 'off');
+  a.history.reset();
+  a.prevPos.copy(a.flight.pos);
+  clearCredit(a);
 }
