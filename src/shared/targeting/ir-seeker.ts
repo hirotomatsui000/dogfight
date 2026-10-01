@@ -4,7 +4,7 @@ import { AFTERBURNER_THROTTLE } from '../data/weapons.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { DEG } from '../math/units.ts';
 import type { ControlInput } from '../physics/controls.ts';
-import type { SensedAircraft } from './sensors.ts';
+import type { Obscurant, SensedAircraft } from './sensors.ts';
 
 export type SeekerMode = 'off' | 'search' | 'track' | 'locked';
 
@@ -75,6 +75,7 @@ export function updateSeeker(
   spec: MissileSpec,
   terrain: Terrain,
   dt: number,
+  clouds: Obscurant | null = null,
 ): void {
   const pos = owner.flight.pos;
   const limit = offBoresightLimitRad(spec, owner);
@@ -98,7 +99,7 @@ export function updateSeeker(
     if (keep && t) {
       const range = pos.distanceTo(t.flight.pos);
       const maxRange = irLockRange(spec, pos, t) * (s.mode === 'locked' ? spec.lockKeepRangeFactor : 1);
-      keep = range <= maxRange && terrain.lineOfSight(pos, t.flight.pos);
+      keep = range <= maxRange && terrain.lineOfSight(pos, t.flight.pos) && !clouds?.blocks(pos, t.flight.pos);
       if (keep && s.mode === 'track') keep = s.axis.angleTo(toTarget.subVectors(t.flight.pos, pos)) <= spec.acquisitionConeDeg * DEG;
     }
     if (keep && t) {
@@ -122,7 +123,7 @@ export function updateSeeker(
     if (a > spec.acquisitionConeDeg * DEG || a >= bestAngle) continue;
     if (nose.angleTo(toTarget) > limit) continue;
     if (toTarget.length() > irLockRange(spec, pos, t)) continue;
-    if (!terrain.lineOfSight(pos, t.flight.pos)) continue;
+    if (!terrain.lineOfSight(pos, t.flight.pos) || clouds?.blocks(pos, t.flight.pos)) continue;
     best = t;
     bestAngle = a;
   }

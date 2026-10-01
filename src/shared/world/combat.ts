@@ -8,7 +8,7 @@ import { type AirData, atmosphere } from '../physics/atmosphere.ts';
 import { autoDesignate, cycleDesignation, isContact } from '../targeting/designation.ts';
 import { resetSeeker, updateSeeker } from '../targeting/ir-seeker.ts';
 import { resetRadarLock, updateRadarLock } from '../targeting/radar-lock.ts';
-import { detectContacts, RADAR_SCAN_INTERVAL_S } from '../targeting/sensors.ts';
+import { detectContacts, type Obscurant, RADAR_SCAN_INTERVAL_S } from '../targeting/sensors.ts';
 import { advanceProjectile, createProjectile, type Projectile, pullTrigger, TRIGGER_AT_REST } from '../weapons/cannon.ts';
 import { decoyChance, rollDecoy } from '../weapons/countermeasures.ts';
 import { type Bomb, bombDamage, hasLanded, releaseBomb, stepBomb, surfaceCrossing } from '../weapons/bomb.ts';
@@ -25,6 +25,8 @@ export interface CombatHost {
   readonly tick: number;
   readonly tickRate: number;
   readonly terrain: Terrain;
+  /** clouds hide aircraft from eyes and infrared seekers (M4) */
+  readonly clouds: Obscurant;
   readonly rng: Rng;
   aircraftList(): Iterable<AircraftEntity>;
   getAircraft(id: number): AircraftEntity | undefined;
@@ -107,7 +109,7 @@ export class Combat {
     const host = this.host;
     for (const a of host.aircraftList()) {
       if (!a.alive) continue;
-      detectContacts(a, host.aircraftList(), host.terrain, a.contacts);
+      detectContacts(a, host.aircraftList(), host.terrain, a.contacts, host.clouds);
       if (!isContact(a.targetId, a.contacts)) a.targetId = null;
       if (a.targetId === null) a.targetId = autoDesignate(a.contacts);
     }
@@ -156,7 +158,7 @@ export class Combat {
       return;
     }
     const designated = a.targetId === null ? null : (host.getAircraft(a.targetId) ?? null);
-    updateSeeker(a.seeker, a, host.aircraftList(), designated, SRM_DART, host.terrain, dt);
+    updateSeeker(a.seeker, a, host.aircraftList(), designated, SRM_DART, host.terrain, dt, host.clouds);
     if (a.seeker.mode !== 'locked' || a.seeker.targetId === null) return;
     const target = host.getAircraft(a.seeker.targetId);
     if (target) {
@@ -232,7 +234,9 @@ export class Combat {
       if (m.pos.distanceTo(target.flight.pos) > activeRangeM(m, target.config.sensors.stealth)) return true;
       m.active = true;
     }
-    return withinGimbal(m, target.flight.pos) && this.host.terrain.lineOfSight(m.pos, target.flight.pos);
+    if (!withinGimbal(m, target.flight.pos) || !this.host.terrain.lineOfSight(m.pos, target.flight.pos)) return false;
+    // An infrared seeker loses a target inside a cloud; radar sees through.
+    return m.spec.guidance !== 'ir' || !this.host.clouds.blocks(m.pos, target.flight.pos);
   }
 
   private dropBomb(a: AircraftEntity): void {

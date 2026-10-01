@@ -23,6 +23,8 @@ import { type AircraftEntity, createAircraftEntity, resetForSpawn } from './enti
 import type { DeathCause, GameEvent, WeaponKind } from './events.ts';
 import { createGroundTarget, damageGroundTarget, type GroundTarget } from './ground-targets.ts';
 import { runwayFlightState, type SpawnStart, spawnFlightState, teamAirfield } from './spawns.ts';
+import { CALM_NOON, type EnvironmentSettings, hourAt } from './time-of-day.ts';
+import { CloudField, WEATHER } from './weather.ts';
 
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
@@ -35,6 +37,8 @@ export interface WorldOptions {
   terrain: Terrain;
   mode: GameMode;
   seed: number;
+  /** weather and clock (M4); a clear noon without clouds by default */
+  environment?: EnvironmentSettings;
 }
 
 export interface AddAircraftOptions {
@@ -60,6 +64,8 @@ export class World implements ModeDirector, CombatHost, BotWorld {
   readonly mode: GameMode;
   readonly rng: Rng;
   readonly combat: Combat;
+  readonly environment: EnvironmentSettings;
+  readonly clouds: CloudField;
   tick = 0;
   private readonly seed: number;
   private readonly aircraft = new Map<number, AircraftEntity>();
@@ -77,8 +83,16 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     this.mode = opts.mode;
     this.seed = opts.seed;
     this.rng = new Rng(opts.seed);
+    this.environment = { ...(opts.environment ?? CALM_NOON) };
+    // The clouds belong to the map and the weather, so every client draws the same ones.
+    this.clouds = new CloudField(WEATHER[this.environment.weather], opts.map.seed);
     this.groundTargets = opts.mode.groundTargets(opts.map).map((spec) => createGroundTarget(spec, opts.terrain));
     this.combat = new Combat(this);
+  }
+
+  /** The local hour now (spec §12.3). */
+  hour(): number {
+    return hourAt(this.environment.startHour, this.environment.clockRunning, this.tick / TICK_RATE);
   }
 
   get combatArea(): MapDefinition['combatArea'] {

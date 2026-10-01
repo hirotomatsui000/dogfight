@@ -32,8 +32,16 @@ export const RADAR_SCAN_INTERVAL_S = 0.2;
 const nose = new Vector3();
 const toTarget = new Vector3();
 
-/** Enemies the observer can see or has on radar, with terrain masking (spec §10.3). Rewrites `out`. */
-export function detectContacts(observer: SensedAircraft, others: Iterable<SensedAircraft>, terrain: Terrain, out: Contact[]): Contact[] {
+/** Anything besides the terrain that hides an aircraft from the eye and from infrared seekers: clouds (M4). */
+export interface Obscurant {
+  blocks(a: Vector3, b: Vector3): boolean;
+}
+
+/**
+ * Enemies the observer can see or has on radar, with terrain masking (spec §10.3). Clouds hide aircraft from the eye
+ * but not from radar. Rewrites `out`.
+ */
+export function detectContacts(observer: SensedAircraft, others: Iterable<SensedAircraft>, terrain: Terrain, out: Contact[], clouds: Obscurant | null = null): Contact[] {
   out.length = 0;
   const o = observer.flight;
   const sensors = observer.config.sensors;
@@ -45,9 +53,11 @@ export function detectContacts(observer: SensedAircraft, others: Iterable<Sensed
     const offNoseRad = rangeM > 0 ? nose.angleTo(toTarget) : 0;
     const visualRange = t.flight.throttle > AFTERBURNER_THROTTLE ? VISUAL_RANGE_AFTERBURNER_M : VISUAL_RANGE_M;
     const radarRange = sensors.radarRangeKm * 1000 * (1 - RADAR_STEALTH_EFFECT * t.config.sensors.stealth);
-    const visual = rangeM <= visualRange;
+    let visual = rangeM <= visualRange;
     const radar = offNoseRad <= sensors.radarConeDeg * DEG && rangeM <= radarRange;
-    if ((visual || radar) && terrain.lineOfSight(o.pos, t.flight.pos)) out.push({ id: t.id, visual, radar, rangeM, offNoseRad });
+    if (!(visual || radar) || !terrain.lineOfSight(o.pos, t.flight.pos)) continue;
+    if (visual && clouds && clouds.blocks(o.pos, t.flight.pos)) visual = false;
+    if (visual || radar) out.push({ id: t.id, visual, radar, rangeM, offNoseRad });
   }
   return out;
 }
