@@ -25,8 +25,13 @@ Talk to the owner in Japanese; commit messages end with
   - `npm run build:single` → `dist-single/index.html` (4983 kB), a Strike match starts from it.
   - 367 tests pass, `tsc` clean.
 
+- `de642f1`, `6d22c62`: the Kestrel and the Kobchik use the owner's own models (Tripo, F-35A- and Su-57-inspired),
+  prepared by `tools/prepare-models.ts` (originals in the git-ignored `models-src/`; ask the owner to re-upload them
+  if they are needed again). Nozzle points for the afterburners are in `src/client/render/aircraft-meshes.ts`.
+  Checked on the title screen and in flight for both jets, and in the single-file build (now 6086 kB). 371 tests.
+
 ## Open decisions for the owner
 
 1. Redeploy `dist-single` on Netlify (the copy the owner had did not include Strike yet).
-2. Replace the generated jet models with the owner's own 3D models (requested 2026-10-01; files not received yet).
+2. Whether to rename the jets after the real types, and whether Tripo's terms need an in-game credit line.
 3. Next milestone: M1c "Website basics" (training flight, settings, gamepad, graphics presets) or M2 multiplayer.
