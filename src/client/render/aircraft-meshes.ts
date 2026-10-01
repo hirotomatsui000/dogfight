@@ -4,7 +4,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import prizrakUrl from '../assets/models/prizrak.glb?url';
 import shadeUrl from '../assets/models/shade.glb?url';
-import { addEngines, type AircraftModel, buildAircraftModel } from './aircraft-model.ts';
+import { addEngines, type AircraftModel, parametricModel } from './aircraft-model.ts';
 import type { LoadProgress } from './load-progress.ts';
 
 /**
@@ -76,5 +76,5 @@ export function aircraftModelFor(
 ): AircraftModel {
   const template = meshes.get(config.id);
   const fit = fits[config.id];
-  return template && fit ? buildImportedModel(template, fit, config.visual.lengthM) : buildAircraftModel(config.visual);
+  return template && fit ? buildImportedModel(template, fit, config.visual.lengthM) : parametricModel(config);
 }

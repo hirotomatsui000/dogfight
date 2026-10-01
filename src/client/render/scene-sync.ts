@@ -2,7 +2,7 @@ import type { Scene, Vector3 } from 'three';
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import { DEG } from '../../shared/math/units.ts';
 import type { AircraftView } from '../session/game-session.ts';
-import { type AircraftModel, buildAircraftModel } from './aircraft-model.ts';
+import { type AircraftModel, parametricModel } from './aircraft-model.ts';
 import { visibilityScale } from './visibility.ts';
 
 interface Entry {
@@ -22,7 +22,7 @@ export class SceneSync {
   private readonly entries = new Map<number, Entry>();
 
   /** `build` makes each jet's model; by default the model generated from its data. */
-  constructor(scene: Scene, build: (config: AircraftConfig) => AircraftModel = (c) => buildAircraftModel(c.visual)) {
+  constructor(scene: Scene, build: (config: AircraftConfig) => AircraftModel = parametricModel) {
     this.scene = scene;
     this.build = build;
   }
