@@ -59,7 +59,7 @@ describe('LocalSession', () => {
     const bots = [...s.views()].filter((v) => v.isBot);
     expect(bots).toHaveLength(1);
     expect(bots[0].team).toBe('usa');
-    expect(bots[0].config.id).toBe('kestrel');
+    expect(bots[0].config.team).toBe('usa');
     expect(bots[0].callsign).toBe('[BOT] Ranger');
     expect(s.view(bots[0].id)).toBe(bots[0]);
   });

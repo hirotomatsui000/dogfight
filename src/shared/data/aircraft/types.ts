@@ -70,7 +70,20 @@ export interface AircraftVisual {
   canards: boolean;
   engines: 1 | 2;
   colors: { primary: string; secondary: string; accent: string };
+  /** distance between twin engine centrelines (default 1.25 × fuselage radius) */
+  engineSpacingM?: number;
+  /** chin: one intake under the nose; side: boxes beside the cockpit; caret: angled stealth intakes (default side) */
+  intakes?: IntakeType;
+  /** leading-edge root extensions blending the wing into the fuselage */
+  lerx?: boolean;
+  /** swept: trapezoid; delta: tip chord near zero; diamond: swept-forward trailing edge (default swept) */
+  wingShape?: WingShape;
+  /** fin leading-edge sweep (default 45°) */
+  tailSweepDeg?: number;
 }
+
+export type IntakeType = 'chin' | 'side' | 'caret';
+export type WingShape = 'swept' | 'delta' | 'diamond';
 
 export interface PerformanceTargets {
   topSpeedMach11km: Range;

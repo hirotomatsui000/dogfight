@@ -50,6 +50,10 @@ export const kobchik: AircraftConfig = {
     canards: false,
     engines: 2,
     colors: { primary: '#8c9aa6', secondary: '#6f7f8c', accent: '#2d3640' },
+    engineSpacingM: 2.0,
+    intakes: 'side',
+    lerx: true,
+    tailSweepDeg: 45,
   },
   hudUnits: 'metric',
   performance: {

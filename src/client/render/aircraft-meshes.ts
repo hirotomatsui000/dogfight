@@ -2,8 +2,8 @@ import { Group, type Object3D, Vector3 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
-import kestrelUrl from '../assets/models/kestrel.glb?url';
-import kobchikUrl from '../assets/models/kobchik.glb?url';
+import prizrakUrl from '../assets/models/prizrak.glb?url';
+import shadeUrl from '../assets/models/shade.glb?url';
 import { addEngines, type AircraftModel, buildAircraftModel } from './aircraft-model.ts';
 import type { LoadProgress } from './load-progress.ts';
 
@@ -18,11 +18,14 @@ export interface ModelFit {
   nozzleRadius: number;
 }
 
-/** The owner's models (generated with Tripo; see CREDITS.md), keyed by aircraft id. */
+/**
+ * The owner's models (generated with Tripo; see CREDITS.md), keyed by aircraft id: the F-35A-inspired model flies as
+ * the Shade and the Su-57-inspired one as the Prizrak (owner's choice, 2026-10-01).
+ */
 export const IMPORTED_MODELS: Readonly<Record<string, ModelFit>> = {
-  kestrel: { url: kestrelUrl, nozzles: [[0, -0.045, 0.31]], nozzleRadius: 0.035 },
-  kobchik: {
-    url: kobchikUrl,
+  shade: { url: shadeUrl, nozzles: [[0, -0.045, 0.31]], nozzleRadius: 0.035 },
+  prizrak: {
+    url: prizrakUrl,
     nozzles: [
       [-0.088, -0.06, 0.49],
       [0.098, -0.06, 0.49],

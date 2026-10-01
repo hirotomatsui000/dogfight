@@ -65,7 +65,9 @@ describe.each(listAircraft().map((c) => [c.id, c] as const))('flight model: %s',
     const s = level(120, 1000, 1);
     let maxG = 0;
     fly(s, c, 3, { pitch: 1, throttle: 1 }, (st) => (maxG = Math.max(maxG, st.gLoad)));
-    expect(maxG).toBeLessThan(5);
+    // Full lift at 120 m/s gives (v / stall speed)² G, well short of the G limit.
+    const liftLimitG = (120 / stallSpeed(p, atmosphere(1000).density)) ** 2;
+    expect(maxG).toBeLessThan(Math.min(p.gMax - 2, liftLimitG * 1.2));
   });
 
   it('stalls and sinks below stall speed', () => {
@@ -125,7 +127,8 @@ describe.each(listAircraft().map((c) => [c.id, c] as const))('flight model: %s',
   it('starts a pull smoothly', () => {
     const s = level(250, 3000, 0.8);
     fly(s, c, 0.05, { pitch: 1 });
-    expect(s.angVel.x).toBeLessThan(0.4 * p.maxPitchRateDegS * DEG);
+    // Thrust vectoring raises the pitch-rate limit by up to (1 + thrustVectoring).
+    expect(s.angVel.x).toBeLessThan(0.4 * p.maxPitchRateDegS * DEG * (1 + p.thrustVectoring));
   });
 
   it('meets its top-speed target at 11 km', () => {

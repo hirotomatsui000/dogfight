@@ -1,9 +1,10 @@
 import { botCallsign } from '../shared/ai/bot-names.ts';
 import { DIFFICULTIES, type DifficultyId } from '../shared/ai/difficulty.ts';
-import { getAircraft, listAircraft } from '../shared/data/aircraft/registry.ts';
+import { getAircraft, randomAircraft } from '../shared/data/aircraft/registry.ts';
 import type { AircraftConfig, TeamId } from '../shared/data/aircraft/types.ts';
 import type { MapDefinition } from '../shared/data/maps/map-definition.ts';
 import type { Terrain } from '../shared/map/terrain.ts';
+import { Rng } from '../shared/math/rng.ts';
 import type { GameMode, ModeStatus } from '../shared/modes/mode.ts';
 import { StrikeMode } from '../shared/modes/strike.ts';
 import { TeamDeathmatchMode } from '../shared/modes/team-deathmatch.ts';
@@ -81,6 +82,8 @@ export class Room {
   failures = 0;
   /** wall-clock ms when the last human left, for closing idle rooms */
   emptySinceMs: number | null = null;
+  /** picks each bot's jet, so bots fly a mix of the roster */
+  private readonly botJets: Rng;
 
   constructor(options: RoomOptions, map: MapDefinition, terrain: Terrain) {
     this.options = options;
@@ -88,6 +91,7 @@ export class Room {
     this.mode = options.mode;
     this.map = map;
     this.terrain = terrain;
+    this.botJets = new Rng((options.seed ?? Math.floor(Math.random() * 0x7fffffff)) ^ 0x2545f491);
     this.world = this.createWorld();
   }
 
@@ -262,12 +266,11 @@ export class Room {
   /** Tops each team up with bots to the team size. */
   private fillBots(): void {
     for (const team of ['usa', 'russia'] as const) {
-      const [jet] = listAircraft(team);
-      if (!jet) continue;
       const bots = this.botsOn(team);
       let missing = this.options.teamSize - this.humansOn(team) - bots.length;
       let index = bots.length;
       while (missing-- > 0) {
+        const jet = randomAircraft(team, this.botJets);
         this.world.addAircraft({ callsign: botCallsign(team, index++), team, aircraftId: jet.id, bot: DIFFICULTIES[this.options.botSkill] });
       }
     }

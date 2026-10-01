@@ -1,7 +1,7 @@
 import { Box3, BoxGeometry, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { kestrel } from '../../shared/data/aircraft/kestrel.ts';
-import { kobchik } from '../../shared/data/aircraft/kobchik.ts';
+import { prizrak } from '../../shared/data/aircraft/prizrak.ts';
 import { getAircraft } from '../../shared/data/aircraft/registry.ts';
 import { aircraftModelFor, buildImportedModel, IMPORTED_MODELS, type ModelFit } from './aircraft-meshes.ts';
 
@@ -11,11 +11,11 @@ const twinFit: ModelFit = { url: 'twin.glb', nozzles: [[-0.1, -0.05, 0.45], [0.1
 
 describe('imported aircraft models', () => {
   it('scales the 1-long model to the aircraft length', () => {
-    const body = buildImportedModel(template(), twinFit, kobchik.visual.lengthM).root.getObjectByName('imported-body');
+    const body = buildImportedModel(template(), twinFit, prizrak.visual.lengthM).root.getObjectByName('imported-body');
     if (!body) throw new Error('no imported body');
     const size = new Box3().setFromObject(body).getSize(new Vector3());
-    expect(size.z).toBeCloseTo(kobchik.visual.lengthM, 1);
-    expect(size.x).toBeCloseTo(0.7 * kobchik.visual.lengthM, 1);
+    expect(size.z).toBeCloseTo(prizrak.visual.lengthM, 1);
+    expect(size.x).toBeCloseTo(0.7 * prizrak.visual.lengthM, 1);
   });
 
   it('puts a nozzle exit with a hidden afterburner at each engine, in metres', () => {
@@ -27,13 +27,13 @@ describe('imported aircraft models', () => {
   });
 
   it('uses the loaded model for its aircraft and the generated model for the rest', () => {
-    const meshes = new Map([['kobchik', template()]]);
-    const fits = { kobchik: twinFit };
-    const imported = aircraftModelFor(kobchik, meshes, fits).root;
+    const meshes = new Map([['prizrak', template()]]);
+    const fits = { prizrak: twinFit };
+    const imported = aircraftModelFor(prizrak, meshes, fits).root;
     expect(imported.getObjectByName('imported-body')).toBeDefined();
     expect(imported.getObjectByName('fuselage')).toBeUndefined();
     expect(aircraftModelFor(kestrel, meshes, fits).root.getObjectByName('fuselage')).toBeDefined();
-    expect(aircraftModelFor(kobchik, new Map(), fits).root.getObjectByName('fuselage')).toBeDefined();
+    expect(aircraftModelFor(prizrak, new Map(), fits).root.getObjectByName('fuselage')).toBeDefined();
   });
 
   it('fits each bundled model to a known aircraft, with its nozzles at the back', () => {

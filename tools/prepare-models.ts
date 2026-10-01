@@ -30,8 +30,8 @@ interface ModelSource {
  * mirror-symmetric about the x = 0 plane (a search over area-weighted surface samples, 2026-10-01).
  */
 const MODELS: Record<string, ModelSource> = {
-  kestrel: { file: 'US_Air_Force_F35A.glb', yawDeg: 180, rollDeg: 0 },
-  kobchik: { file: 'Russia_Air_Force_Su-57.glb', yawDeg: -81, rollDeg: -7 },
+  shade: { file: 'US_Air_Force_F35A.glb', yawDeg: 180, rollDeg: 0 },
+  prizrak: { file: 'Russia_Air_Force_Su-57.glb', yawDeg: -81, rollDeg: -7 },
 };
 
 /** Share of vertices the simplifier keeps (about 25,000 of 200,000+ triangles). */

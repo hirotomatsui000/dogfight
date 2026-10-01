@@ -1,9 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
 import { botCallsign } from '../../shared/ai/bot-names.ts';
 import type { DifficultyProfile } from '../../shared/ai/difficulty.ts';
-import { getAircraft, listAircraft, opposingTeam } from '../../shared/data/aircraft/registry.ts';
+import { getAircraft, opposingTeam, randomAircraft } from '../../shared/data/aircraft/registry.ts';
 import { buildTerrain, type MapDefinition } from '../../shared/data/maps/map-definition.ts';
 import type { Terrain } from '../../shared/map/terrain.ts';
+import { Rng } from '../../shared/math/rng.ts';
 import type { GameMode, ModeStatus } from '../../shared/modes/mode.ts';
 import { type ControlInput, neutralInput } from '../../shared/physics/controls.ts';
 import { incomingMissileWarning } from '../../shared/targeting/warnings.ts';
@@ -66,10 +67,10 @@ export class LocalSession implements GameSession {
     this.localId = this.world.addAircraft({ callsign: opts.callsign, team: config.team, aircraftId: config.id }).id;
     if (opts.opponents) {
       const team = opposingTeam(config.team);
-      const [enemyAircraft] = listAircraft(team);
-      if (!enemyAircraft) throw new Error(`No aircraft is registered for team ${team}`);
+      // Each AI opponent flies a random jet of its team, chosen from the match seed.
+      const jets = new Rng((opts.seed ?? 1) ^ 0x2545f491);
       for (let i = 0; i < opts.opponents.count; i++) {
-        this.world.addAircraft({ callsign: botCallsign(team, i), team, aircraftId: enemyAircraft.id, bot: opts.opponents.profile });
+        this.world.addAircraft({ callsign: botCallsign(team, i), team, aircraftId: randomAircraft(team, jets).id, bot: opts.opponents.profile });
       }
     }
     this.targetViews = this.world.groundTargetList().map((t) => ({

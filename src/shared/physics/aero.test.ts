@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { kestrel } from '../data/aircraft/kestrel.ts';
+import { listAircraft } from '../data/aircraft/registry.ts';
 import { DEG } from '../math/units.ts';
 import { cornerSpeed, dragCoefficient, liftCoefficient, stallSpeed, thrustNewtons, trimAlpha, waveDragFactor } from './aero.ts';
 
@@ -80,10 +81,10 @@ describe('thrustNewtons', () => {
 });
 
 describe('stallSpeed', () => {
-  it('is within the performance target for Kestrel at sea level', () => {
-    const v = stallSpeed(p, 1.225);
-    expect(v).toBeGreaterThan(kestrel.performance.stallSpeedMs[0]);
-    expect(v).toBeLessThan(kestrel.performance.stallSpeedMs[1]);
+  it.each(listAircraft().map((c) => [c.id, c] as const))('is within the performance target at sea level: %s', (_id, c) => {
+    const v = stallSpeed(c.physics, 1.225);
+    expect(v).toBeGreaterThan(c.performance.stallSpeedMs[0]);
+    expect(v).toBeLessThan(c.performance.stallSpeedMs[1]);
   });
 });
 

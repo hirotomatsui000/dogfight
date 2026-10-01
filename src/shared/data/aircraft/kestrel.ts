@@ -49,6 +49,9 @@ export const kestrel: AircraftConfig = {
     canards: false,
     engines: 1,
     colors: { primary: '#8d959c', secondary: '#6d757c', accent: '#2f3b46' },
+    intakes: 'chin',
+    lerx: true,
+    tailSweepDeg: 45,
   },
   hudUnits: 'imperial',
   performance: {
