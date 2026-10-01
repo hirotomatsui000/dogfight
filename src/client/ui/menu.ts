@@ -6,6 +6,7 @@ import { SPAWN_STARTS, type SpawnStart } from '../../shared/world/spawns.ts';
 import { type EnvironmentSettings, START_HOURS, TIME_OF_DAY_IDS, TIME_OF_DAY_LABELS, type TimeOfDayId } from '../../shared/world/time-of-day.ts';
 import { WEATHER, WEATHER_IDS, type WeatherId } from '../../shared/world/weather.ts';
 import { STRIKE_DEFAULTS, STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
+import { MISSION_RULES } from '../hud/objective-hud.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
 import { isTouchOnly } from './device.ts';
@@ -30,6 +31,8 @@ export interface StartOptions {
   start?: SpawnStart;
   /** weather and clock (M4) */
   environment?: EnvironmentSettings;
+  /** pilots per side offline: you and AI wingmen against as many AI pilots (M5); 1 when unset */
+  teamSize?: number;
 }
 
 export interface StartMenuHandlers {
@@ -44,8 +47,17 @@ const CONTROL_MODES: readonly ControlMode[] = ['mouse-aim', 'direct'];
 type FlyMission = Exclude<MissionId, 'free-flight' | 'training'>;
 const MISSIONS: readonly { value: FlyMission; label: string }[] = [
   { value: 'team-deathmatch', label: 'Dogfight' },
+  { value: 'air-superiority', label: 'Air Superiority' },
+  { value: 'team-objective', label: 'Team Objective' },
   { value: 'strike', label: 'Strike' },
 ];
+/** The mission names the online sheet uses for a new room. */
+export function missionLabel(m: MissionId): string {
+  return MISSIONS.find((x) => x.value === m)?.label ?? (m === 'free-flight' ? 'Free Flight' : 'Dogfight');
+}
+/** Pilots per side offline (M5). */
+export const TEAM_SIZES = ['1', '2', '4'] as const;
+type TeamSizeChoice = (typeof TEAM_SIZES)[number];
 const CONTROL_LABELS: Record<ControlMode, string> = { 'mouse-aim': 'Mouse aim', direct: 'Keyboard' };
 
 export function sanitizeCallsign(s: string): string {
@@ -338,7 +350,8 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   // In Strike the line under the jets says what the chosen jet must do; otherwise it describes the jet.
   const showSummary = () => {
     const a = aircraft.find((x) => x.id === aircraftId) ?? aircraft[0];
-    summary.textContent = mission === 'strike' ? strikeRole(a) : aircraftSummary(a);
+    summary.textContent =
+      mission === 'strike' ? strikeRole(a) : mission === 'air-superiority' || mission === 'team-objective' ? `${a.name} · ${MISSION_RULES[mission]}` : aircraftSummary(a);
   };
   const jets = choiceGroup(
     'aircraft',
@@ -379,6 +392,18 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
       saveSetting('difficulty', d);
     },
   );
+  let teamSize: TeamSizeChoice = pickValid(String(loadSetting<unknown>('teamSize', '1')), TEAM_SIZES, '1');
+  const size = choiceGroup(
+    'size',
+    'Pilots per side',
+    TEAM_SIZES.map((n) => ({ value: n, label: `${n} v ${n}` })),
+    teamSize,
+    (n) => {
+      teamSize = n;
+      saveSetting('teamSize', n);
+    },
+  );
+  size.title = 'You and AI wingmen against as many AI pilots (offline)';
 
   const launch = el('div', 'launch');
   const fly = el('button', 'fly', 'Fly');
@@ -406,12 +431,14 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   links.append(training, freeFlight, controlsLink, settingsLink);
   launch.append(launchRow, links);
 
-  main.append(brand, missions, jets, skill, worldRow.set, launch);
+  const opponents = el('div', 'opponent-row');
+  opponents.append(skill, size);
+  main.append(brand, missions, jets, opponents, worldRow.set, launch);
   form.append(top, main, credits());
 
   const sheet = controlsSheet(settings);
   const invitedRoom = new URLSearchParams(location.search).get('room');
-  const online = onlineSheet(invitedRoom ?? 'public', () => (mission === 'strike' ? 'Strike' : 'Dogfight'), (room) => start(mission, { room }));
+  const online = onlineSheet(invitedRoom ?? 'public', () => missionLabel(mission), (room) => start(mission, { room }));
   screen.append(form, sheet, online);
 
   const start = (mission: MissionId, onlineRoom?: { room: string }) => {
@@ -426,6 +453,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
       map: w.map,
       start: w.start,
       environment: environmentOf(w),
+      teamSize: Number(teamSize),
     };
     saveSetting('aircraft', options.aircraftId);
     saveSetting('callsign', options.callsign);

@@ -1,16 +1,19 @@
-import type { Group, Scene, Vector3 } from 'three';
+import type { Group, Object3D, Scene, Vector3 } from 'three';
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import { DEG } from '../../shared/math/units.ts';
 import type { AircraftView } from '../session/game-session.ts';
 import { type AircraftModel, parametricModel } from './aircraft-model.ts';
 import { navLights } from './environment/night-lights.ts';
 import { landingGear, setGear } from './landing-gear.ts';
+import { ROTODOME_RAD_PER_S } from './sentinel-model.ts';
 import { visibilityScale } from './visibility.ts';
 
 interface Entry {
   model: AircraftModel;
   configId: string;
   gear: Group;
+  /** a Sentinel's radar dish (M5) */
+  dome: Object3D | null;
 }
 
 const AFTERBURNER_THRESHOLD = 0.9;
@@ -40,7 +43,7 @@ export class SceneSync {
         const model = this.build(v.config);
         const gear = landingGear(v.config.visual);
         model.root.add(navLights(v.config.visual), gear);
-        entry = { model, configId: v.config.id, gear };
+        entry = { model, configId: v.config.id, gear, dome: model.root.getObjectByName('rotodome') ?? null };
         this.entries.set(v.id, entry);
         this.scene.add(entry.model.root);
       }
@@ -53,6 +56,7 @@ export class SceneSync {
         : visibilityScale(v.position.distanceTo(cameraPos), v.config.visual.lengthM, MIN_APPARENT_ANGLE, MAX_VISIBILITY_SCALE);
       root.scale.setScalar(scale);
       setGear(entry.gear, v.alive ? v.flight.gear : 0);
+      if (entry.dome) entry.dome.rotation.y = (timeS * ROTODOME_RAD_PER_S) % (Math.PI * 2);
 
       const ab = (v.flight.throttle - AFTERBURNER_THRESHOLD) / (1 - AFTERBURNER_THRESHOLD);
       for (const [i, flame] of entry.model.afterburners.entries()) {

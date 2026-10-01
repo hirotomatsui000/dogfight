@@ -6,6 +6,7 @@ import prizrakUrl from '../assets/models/prizrak.glb?url';
 import shadeUrl from '../assets/models/shade.glb?url';
 import { addEngines, type AircraftModel, parametricModel } from './aircraft-model.ts';
 import type { LoadProgress } from './load-progress.ts';
+import { sentinelModel } from './sentinel-model.ts';
 
 /**
  * How an imported model sits in its jet. tools/prepare-models.ts writes every model 1 long with the nose toward -z,
@@ -74,6 +75,7 @@ export function aircraftModelFor(
   meshes: AircraftMeshes,
   fits: Readonly<Record<string, ModelFit>> = IMPORTED_MODELS,
 ): AircraftModel {
+  if (config.support) return sentinelModel(config);
   const template = meshes.get(config.id);
   const fit = fits[config.id];
   return template && fit ? buildImportedModel(template, fit, config.visual.lengthM) : parametricModel(config);

@@ -100,10 +100,10 @@ body {
 .start-top { display: flex; justify-content: flex-end; }
 
 .start-main {
-  align-self: center;
-  width: min(100%, 460px);
+  align-self: safe center;
+  width: min(100%, 600px);
   display: grid;
-  gap: clamp(22px, 4.4vh, 40px);
+  gap: clamp(14px, 3vh, 36px);
 }
 
 .start-main > * { animation: rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
@@ -177,8 +177,13 @@ body {
 .option-kicker { font: 500 10px/1.3 var(--mono); letter-spacing: 0.2em; text-transform: uppercase; }
 .option-name { font: 700 30px/1 var(--display); letter-spacing: 0.04em; text-transform: uppercase; }
 .pick-skill .option-name,
-.pick-mission .option-name,
+.pick-size .option-name,
 .sheet .option-name { font-size: 20px; letter-spacing: 0.08em; }
+/* Four missions on one line (M5). */
+.pick-mission .option-name { font-size: 18px; letter-spacing: 0.06em; }
+.pick-mission .options { gap: 6px 10px; }
+/* Opponent skill and pilots per side side by side (M5). */
+.opponent-row { display: flex; flex-wrap: wrap; gap: 12px 36px; }
 
 input:checked + .option { color: var(--canopy); }
 
@@ -209,7 +214,7 @@ input:focus-visible + .option { color: var(--hud); }
 /* The world row (M4): compact dropdowns in the HUD style. */
 .world-row { display: flex; flex-wrap: wrap; gap: 8px 8px; align-items: center; }
 .world-select {
-  padding: 6px 8px;
+  padding: 6px 4px;
   font: 600 15px/1 var(--display);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -230,7 +235,7 @@ input:focus-visible + .option { color: var(--hud); }
 
 .pick-note {
   margin: 10px 0 0;
-  max-width: 40ch;
+  max-width: 56ch;
   min-height: 2.9em;
   font-size: 14px;
   line-height: 1.45;
@@ -491,10 +496,13 @@ input:focus-visible + .option { color: var(--hud); }
 
 /* Short screens (a 720 p laptop): tighten the column so FLY, the links and the credits stay in view. */
 @media (max-height: 820px) {
-  .start-form { gap: 16px; padding-block: 16px; }
-  .start-main { gap: 18px; }
-  .brand-word { font-size: clamp(64px, min(12vw, 15vh), 150px); }
-  .brand-tag { margin-top: 10px; }
+  .start-form { gap: 12px; padding-block: 12px; }
+  .start-main { gap: 12px; }
+  .brand-word { font-size: clamp(56px, min(12vw, 11vh), 150px); }
+  .brand-tag { margin-top: 8px; }
+  .pick > legend { margin-bottom: 4px; }
+  .pick-note { min-height: 0; margin-top: 6px; }
+  .launch { gap: 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

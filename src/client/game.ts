@@ -5,11 +5,9 @@ import { BOMB_ANVIL, CANNONS } from '../shared/data/weapons.ts';
 import { timeToImpact } from '../shared/map/ground-proximity.ts';
 import { DEG } from '../shared/math/units.ts';
 import { QUICK_CHAT } from '../shared/net/protocol.ts';
-import { FreeFlightMode } from '../shared/modes/free-flight.ts';
 import type { GameMode } from '../shared/modes/mode.ts';
-import { StrikeMode } from '../shared/modes/strike.ts';
-import { TeamDeathmatchMode } from '../shared/modes/team-deathmatch.ts';
-import { TrainingMode } from '../shared/modes/training.ts';
+import { createMode } from '../shared/modes/registry.ts';
+import { STRIKE_AIRCRAFT_PER_PILOT } from '../shared/modes/strike.ts';
 import { atmosphere } from '../shared/physics/atmosphere.ts';
 import { type ControlInput, neutralInput } from '../shared/physics/controls.ts';
 import { predictImpact } from '../shared/weapons/bomb.ts';
@@ -24,6 +22,7 @@ import { describeDeath, KillFeed } from './hud/kill-feed.ts';
 import { setHudColor } from './hud/palette.ts';
 import { releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
 import { formatTimeOfDay } from './hud/format.ts';
+import { sentinelDownText, zoneEventText, zoneFeedText } from './hud/objective-hud.ts';
 import { takeoffHint } from './hud/takeoff.ts';
 import { trainingPrompt } from './hud/training-prompts.ts';
 import { BASE_MOUSE_SENSITIVITY, ControlMapper, type ControlMode } from './input/control-mapper.ts';
@@ -89,10 +88,10 @@ function showLoading(root: HTMLElement, text: string): HTMLElement {
   return overlay;
 }
 
-function createMode(options: StartOptions): GameMode {
-  if (options.mission === 'strike') return new StrikeMode();
-  if (options.mission === 'training') return new TrainingMode();
-  return options.mission === 'team-deathmatch' ? new TeamDeathmatchMode() : new FreeFlightMode();
+/** The offline mode for the title screen's choices: Strike gives each side four aircraft per pilot (M5). */
+function modeFor(options: StartOptions): GameMode {
+  const size = Math.max(1, options.teamSize ?? 1);
+  return createMode(options.mission, { strike: { aircraftPerTeam: STRIKE_AIRCRAFT_PER_PILOT * size } });
 }
 
 function deathText(cause: DeathCause, killer: string | null): string {
@@ -169,7 +168,9 @@ export async function startGame(
   }
   const map = loadedMap.def;
   const terrain = loadedMap.terrain;
-  const mode = createMode(options);
+  const teamSize = Math.max(1, options.teamSize ?? 1);
+  // Online the room's mode decides the respawn delay shown while waiting.
+  const mode = online ? createMode(online.modeId) : modeFor(options);
   let session: GameSession;
   if (online) {
     session = online;
@@ -182,8 +183,9 @@ export async function startGame(
       callsign: options.callsign,
       // A fresh seed per match varies gunfire spread, flare luck and the bot's aim; the World stays deterministic.
       seed: Math.floor(Math.random() * 0x7fffffff),
-      // Training brings its own drones.
-      opponents: options.mission === 'free-flight' || options.mission === 'training' ? undefined : { count: 1, profile: DIFFICULTIES[options.difficulty] },
+      // Training brings its own drones; Free Flight has no enemies.
+      opponents: options.mission === 'free-flight' || options.mission === 'training' ? undefined : { count: teamSize, profile: DIFFICULTIES[options.difficulty] },
+      wingmen: options.mission === 'free-flight' || options.mission === 'training' || teamSize < 2 ? undefined : { count: teamSize - 1, profile: DIFFICULTIES[options.difficulty] },
       start: options.start,
       // Training flies a calm noon.
       environment: options.mission === 'training' ? undefined : options.environment,
@@ -404,9 +406,12 @@ export async function startGame(
         audio?.explosion(explosionGain(d));
         if (d < EXPLOSION_SHAKE_RANGE_M) cameraRig.addTrauma(0.6 * (1 - d / EXPLOSION_SHAKE_RANGE_M));
       }
+      const me = session.localView();
       if (e.aircraftId === session.localId) {
         deathMessage = deathText(e.cause, killer?.callsign ?? null);
         respawnAt = nowS + mode.respawnDelayS;
+      } else if (victim?.config.support && me) {
+        showBanner(sentinelDownText(victim.team, me.team), nowS);
       } else if (killer?.isLocal) {
         showBanner('TARGET DESTROYED', nowS);
       }
@@ -444,6 +449,12 @@ export async function startGame(
         const alert = targetAlerts.underAttack(e.targetId, nowS);
         if (alert) showBanner(alert, nowS);
       }
+    } else if (e.type === 'zone') {
+      const me = session.localView();
+      if (me) {
+        showBanner(zoneEventText(e.zoneId, e.owner, e.previous, me.team), nowS);
+        killFeed.add(zoneFeedText(e.zoneId, e.owner, e.previous), e.owner ?? e.previous ?? me.team, false);
+      }
     } else if (e.type === 'targetDestroyed') {
       const text = targetDestroyedText(e.targetId);
       showBanner(text, nowS);
@@ -462,6 +473,7 @@ export async function startGame(
       .filter((t) => t.destroyed)
       .map((t) => `${t.id} (${t.label})`);
     const rows: ResultRow[] = [...session.views()]
+      .filter((v) => !v.config.support)
       .map((v) => ({ callsign: v.callsign, aircraft: v.config.name, team: v.team, kills: v.kills, deaths: v.deaths, isLocal: v.isLocal }))
       .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
     const training = options.mission === 'training';
@@ -655,7 +667,7 @@ export async function startGame(
     } else {
       hud.draw(null);
     }
-    mapScreen.draw(session.localView(), session.views(), session.groundTargets());
+    mapScreen.draw(session.localView(), session.views(), session.groundTargets(), session.modeStatus());
     rafId = requestAnimationFrame(frame);
   };
   rafId = requestAnimationFrame(frame);

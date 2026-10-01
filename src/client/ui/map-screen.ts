@@ -4,6 +4,8 @@ import { airfieldWorld } from '../../shared/map/features.ts';
 import type { LandCover } from '../../shared/map/land-cover.ts';
 import type { Terrain } from '../../shared/map/terrain.ts';
 import { headingRad } from '../../shared/physics/flight-model.ts';
+import type { ModeStatus } from '../../shared/modes/mode.ts';
+import { FOE, FRIEND } from '../hud/palette.ts';
 import type { AircraftView, GroundTargetView } from '../session/game-session.ts';
 
 /** Land-cover colours of the map screen, chart-like rather than photographic. */
@@ -36,7 +38,9 @@ export function shadedColor(cover: LandCover, shade: number): [number, number, n
 }
 
 const IMAGE_PX = 1024;
-const TEAM_COLORS: Record<TeamId, string> = { usa: '#5aa7ff', russia: '#ff5a4f' };
+/** Team colours follow the HUD's friend/foe choice (M5: colour-blind safe option). */
+const teamColor = (team: TeamId, mine: TeamId) => (team === mine ? FRIEND : FOE);
+const AIRFIELD_TEAM_COLORS: Record<TeamId, string> = { usa: '#5aa7ff', russia: '#ff5a4f' };
 
 /** The map image: land cover with hill shading, roads, towns and airfields. Drawn once per map (about 0.2 s). */
 function drawBase(def: MapDefinition, terrain: Terrain): HTMLCanvasElement {
@@ -126,7 +130,7 @@ export class MapScreen {
     if (this.open && !this.base) this.base = drawBase(this.def, this.terrain);
   }
 
-  draw(me: AircraftView | null, views: Iterable<AircraftView>, targets: readonly GroundTargetView[]): void {
+  draw(me: AircraftView | null, views: Iterable<AircraftView>, targets: readonly GroundTargetView[], status: ModeStatus | null = null): void {
     if (!this.open || !this.base) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const css = Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.86);
@@ -172,7 +176,7 @@ export class MapScreen {
       }
       for (const a of f.airfields) {
         const p = at(a.x, a.z);
-        const color = a.team ? TEAM_COLORS[a.team] : '#e8e8e8';
+        const color = a.team ? AIRFIELD_TEAM_COLORS[a.team] : '#e8e8e8';
         label(`✈ ${a.name}`, p.u, p.v + 16 * s, `600 ${Math.round(11 * s)}px system-ui, sans-serif`, color);
       }
       for (const r of f.rivers) {
@@ -186,12 +190,43 @@ export class MapScreen {
       const p = at(t.position.x, t.position.z);
       label(t.destroyed ? `✕${t.id}` : t.id, p.u, p.v + 5 * s, `700 ${Math.round(14 * s)}px system-ui, sans-serif`, t.destroyed ? '#999' : '#ffc14d');
     }
-    // Aircraft: teammates always (datalink), enemies only while they are contacts.
+    const mine: TeamId = me?.team ?? 'usa';
+    // Air Superiority zones (M5): filled by owner, with the letter.
+    for (const z of status?.zones ?? []) {
+      const p = at(z.x, z.z);
+      const r = (z.radiusM / def.sizeM) * px;
+      const color = z.owner ? teamColor(z.owner, mine) : '#e8e8e8';
+      ctx.fillStyle = color;
+      ctx.globalAlpha = z.owner ? 0.3 : 0.12;
+      ctx.beginPath();
+      ctx.arc(p.u, p.v, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2 * s;
+      ctx.stroke();
+      label(z.id, p.u, p.v + 6 * s, `700 ${Math.round(16 * s)}px system-ui, sans-serif`, color);
+    }
+    // Aircraft: teammates always, enemies while they are contacts or on the datalink (hollow).
     const known = new Set(me ? me.contacts.map((k) => k.id) : []);
+    const linked = new Set(me ? me.datalink : []);
     for (const v of views) {
       if (!v.alive || (me && v.id === me.id)) continue;
-      if (me && v.team !== me.team && !known.has(v.id)) continue;
-      this.marker(ctx, at(v.position.x, v.position.z), headingRad(v.flight), TEAM_COLORS[v.team], 6 * s, false);
+      const enemy = me !== null && v.team !== me.team;
+      if (enemy && !known.has(v.id) && !linked.has(v.id)) continue;
+      const p = at(v.position.x, v.position.z);
+      const color = teamColor(v.team, mine);
+      if (v.config.support) {
+        // Sentinels (M5): a ringed dot, named.
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2 * s;
+        ctx.beginPath();
+        ctx.arc(p.u, p.v, 7 * s, 0, Math.PI * 2);
+        ctx.stroke();
+        label('SENTINEL', p.u, p.v - 11 * s, `700 ${Math.round(10 * s)}px system-ui, sans-serif`, color);
+        continue;
+      }
+      this.marker(ctx, p, headingRad(v.flight), color, 6 * s, false, enemy && !known.has(v.id));
     }
     if (me && me.alive) this.marker(ctx, at(me.position.x, me.position.z), headingRad(me.flight), '#63ff95', 9 * s, true);
     // North and the scale.
@@ -207,7 +242,7 @@ export class MapScreen {
     this.overlay.remove();
   }
 
-  private marker(ctx: CanvasRenderingContext2D, p: { u: number; v: number }, heading: number, color: string, size: number, me: boolean): void {
+  private marker(ctx: CanvasRenderingContext2D, p: { u: number; v: number }, heading: number, color: string, size: number, me: boolean, hollow = false): void {
     ctx.save();
     ctx.translate(p.u, p.v);
     ctx.rotate(heading);
@@ -217,6 +252,13 @@ export class MapScreen {
     ctx.lineTo(0, size * 0.4);
     ctx.lineTo(-size * 0.7, size * 0.8);
     ctx.closePath();
+    if (hollow) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
     ctx.fillStyle = color;
     ctx.fill();
     ctx.lineWidth = me ? 2 : 1;

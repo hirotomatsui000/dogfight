@@ -33,6 +33,8 @@ export interface LocalSessionOptions {
   terrain?: Terrain;
   /** AI bots on the other team */
   opponents?: OpponentOptions;
+  /** AI bots on the player's own team (M5) */
+  wingmen?: OpponentOptions;
   /** the player starts in the air (default) or on the team's runway (M4) */
   start?: SpawnStart;
   /** weather and clock (M4) */
@@ -73,12 +75,17 @@ export class LocalSession implements GameSession {
     this.world = new World({ map: opts.map, terrain: this.terrain, mode: opts.mode, seed: opts.seed ?? 1, environment: opts.environment });
     const config = getAircraft(opts.aircraftId);
     this.localId = this.world.addAircraft({ callsign: opts.callsign, team: config.team, aircraftId: config.id, start: opts.start }).id;
+    // Each AI pilot flies a random jet of its team, chosen from the match seed.
+    const jets = new Rng((opts.seed ?? 1) ^ 0x2545f491);
     if (opts.opponents) {
       const team = opposingTeam(config.team);
-      // Each AI opponent flies a random jet of its team, chosen from the match seed.
-      const jets = new Rng((opts.seed ?? 1) ^ 0x2545f491);
       for (let i = 0; i < opts.opponents.count; i++) {
         this.world.addAircraft({ callsign: botCallsign(team, i), team, aircraftId: randomAircraft(team, jets).id, bot: opts.opponents.profile });
+      }
+    }
+    if (opts.wingmen) {
+      for (let i = 0; i < opts.wingmen.count; i++) {
+        this.world.addAircraft({ callsign: botCallsign(config.team, i), team: config.team, aircraftId: randomAircraft(config.team, jets).id, bot: opts.wingmen.profile });
       }
     }
     this.targetViews = this.world.groundTargetList().map((t) => ({

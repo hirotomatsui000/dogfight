@@ -37,6 +37,8 @@ export function drawCombatLayer(ctx: CanvasRenderingContext2D, p: Projector, f: 
     const friendly = v.team === me.team;
     if (!friendly && !known.has(v.id)) continue;
     const designated = f.target !== null && v.id === f.target.id;
+    // Sentinels have their own markers (objective layer) unless designated.
+    if (v.config.support && !designated) continue;
     if (!p.point(f.camera, v.position, pt)) {
       if (!friendly) drawEdgeArrow(ctx, p, f, v.position, formatRange(me.flight.pos.distanceTo(v.flight.pos), me.config.hudUnits), FOE);
       continue;

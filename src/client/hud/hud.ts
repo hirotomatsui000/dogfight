@@ -14,6 +14,7 @@ import {
   verticalSpeedValue,
 } from './format.ts';
 import { drawGameLayer } from './game-layer.ts';
+import { drawDatalink, drawObjective, drawZones } from './objective-layer.ts';
 import type { HudFrame } from './hud-frame.ts';
 import { AMBER, FONT, FONT_BIG, FONT_SMALL, GREEN, PRIMARY, RED, SHADOW, WHITE } from './palette.ts';
 import { Projector, type ScreenPoint } from './projector.ts';
@@ -101,7 +102,8 @@ export class Hud {
       this.drawThrottle(f);
       this.drawStatus(f);
       this.drawWarnings(f);
-      if (f.status.modeId !== 'free-flight') {
+      if (f.status.modeId !== 'free-flight' || f.status.drones) {
+        drawDatalink(ctx, this.projector, f);
         drawCombatLayer(ctx, this.projector, f, this.clock);
         drawRadarScope(ctx, 100 + SCOPE_RADIUS_PX, this.height - 40 - SCOPE_RADIUS_PX, SCOPE_RADIUS_PX, f);
         if (f.status.strike) drawStrikeMarkers(ctx, this.projector, f, f.status.strike, this.clock);
@@ -109,6 +111,8 @@ export class Hud {
     }
     drawGameLayer(ctx, this.width, this.height, f);
     if (f.status.strike) drawStrikeStatus(ctx, f, f.status.strike);
+    if (f.status.zones) drawZones(ctx, this.projector, f, f.status.zones, this.width);
+    if (f.status.objective) drawObjective(ctx, this.projector, f, f.status.objective);
     if (f.training) drawTrainingLayer(ctx, this.projector, f, f.training, this.width);
     this.drawModeAndHint(f);
     if (f.banner) this.drawCenterText(f.banner, this.height * 0.3, AMBER, FONT_BIG);

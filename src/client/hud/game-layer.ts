@@ -58,7 +58,7 @@ function drawHitMarker(ctx: CanvasRenderingContext2D, x: number, y: number): voi
 }
 
 function drawScoreboard(ctx: CanvasRenderingContext2D, width: number, height: number, f: HudFrame): void {
-  const rows = [...f.views].sort((a, b) => (a.team === b.team ? b.kills - a.kills : a.team === f.view.team ? -1 : 1));
+  const rows = [...f.views].filter((v) => !v.config.support).sort((a, b) => (a.team === b.team ? b.kills - a.kills : a.team === f.view.team ? -1 : 1));
   const w = 460;
   const h = 70 + rows.length * 22;
   const x = width / 2 - w / 2;

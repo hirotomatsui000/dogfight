@@ -8,6 +8,7 @@ import type { Terrain } from '../shared/map/terrain.ts';
 import { Rng } from '../shared/math/rng.ts';
 import type { ModeStatus } from '../shared/modes/mode.ts';
 import { createMode } from '../shared/modes/registry.ts';
+import { STRIKE_AIRCRAFT_PER_PILOT } from '../shared/modes/strike.ts';
 import { type DecodedInput, encodeSnapshot } from '../shared/net/codec.ts';
 import { type HelloMessage, type OnlineModeId, PROTOCOL_VERSION, type RosterEntry, type ServerJsonMessage, SNAPSHOT_EVERY_TICKS } from '../shared/net/protocol.ts';
 import { type ControlInput, neutralInput } from '../shared/physics/controls.ts';
@@ -48,8 +49,7 @@ export interface RoomOptions {
 
 /** Inputs waiting per player; older ones are dropped beyond this (about half a second). */
 export const MAX_QUEUE = 30;
-/** Strike online: aircraft per pilot on each team (spec §13.1). */
-export const STRIKE_AIRCRAFT_PER_PILOT = 4;
+export { STRIKE_AIRCRAFT_PER_PILOT } from '../shared/modes/strike.ts';
 /** Status updates go out on change, and at least this often so clocks stay in step. */
 const STATUS_EVERY_TICKS = TICK_RATE;
 

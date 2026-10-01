@@ -42,16 +42,33 @@ export function drawRadarScope(ctx: CanvasRenderingContext2D, cx: number, cy: nu
   ctx.stroke();
 
   const known = new Set(me.contacts.map((c) => c.id));
+  const linked = new Set(me.datalink);
   for (const v of f.views) {
     if (v.isLocal || !v.alive) continue;
     const friendly = v.team === me.team;
-    if (!friendly && !known.has(v.id)) continue;
+    if (!friendly && !known.has(v.id) && !linked.has(v.id)) continue;
     if (!scopePoint(v.position.x - me.position.x, v.position.z - me.position.z, heading, scale, radius, pos)) continue;
     ctx.strokeStyle = friendly ? FRIEND : FOE;
     ctx.fillStyle = friendly ? FRIEND : FOE;
     const x = cx + pos.x;
     const y = cy + pos.y;
-    if (friendly) {
+    if (v.config.support) {
+      // Sentinels (M5): a circle with a bar, like their HUD marker.
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.moveTo(x - 8, y);
+      ctx.lineTo(x + 8, y);
+      ctx.stroke();
+    } else if (!friendly && !known.has(v.id)) {
+      // A datalink contact (M5): seen by a teammate's radar only, a hollow diamond.
+      ctx.beginPath();
+      ctx.moveTo(x, y - 5);
+      ctx.lineTo(x + 5, y);
+      ctx.lineTo(x, y + 5);
+      ctx.lineTo(x - 5, y);
+      ctx.closePath();
+      ctx.stroke();
+    } else if (friendly) {
       // Friend and foe differ in shape as well as color (spec §24): friends are triangles, enemies squares.
       ctx.beginPath();
       ctx.moveTo(x, y - 5);
