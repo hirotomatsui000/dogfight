@@ -49,6 +49,11 @@ export class DomInput {
 
   requestPointerLock(): void {
     if (this.pointerLocked) return;
+    // iPhone Safari before iOS 26 (and every in-app browser built on it) has no Pointer Lock API at all.
+    if (typeof this.target.requestPointerLock !== 'function') {
+      this.pointerLockRefused = true;
+      return;
+    }
     // Modern browsers return a Promise that rejects when capture is refused (embedded views, no user gesture);
     // older Safari returns nothing. Either way the game stays playable with the keyboard.
     const result = this.target.requestPointerLock() as Promise<void> | undefined;

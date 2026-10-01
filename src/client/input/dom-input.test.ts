@@ -20,4 +20,11 @@ describe('DomInput.requestPointerLock', () => {
     const target = { requestPointerLock: () => undefined } as unknown as HTMLElement;
     expect(() => new DomInput(target).requestPointerLock()).not.toThrow();
   });
+
+  it('works in browsers with no pointer-lock API at all (iPhone Safari before iOS 26) and reports it', () => {
+    vi.stubGlobal('document', {});
+    const input = new DomInput({} as unknown as HTMLElement);
+    expect(() => input.requestPointerLock()).not.toThrow();
+    expect(input.pointerLockRefused).toBe(true);
+  });
 });
