@@ -54,5 +54,13 @@ export interface EnvironmentSettings {
   clockRunning: boolean;
 }
 
+/**
+ * Settings that show `hour` at `elapsedS` into the match (Free Flight's clock control, M5): the start hour is wound
+ * back by the time the clock has already run.
+ */
+export function environmentAt(weather: WeatherId, hour: number, clockRunning: boolean, elapsedS: number): EnvironmentSettings {
+  return { weather, startHour: hourAt(hour, clockRunning, -elapsedS), clockRunning };
+}
+
 /** A plain noon sky with no clouds: the World's default, so tests and the balance tournament stay as they were. */
 export const CALM_NOON: Readonly<EnvironmentSettings> = { weather: 'clear', startHour: 12, clockRunning: false };

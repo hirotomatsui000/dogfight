@@ -7,7 +7,7 @@ import { damageFlightEnv, damageState, maneuverKillCredit } from '../damage/dama
 import { getAircraft } from '../data/aircraft/registry.ts';
 import type { AircraftPhysics, TeamId } from '../data/aircraft/types.ts';
 import type { MapDefinition } from '../data/maps/map-definition.ts';
-import { airfieldGroundHeight } from '../map/features.ts';
+import { airfieldGroundAt, airfieldGroundHeight } from '../map/features.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { type Approach, closestApproach } from '../math/closest-approach.ts';
 import { Rng } from '../math/rng.ts';
@@ -32,6 +32,10 @@ export const DT = 1 / TICK_RATE;
 export const BOUNDARY_GRACE_S = 15;
 export const CEILING_M = 18000;
 export const GROUND_CLEARANCE_M = 2;
+/** Free Flight's "fly from here" (M5): at least this high, and this far above the ground, inside this share of the area. */
+const FLY_FROM_MIN_ALTITUDE_M = 2000;
+const FLY_FROM_CLEARANCE_M = 1500;
+const FLY_FROM_AREA_SHARE = 0.9;
 
 export interface WorldOptions {
   map: MapDefinition;
@@ -77,8 +81,9 @@ export class World implements ModeDirector, CombatHost, BotWorld {
   readonly mode: GameMode;
   readonly rng: Rng;
   readonly combat: Combat;
-  readonly environment: EnvironmentSettings;
-  readonly clouds: CloudField;
+  /** weather and clock; Free Flight can change them during a match (M5) */
+  environment: EnvironmentSettings;
+  clouds: CloudField;
   tick = 0;
   private readonly seed: number;
   private readonly aircraft = new Map<number, AircraftEntity>();
@@ -103,6 +108,47 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     this.groundTargets = opts.mode.groundTargets(opts.map).map((spec) => createGroundTarget(spec, opts.terrain));
     this.combat = new Combat(this);
     for (const spec of opts.mode.supportAircraft?.(opts.map) ?? []) this.addSupport(spec);
+  }
+
+  /** New weather and clock for the rest of the match (Free Flight, M5); the clouds are rebuilt for the new weather. */
+  setEnvironment(env: EnvironmentSettings): void {
+    const weatherChanged = env.weather !== this.environment.weather;
+    this.environment = { ...env };
+    if (weatherChanged) this.clouds = new CloudField(WEATHER[env.weather], this.map.seed);
+  }
+
+  /**
+   * Free Flight (M5): puts a pilot's jet in the air over (x, z), or on the runway when the point is on an airfield,
+   * at once and fully repaired. The point is kept inside the combat area. False in other modes.
+   */
+  flyFrom(id: number, x: number, z: number): boolean {
+    const a = this.aircraft.get(id);
+    if (!a || a.support || this.mode.id !== 'free-flight') return false;
+    const c = this.map.combatArea;
+    const d = Math.hypot(x - c.x, z - c.z);
+    const limit = FLY_FROM_AREA_SHARE * c.radiusM;
+    if (d > limit) {
+      x = c.x + ((x - c.x) * limit) / d;
+      z = c.z + ((z - c.z) * limit) / d;
+    }
+    const field = this.map.features ? airfieldGroundAt(this.map.features.airfields, x, z) : null;
+    let flight: FlightState;
+    if (field) {
+      flight = runwayFlightState(field, a.id % 12);
+    } else {
+      // Toward the middle of the area, high enough above the ground below.
+      const heading = Math.atan2(c.x - x, -(c.z - z));
+      const altitude = Math.max(FLY_FROM_MIN_ALTITUDE_M, this.terrain.surfaceAt(x, z) + FLY_FROM_CLEARANCE_M);
+      flight = spawnFlightState({ x, z, headingRad: Number.isFinite(heading) ? heading : 0, altitudeM: altitude }, this.terrain, 0, a.config.physics);
+    }
+    a.flight = flight;
+    a.alive = true;
+    a.spawnGen++;
+    a.respawnAtTick = -1;
+    a.outOfBoundsTicks = 0;
+    resetForSpawn(a);
+    this.emit({ type: 'spawned', aircraftId: a.id, spawnGen: a.spawnGen });
+    return true;
   }
 
   /** Where the mode wants a bot when it has nothing near to fight (M5). */
