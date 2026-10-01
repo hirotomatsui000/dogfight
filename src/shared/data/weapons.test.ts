@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { listAircraft } from './aircraft/registry.ts';
-import { CANNONS, COUNTERMEASURES, SRM_DART } from './weapons.ts';
+import { BOMB_ANVIL, CANNONS, COUNTERMEASURES, SRM_DART } from './weapons.ts';
 
 describe('weapon data', () => {
   it('matches the cannon table in the spec', () => {
@@ -42,5 +42,10 @@ describe('weapon data', () => {
 
   it('has a cannon spec for every aircraft', () => {
     for (const a of listAircraft()) expect(CANNONS[a.stores.cannon].id).toBe(a.stores.cannon);
+  });
+
+  it('matches the bomb in the spec', () => {
+    expect(BOMB_ANVIL).toMatchObject({ name: 'Anvil', perAircraft: 8, minReleaseIntervalS: 0.25, damage: 40, fullDamageRadiusM: 30, maxDamageRadiusM: 90, maxFallS: 60 });
+    expect(BOMB_ANVIL.dragPerM).toBeGreaterThan(0);
   });
 });

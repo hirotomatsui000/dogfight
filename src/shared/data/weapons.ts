@@ -143,3 +143,31 @@ export const COUNTERMEASURES: CountermeasureSpec = { minIntervalS: 0.4, flareBur
 
 /** Throttle above which the engine is on afterburner (spec §5.3). */
 export const AFTERBURNER_THROTTLE = 0.9;
+
+export interface BombSpec {
+  id: 'anvil';
+  name: string;
+  /** bombs on each new Russian aircraft in a Strike match */
+  perAircraft: number;
+  minReleaseIntervalS: number;
+  /** drag constant at sea-level density, per meter: the bomb decelerates by dragPerM · v² */
+  dragPerM: number;
+  damage: number;
+  fullDamageRadiusM: number;
+  maxDamageRadiusM: number;
+  /** a bomb still falling after this long disappears */
+  maxFallS: number;
+}
+
+/** Free-fall bomb "Anvil" for the Strike mode (spec §10.4). It damages ground targets, never aircraft. */
+export const BOMB_ANVIL: BombSpec = {
+  id: 'anvil',
+  name: 'Anvil',
+  perAircraft: 8,
+  minReleaseIntervalS: 0.25,
+  dragPerM: 8e-5,
+  damage: 40,
+  fullDamageRadiusM: 30,
+  maxDamageRadiusM: 90,
+  maxFallS: 60,
+};
