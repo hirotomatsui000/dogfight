@@ -10,6 +10,8 @@ import { type ControlInput, neutralInput } from '../../shared/physics/controls.t
 import { incomingMissileWarning } from '../../shared/targeting/warnings.ts';
 import { projectileVelocity } from '../../shared/weapons/cannon.ts';
 import type { GameEvent } from '../../shared/world/events.ts';
+import type { SpawnStart } from '../../shared/world/spawns.ts';
+import type { EnvironmentSettings } from '../../shared/world/time-of-day.ts';
 import { DT, World } from '../../shared/world/world.ts';
 import { FixedStepper } from './fixed-stepper.ts';
 import type { AircraftView, BombView, GameSession, GroundTargetView, MissileView, ProjectileView } from './game-session.ts';
@@ -29,6 +31,10 @@ export interface LocalSessionOptions {
   terrain?: Terrain;
   /** AI bots on the other team */
   opponents?: OpponentOptions;
+  /** the player starts in the air (default) or on the team's runway (M4) */
+  start?: SpawnStart;
+  /** weather and clock (M4) */
+  environment?: EnvironmentSettings;
 }
 
 export { BOT_CALLSIGNS } from '../../shared/ai/bot-names.ts';
@@ -62,9 +68,9 @@ export class LocalSession implements GameSession {
   constructor(opts: LocalSessionOptions) {
     this.map = opts.map;
     this.terrain = opts.terrain ?? buildTerrain(opts.map);
-    this.world = new World({ map: opts.map, terrain: this.terrain, mode: opts.mode, seed: opts.seed ?? 1 });
+    this.world = new World({ map: opts.map, terrain: this.terrain, mode: opts.mode, seed: opts.seed ?? 1, environment: opts.environment });
     const config = getAircraft(opts.aircraftId);
-    this.localId = this.world.addAircraft({ callsign: opts.callsign, team: config.team, aircraftId: config.id }).id;
+    this.localId = this.world.addAircraft({ callsign: opts.callsign, team: config.team, aircraftId: config.id, start: opts.start }).id;
     if (opts.opponents) {
       const team = opposingTeam(config.team);
       // Each AI opponent flies a random jet of its team, chosen from the match seed.

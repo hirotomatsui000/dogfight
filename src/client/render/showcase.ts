@@ -10,6 +10,7 @@ import { Sea } from './sea.ts';
 import { SkySystem } from './sky.ts';
 import type { LoadedMap } from './terrain/map-loader.ts';
 import { TerrainLod } from './terrain/terrain-lod.ts';
+import { WorldFeatures } from './world/world-features.ts';
 import { createTerrainMaterial } from './terrain-material.ts';
 
 export interface Pose {
@@ -89,6 +90,7 @@ export class Showcase {
   private meshes: AircraftMeshes | null = null;
   private sea: Sea | null = null;
   private ground: TerrainLod | null = null;
+  private features: WorldFeatures | null = null;
   private running = true;
   private rafId = 0;
   private startMs = 0;
@@ -132,6 +134,7 @@ export class Showcase {
     this.running = false;
     cancelAnimationFrame(this.rafId);
     this.ground?.dispose();
+    this.features?.dispose();
     this.renderer.dispose();
   }
 
@@ -140,6 +143,8 @@ export class Showcase {
     new SkySystem(scene, this.renderer.webgl, textures.sky);
     this.ground = new TerrainLod(map, createTerrainMaterial(textures), this.detail);
     scene.add(this.ground.group);
+    this.features = new WorldFeatures(map.def, map.terrain);
+    scene.add(this.features.group);
     this.sea = new Sea(textures.waterNormals);
     scene.add(this.sea.mesh);
     // The ground under the first shot, before the scene fades in.
@@ -166,6 +171,7 @@ export class Showcase {
     showcaseCameraPosition(t, this.pose, camera.position);
     camera.lookAt(this.pose.position);
     this.ground?.update(camera.position);
+    this.features?.update(camera.position);
     const w = window.innerWidth;
     const h = window.innerHeight;
     if (w >= WIDE_LAYOUT_PX) camera.setViewOffset(w, h, -w * FRAME_SHIFT, 0, w, h);

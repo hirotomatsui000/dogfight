@@ -40,6 +40,7 @@ import { Sea } from './render/sea.ts';
 import { SkySystem } from './render/sky.ts';
 import { loadMap } from './render/terrain/map-loader.ts';
 import { TerrainLod } from './render/terrain/terrain-lod.ts';
+import { WorldFeatures } from './render/world/world-features.ts';
 import { createTerrainMaterial } from './render/terrain-material.ts';
 import { TrainingRings } from './render/training-rings.ts';
 import { CHAT_KEYS, ConnectionOverlay, connectOnline, DebugOverlay, isOutdated, RECONNECT_DELAYS_MS, reportErrors, showUpdateNotice } from './online-play.ts';
@@ -175,11 +176,14 @@ export async function startGame(
       seed: Math.floor(Math.random() * 0x7fffffff),
       // Training brings its own drones.
       opponents: options.mission === 'free-flight' || options.mission === 'training' ? undefined : { count: 1, profile: DIFFICULTIES[options.difficulty] },
+      start: options.start,
     });
   }
   new SkySystem(renderer.scene, renderer.webgl, textures.sky);
   const ground = new TerrainLod(loadedMap, createTerrainMaterial(textures), QUALITY_PRESETS[quality].terrainDetail);
   renderer.scene.add(ground.group);
+  const worldFeatures = new WorldFeatures(map, terrain);
+  renderer.scene.add(worldFeatures.group);
   const sea = new Sea(textures.waterNormals);
   renderer.scene.add(sea.mesh);
   // Build the ground around the start before the first frame.
@@ -551,6 +555,7 @@ export async function startGame(
     const aim = mapper.settings.mode === 'mouse-aim' ? mapper.aimDirection : null;
     cameraRig.update(active ? dt : 0, local ? target : null, aim);
     ground.update(renderer.camera.position);
+    worldFeatures.update(renderer.camera.position);
     sceneSync.update(session.views(), nowS, renderer.camera.position);
     targetModels.update(session.groundTargets());
     trainingRings.update(session.modeStatus().training?.ring, renderer.camera.position);
@@ -585,7 +590,8 @@ export async function startGame(
         aimDirection: aim,
         status,
         radarAltitudeM: f.pos.y - terrain.surfaceAt(f.pos.x, f.pos.z),
-        pullUp: local.alive && timeToImpact(f, terrain) !== null,
+        // Not on the take-off run: the gear is down until the jet is well clear of the runway.
+        pullUp: local.alive && f.gear === 0 && timeToImpact(f, terrain) !== null,
         message,
         banner: nowS < bannerUntil ? banner : null,
         hint: `${HINTS[mapper.settings.mode]}${local.bombLoad > 0 ? ' · G bomb' : ''}${online ? ' · 7-0 chat' : ''}`,
@@ -640,6 +646,7 @@ export async function startGame(
     targetModels.dispose();
     trainingRings.dispose();
     ground.dispose();
+    worldFeatures.dispose();
     session.dispose();
     renderer.dispose();
     audio?.dispose();

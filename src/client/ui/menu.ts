@@ -2,6 +2,7 @@ import { DIFFICULTIES, type DifficultyId } from '../../shared/ai/difficulty.ts';
 import { listAircraft, TEAM_NAMES } from '../../shared/data/aircraft/registry.ts';
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import type { MapId } from '../../shared/data/maps/registry.ts';
+import { SPAWN_STARTS, type SpawnStart } from '../../shared/world/spawns.ts';
 import { STRIKE_DEFAULTS, STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
@@ -23,6 +24,8 @@ export interface StartOptions {
   online?: { room: string };
   /** the map for Dogfight and Free Flight (M4); Lechovia when unset */
   map?: MapId;
+  /** in the air or on the runway (M4) */
+  start?: SpawnStart;
 }
 
 export interface StartMenuHandlers {
@@ -290,7 +293,8 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   screen.append(form, sheet, online);
 
   const start = (mission: MissionId, onlineRoom?: { room: string }) => {
-    const options: StartOptions = { aircraftId, callsign: sanitizeCallsign(callsign.value), controlMode: settings.current.controlMode, mission, difficulty, online: onlineRoom };
+    const start = pickValid(loadSetting<unknown>('start', 'air'), SPAWN_STARTS, 'air');
+    const options: StartOptions = { aircraftId, callsign: sanitizeCallsign(callsign.value), controlMode: settings.current.controlMode, mission, difficulty, online: onlineRoom, start };
     saveSetting('aircraft', options.aircraftId);
     saveSetting('callsign', options.callsign);
     saveSetting('difficulty', options.difficulty);
