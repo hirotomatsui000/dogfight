@@ -3,6 +3,7 @@ import { DIFFICULTIES } from '../../shared/ai/difficulty.ts';
 import { buildTerrain } from '../../shared/data/maps/map-definition.ts';
 import { createTestRange } from '../../shared/data/maps/test-range.ts';
 import { FreeFlightMode } from '../../shared/modes/free-flight.ts';
+import { StrikeMode } from '../../shared/modes/strike.ts';
 import { TeamDeathmatchMode } from '../../shared/modes/team-deathmatch.ts';
 import { neutralInput } from '../../shared/physics/controls.ts';
 import { LocalSession } from './local-session.ts';
@@ -80,5 +81,37 @@ describe('LocalSession', () => {
     expect(shots.length).toBeGreaterThan(3);
     expect(shots[0].velocity.length()).toBeGreaterThan(900);
     expect([...s.missiles()]).toEqual([]);
+  });
+});
+
+const strike = (aircraftId = 'kobchik') =>
+  new LocalSession({ map, terrain, mode: new StrikeMode(), aircraftId, callsign: 'Pilot', opponents: { count: 1, profile: DIFFICULTIES.rookie } });
+
+describe('LocalSession in Strike', () => {
+  it('shows the targets and the attacker bomb load', () => {
+    const s = strike();
+    s.update(1 / 60, neutralInput(0.8));
+    expect(s.groundTargets().map((t) => [t.id, t.hp, t.destroyed])).toEqual([
+      ['A', 100, false],
+      ['B', 100, false],
+      ['C', 100, false],
+    ]);
+    expect([s.localView()?.bombLoad, s.localView()?.stores.bombs]).toEqual([8, 8]);
+    expect([...s.views()].find((v) => v.isBot)?.bombLoad).toBe(0);
+  });
+
+  it('drops one bomb for a G press that arrives between simulation steps', () => {
+    const s = strike();
+    s.update(1 / 240, { ...neutralInput(0.8), dropBomb: true });
+    s.update(1 / 60, neutralInput(0.8));
+    s.update(1 / 60, neutralInput(0.8));
+    expect([...s.bombs()]).toHaveLength(1);
+    expect(s.localView()?.stores.bombs).toBe(7);
+  });
+
+  it('has no targets or bombs outside Strike', () => {
+    const s = dogfight();
+    s.update(1 / 60, neutralInput(0.8));
+    expect([s.groundTargets().length, [...s.bombs()].length, s.localView()?.bombLoad]).toEqual([0, 0, 0]);
   });
 });

@@ -27,6 +27,7 @@ export function testView(id: number, over: Partial<AircraftView> = {}): Aircraft
     deaths: 0,
     firingCannon: false,
     stores: { cannonRounds: s.cannonRounds, srm: s.srm, mrm: s.mrm, countermeasures: s.countermeasures, bombs: 0 },
+    bombLoad: 0,
     targetId: null,
     contacts: [],
     seeker: createSeeker(),

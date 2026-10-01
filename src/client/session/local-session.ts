@@ -11,7 +11,7 @@ import { projectileVelocity } from '../../shared/weapons/cannon.ts';
 import type { GameEvent } from '../../shared/world/events.ts';
 import { DT, World } from '../../shared/world/world.ts';
 import { FixedStepper } from './fixed-stepper.ts';
-import type { AircraftView, GameSession, MissileView, ProjectileView } from './game-session.ts';
+import type { AircraftView, BombView, GameSession, GroundTargetView, MissileView, ProjectileView } from './game-session.ts';
 
 export interface OpponentOptions {
   count: number;
@@ -52,12 +52,14 @@ export class LocalSession implements GameSession {
   private readonly inputs = new Map<number, ControlInput>();
   private readonly stepInput = neutralInput();
   /** button presses wait here until a simulation step consumes them (frames can run 0 or several steps) */
-  private readonly latched = { cycleTarget: false, countermeasures: false, fireMissile: false };
+  private readonly latched = { cycleTarget: false, countermeasures: false, fireMissile: false, dropBomb: false };
   private readonly previous = new Map<number, PreviousPose>();
   private readonly viewCache = new Map<number, AircraftView>();
   private readonly missileViews = new Map<number, MissileView>();
   private readonly projectilePool: ProjectileView[] = [];
   private readonly projectileViews: ProjectileView[] = [];
+  private readonly targetViews: GroundTargetView[];
+  private readonly bombViews = new Map<number, BombView>();
   private pendingEvents: GameEvent[] = [];
 
   constructor(opts: LocalSessionOptions) {
@@ -75,6 +77,15 @@ export class LocalSession implements GameSession {
         this.world.addAircraft({ callsign: `[BOT] ${names[i % names.length]}`, team, aircraftId: enemyAircraft.id, bot: opts.opponents.profile });
       }
     }
+    this.targetViews = this.world.groundTargetList().map((t) => ({
+      id: t.id,
+      kind: t.kind,
+      label: t.label,
+      position: t.pos.clone(),
+      maxHp: t.maxHp,
+      hp: t.hp,
+      destroyed: t.destroyed,
+    }));
     this.pendingEvents.push(...this.world.drainEvents());
   }
 
@@ -83,11 +94,13 @@ export class LocalSession implements GameSession {
     l.cycleTarget ||= input.cycleTarget;
     l.countermeasures ||= input.countermeasures;
     l.fireMissile ||= input.fireMissile;
+    l.dropBomb ||= input.dropBomb;
     this.stepper.advance(frameDtS, () => {
       Object.assign(this.stepInput, input, l);
       l.cycleTarget = false;
       l.countermeasures = false;
       l.fireMissile = false;
+      l.dropBomb = false;
       this.inputs.set(this.localId, this.stepInput);
       this.capturePrevious();
       this.world.step(this.inputs);
@@ -116,6 +129,14 @@ export class LocalSession implements GameSession {
     return this.projectileViews;
   }
 
+  groundTargets(): readonly GroundTargetView[] {
+    return this.targetViews;
+  }
+
+  bombs(): Iterable<BombView> {
+    return this.bombViews.values();
+  }
+
   drainEvents(): GameEvent[] {
     const drained = this.pendingEvents;
     this.pendingEvents = [];
@@ -131,6 +152,7 @@ export class LocalSession implements GameSession {
     this.previous.clear();
     this.missileViews.clear();
     this.projectileViews.length = 0;
+    this.bombViews.clear();
   }
 
   private capturePrevious(): void {
@@ -171,6 +193,7 @@ export class LocalSession implements GameSession {
           deaths: 0,
           firingCannon: false,
           stores: a.stores,
+          bombLoad: a.bombLoad,
           targetId: null,
           contacts: a.contacts,
           seeker: a.seeker,
@@ -228,5 +251,24 @@ export class LocalSession implements GameSession {
       this.projectileViews.push(v);
       i++;
     }
+
+    const targets = this.world.groundTargetList();
+    for (let t = 0; t < targets.length; t++) {
+      this.targetViews[t].hp = targets[t].hp;
+      this.targetViews[t].destroyed = targets[t].destroyed;
+    }
+
+    const liveBombs = new Set<number>();
+    for (const b of this.world.bombList()) {
+      liveBombs.add(b.id);
+      let v = this.bombViews.get(b.id);
+      if (!v) {
+        v = { id: b.id, team: b.team, position: new Vector3(), velocity: new Vector3() };
+        this.bombViews.set(b.id, v);
+      }
+      v.position.lerpVectors(b.prevPos, b.pos, alpha);
+      v.velocity.copy(b.vel);
+    }
+    for (const id of this.bombViews.keys()) if (!liveBombs.has(id)) this.bombViews.delete(id);
   }
 }

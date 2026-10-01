@@ -1,6 +1,6 @@
 import type { Quaternion, Vector3 } from 'three';
 import type { AircraftConfig, TeamId } from '../../shared/data/aircraft/types.ts';
-import type { MapDefinition } from '../../shared/data/maps/map-definition.ts';
+import type { GroundTargetKind, MapDefinition } from '../../shared/data/maps/map-definition.ts';
 import type { Terrain } from '../../shared/map/terrain.ts';
 import type { ModeStatus } from '../../shared/modes/mode.ts';
 import type { ControlInput } from '../../shared/physics/controls.ts';
@@ -33,6 +33,8 @@ export interface AircraftView {
   deaths: number;
   firingCannon: boolean;
   stores: Readonly<StoresState>;
+  /** bombs each new aircraft of this one carries in this mode; 0 = none */
+  readonly bombLoad: number;
   /** designated target */
   targetId: number | null;
   contacts: readonly Contact[];
@@ -52,6 +54,26 @@ export interface MissileView {
   motorBurning: boolean;
 }
 
+/** A Strike target as the renderer and HUD see it. */
+export interface GroundTargetView {
+  readonly id: string;
+  readonly kind: GroundTargetKind;
+  readonly label: string;
+  /** center, on the ground */
+  readonly position: Vector3;
+  readonly maxHp: number;
+  hp: number;
+  destroyed: boolean;
+}
+
+export interface BombView {
+  readonly id: number;
+  readonly team: TeamId;
+  /** interpolated for smooth rendering */
+  readonly position: Vector3;
+  readonly velocity: Vector3;
+}
+
 export interface ProjectileView {
   team: TeamId;
   /** interpolated for smooth rendering */
@@ -69,6 +91,8 @@ export interface GameSession {
   view(id: number): AircraftView | null;
   missiles(): Iterable<MissileView>;
   projectiles(): Iterable<ProjectileView>;
+  groundTargets(): readonly GroundTargetView[];
+  bombs(): Iterable<BombView>;
   drainEvents(): GameEvent[];
   modeStatus(): ModeStatus;
   dispose(): void;
