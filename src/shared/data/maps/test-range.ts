@@ -83,6 +83,19 @@ export function createTestRange(seed = 1): MapDefinition {
       usa: { x: -7500, z: 0, headingRad: Math.PI / 2, altitudeM: 3000 },
       russia: { x: 7500, z: 0, headingRad: (3 * Math.PI) / 2, altitudeM: 3000 },
     },
+    // Strike (spec §12.2): fictional facilities on flat farmland west of the river, defenders 8 km behind them,
+    // attackers 24 km to the east.
+    strike: {
+      targets: [
+        { id: 'A', kind: 'depot', label: 'Supply depot', x: -5000, z: -8000 },
+        { id: 'B', kind: 'radar', label: 'Radar site', x: -6000, z: 0 },
+        { id: 'C', kind: 'fuel', label: 'Fuel depot', x: -6000, z: 8000 },
+      ],
+      spawns: {
+        usa: { x: -14000, z: 0, headingRad: Math.PI / 2, altitudeM: 4000 },
+        russia: { x: 18000, z: 0, headingRad: (3 * Math.PI) / 2, altitudeM: 5000 },
+      },
+    },
     height,
     landCover,
   };
