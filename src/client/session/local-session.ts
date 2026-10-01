@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
+import { botCallsign } from '../../shared/ai/bot-names.ts';
 import type { DifficultyProfile } from '../../shared/ai/difficulty.ts';
 import { getAircraft, listAircraft, opposingTeam } from '../../shared/data/aircraft/registry.ts';
-import type { TeamId } from '../../shared/data/aircraft/types.ts';
 import { buildTerrain, type MapDefinition } from '../../shared/data/maps/map-definition.ts';
 import type { Terrain } from '../../shared/map/terrain.ts';
 import type { GameMode, ModeStatus } from '../../shared/modes/mode.ts';
@@ -30,11 +30,7 @@ export interface LocalSessionOptions {
   opponents?: OpponentOptions;
 }
 
-/** Fictional bot callsigns per team. */
-export const BOT_CALLSIGNS: Readonly<Record<TeamId, readonly string[]>> = {
-  usa: ['Ranger', 'Saber', 'Comet', 'Atlas'],
-  russia: ['Grom', 'Burya', 'Sokol', 'Vityaz'],
-};
+export { BOT_CALLSIGNS } from '../../shared/ai/bot-names.ts';
 
 interface PreviousPose {
   pos: Vector3;
@@ -72,9 +68,8 @@ export class LocalSession implements GameSession {
       const team = opposingTeam(config.team);
       const [enemyAircraft] = listAircraft(team);
       if (!enemyAircraft) throw new Error(`No aircraft is registered for team ${team}`);
-      const names = BOT_CALLSIGNS[team];
       for (let i = 0; i < opts.opponents.count; i++) {
-        this.world.addAircraft({ callsign: `[BOT] ${names[i % names.length]}`, team, aircraftId: enemyAircraft.id, bot: opts.opponents.profile });
+        this.world.addAircraft({ callsign: botCallsign(team, i), team, aircraftId: enemyAircraft.id, bot: opts.opponents.profile });
       }
     }
     this.targetViews = this.world.groundTargetList().map((t) => ({

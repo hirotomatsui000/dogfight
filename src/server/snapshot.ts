@@ -1,0 +1,60 @@
+import type { OwnState, Snapshot } from '../shared/net/codec.ts';
+import type { AircraftEntity } from '../shared/world/entities.ts';
+import type { World } from '../shared/world/world.ts';
+
+const v3 = (v: { x: number; y: number; z: number }): [number, number, number] => [v.x, v.y, v.z];
+const q4 = (q: { x: number; y: number; z: number; w: number }): [number, number, number, number] => [q.x, q.y, q.z, q.w];
+
+/** Everyone's part of a snapshot; the per-player fields (ack, queue, own jet) are filled in per receiver. */
+export function sharedSnapshot(world: World): Omit<Snapshot, 'ackSeq' | 'queueDepth' | 'own'> {
+  return {
+    tick: world.tick,
+    aircraft: [...world.aircraftList()].map((a) => ({
+      id: a.id,
+      alive: a.alive,
+      firingCannon: a.firingCannon,
+      spawnGen: a.spawnGen,
+      hp: a.hp,
+      throttle: a.flight.throttle,
+      pos: v3(a.flight.pos),
+      quat: q4(a.flight.quat),
+      vel: v3(a.flight.vel),
+    })),
+    missiles: world.missileList().map((m) => ({
+      id: m.id,
+      ownerId: m.ownerId,
+      targetId: m.targetId,
+      motorBurning: m.ageS < m.spec.burnTimeS,
+      team: m.team,
+      pos: v3(m.pos),
+      vel: v3(m.vel),
+    })),
+    bombs: world.bombList().map((b) => ({ id: b.id, team: b.team, pos: v3(b.pos), vel: v3(b.vel) })),
+    targets: world.groundTargetList().map((t) => ({ hpFraction: t.maxHp > 0 ? t.hp / t.maxHp : 0, destroyed: t.destroyed })),
+  };
+}
+
+/** The receiving player's own jet at full precision (spec §7). */
+export function ownState(a: AircraftEntity): OwnState {
+  const f = a.flight;
+  return {
+    pos: v3(f.pos),
+    vel: v3(f.vel),
+    angVel: v3(f.angVel),
+    quat: q4(f.quat),
+    throttle: f.throttle,
+    airbrake: f.airbrake,
+    hp: a.hp,
+    cannonRounds: a.stores.cannonRounds,
+    srm: a.stores.srm,
+    mrm: a.stores.mrm,
+    countermeasures: a.stores.countermeasures,
+    bombs: a.stores.bombs,
+    seekerMode: a.seeker.mode,
+    seekerTargetId: a.seeker.targetId,
+    seekerAxis: v3(a.seeker.axis),
+    targetId: a.targetId,
+    outOfBoundsTicks: a.outOfBoundsTicks,
+    contacts: a.contacts.map((c) => ({ id: c.id, visual: c.visual, radar: c.radar, rangeM: c.rangeM, offNoseRad: c.offNoseRad })),
+  };
+}
