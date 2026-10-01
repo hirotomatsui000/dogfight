@@ -52,7 +52,11 @@ In a fight:
 - The nearest enemy ahead is targeted automatically; R picks the next one.
 - The missile seeker growls while it tracks and gives a steady tone when locked. Then press F.
 - Inside 2 km a gun aim circle appears. Put the nose on it and fire.
-- When the HUD shows MISSILE, turn hard and press X for flares. Flares work better off afterburner.
+- A missile fired at you shows as MISSILE with its range from the moment it launches, and a red marker (or an arrow
+  at the screen edge) shows where it is. You can beat it without flares: when the HUD flashes TURN HARD NOW, about
+  two seconds before impact, turn hard to put the missile on your wing. Breaking too early or too late does not
+  work. Flares (X) help too, and work better off afterburner.
+- Distant jets and missiles are drawn a little larger than life so they never shrink to a single pixel.
 
 The camera always follows from behind and above your jet (third person).
 

@@ -6,9 +6,9 @@ import { MissileModels } from './missile-models.ts';
 import { type ParticleFrame, ParticleSystem } from './particles.ts';
 import { Tracers } from './tracers.ts';
 
-const SMOKE_CAPACITY = 6000;
+const SMOKE_CAPACITY = 9000;
 const FIRE_CAPACITY = 3000;
-const TRAIL_SPACING_M = 7;
+const TRAIL_SPACING_M = 9;
 const FLARES_PER_SALVO = 2;
 const FLARE_BURN_S = 3;
 const DAMAGE_SMOKE_INTERVAL_S = 0.04;
@@ -65,7 +65,7 @@ export class Effects {
     }
   }
 
-  update(dt: number, session: GameSession, frame: ParticleFrame): void {
+  update(dt: number, session: GameSession, frame: ParticleFrame, cameraPos: Vector3): void {
     if (dt > 0) {
       for (const m of session.missiles()) this.missileTrail(m);
       for (const id of this.trailFrom.keys()) if (!this.hasMissile(session, id)) this.trailFrom.delete(id);
@@ -79,7 +79,7 @@ export class Effects {
         if (v.firingCannon) this.muzzleFlash(v);
       }
     }
-    this.missileModels.update(session.missiles());
+    this.missileModels.update(session.missiles(), cameraPos);
     this.tracers.update(session.projectiles(), frame);
     this.smoke.update(dt, frame);
     this.fire.update(dt, frame);
@@ -188,12 +188,13 @@ export class Effects {
       from.copy(this.tail);
       return;
     }
-    this.fire.spawn({ x: this.tail.x, y: this.tail.y, z: this.tail.z, vx: 0, vy: 0, vz: 0, lifeS: 0.06, size0: 3.5, size1: 2, color: MOTOR, alpha: 1 });
+    // A bright motor and a thick, long-lived trail, so a missile can be seen coming from kilometers away (spec §15.4).
+    this.fire.spawn({ x: this.tail.x, y: this.tail.y, z: this.tail.z, vx: 0, vy: 0, vz: 0, lifeS: 0.06, size0: 6, size1: 3, color: MOTOR, alpha: 1 });
     const gap = from.distanceTo(this.tail);
     const puffs = Math.floor(gap / TRAIL_SPACING_M);
     for (let i = 1; i <= puffs; i++) {
       this.tmp.lerpVectors(from, this.tail, (i * TRAIL_SPACING_M) / gap);
-      this.smoke.spawn({ x: this.tmp.x, y: this.tmp.y, z: this.tmp.z, vx: rand(-1, 1), vy: rand(-1, 1), vz: rand(-1, 1), lifeS: rand(2.5, 4), size0: 1.5, size1: rand(8, 12), color: TRAIL_SMOKE, alpha: 0.55, lift: 1 });
+      this.smoke.spawn({ x: this.tmp.x, y: this.tmp.y, z: this.tmp.z, vx: rand(-1, 1), vy: rand(-1, 1), vz: rand(-1, 1), lifeS: rand(5, 7), size0: 3, size1: rand(16, 22), color: TRAIL_SMOKE, alpha: 0.6, lift: 1 });
     }
     if (puffs > 0) from.lerpVectors(from, this.tail, (puffs * TRAIL_SPACING_M) / gap);
   }

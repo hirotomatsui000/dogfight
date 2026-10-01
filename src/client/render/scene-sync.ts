@@ -1,6 +1,8 @@
-import type { Scene } from 'three';
+import type { Scene, Vector3 } from 'three';
+import { DEG } from '../../shared/math/units.ts';
 import type { AircraftView } from '../session/game-session.ts';
 import { type AircraftModel, buildAircraftModel } from './aircraft-model.ts';
+import { visibilityScale } from './visibility.ts';
 
 interface Entry {
   model: AircraftModel;
@@ -8,6 +10,9 @@ interface Entry {
 }
 
 const AFTERBURNER_THRESHOLD = 0.9;
+/** Other aircraft never look smaller than this (spec §15.4), so a jet 5 km out is a shape, not a pixel. */
+const MIN_APPARENT_ANGLE = 0.7 * DEG;
+const MAX_VISIBILITY_SCALE = 8;
 
 /** Keeps one 3-D model per aircraft view in the scene. */
 export class SceneSync {
@@ -18,7 +23,7 @@ export class SceneSync {
     this.scene = scene;
   }
 
-  update(views: Iterable<AircraftView>, timeS: number): void {
+  update(views: Iterable<AircraftView>, timeS: number, cameraPos: Vector3): void {
     const seen = new Set<number>();
     for (const v of views) {
       seen.add(v.id);
@@ -33,6 +38,10 @@ export class SceneSync {
       root.visible = v.alive;
       root.position.copy(v.position);
       root.quaternion.copy(v.quaternion);
+      const scale = v.isLocal
+        ? 1
+        : visibilityScale(v.position.distanceTo(cameraPos), v.config.visual.lengthM, MIN_APPARENT_ANGLE, MAX_VISIBILITY_SCALE);
+      root.scale.setScalar(scale);
 
       const ab = (v.flight.throttle - AFTERBURNER_THRESHOLD) / (1 - AFTERBURNER_THRESHOLD);
       for (const [i, flame] of entry.model.afterburners.entries()) {

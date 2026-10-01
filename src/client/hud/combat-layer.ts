@@ -6,6 +6,7 @@ import type { AircraftView } from '../session/game-session.ts';
 import { formatClosure, formatRange } from './format.ts';
 import type { HudFrame } from './hud-frame.ts';
 import { closureRate, type EdgeMarker, edgeMarker } from './hud-geometry.ts';
+import { missileAdvice } from './missile-advice.ts';
 import { AMBER, FONT, FONT_BIG, FONT_SMALL, FOE, FRIEND, GREEN, RED, WHITE } from './palette.ts';
 import type { Projector, ScreenPoint } from './projector.ts';
 
@@ -29,16 +30,60 @@ export function drawCombatLayer(ctx: CanvasRenderingContext2D, p: Projector, f: 
     if (!friendly && !known.has(v.id)) continue;
     const designated = f.target !== null && v.id === f.target.id;
     if (!p.point(f.camera, v.position, pt)) {
-      if (designated) drawOffscreenArrow(ctx, p, f, v);
+      if (!friendly) drawEdgeArrow(ctx, p, f, v.position, formatRange(me.flight.pos.distanceTo(v.flight.pos), me.config.hudUnits), FOE);
       continue;
     }
     if (designated) drawTargetBox(ctx, f, v);
     else drawMarker(ctx, friendly);
   }
+  drawMissileMarkers(ctx, p, f, clock);
   if (f.leadDirection && p.direction(f.camera, f.leadDirection, pt)) drawPipper(ctx);
   drawSeeker(ctx, p, f, clock);
   drawWeaponsStatus(ctx, p, f);
   drawMissileWarning(ctx, p, f, clock);
+}
+
+/**
+ * Every missile guiding on you gets a red marker with its range (an edge arrow when off-screen), and your own
+ * missiles a small white one, so both can be followed even as specks (spec §15.2).
+ */
+function drawMissileMarkers(ctx: CanvasRenderingContext2D, p: Projector, f: HudFrame, clock: number): void {
+  const me = f.view;
+  for (const m of f.missiles) {
+    const incoming = m.targetId === me.id;
+    if (!incoming && m.ownerId !== me.id) continue;
+    const label = `MSL ${formatRange(me.flight.pos.distanceTo(m.position), me.config.hudUnits)}`;
+    if (!p.point(f.camera, m.position, pt)) {
+      if (incoming) drawEdgeArrow(ctx, p, f, m.position, label, RED);
+      continue;
+    }
+    ctx.save();
+    if (incoming) {
+      ctx.strokeStyle = RED;
+      ctx.fillStyle = RED;
+      ctx.lineWidth = 2;
+      const r = clock % 0.4 < 0.2 ? 13 : 11;
+      diamond(ctx, r);
+      ctx.stroke();
+      ctx.font = FONT_SMALL;
+      ctx.fillText(label, pt.x + 17, pt.y + 4);
+    } else {
+      ctx.strokeStyle = WHITE;
+      ctx.globalAlpha = 0.85;
+      diamond(ctx, 6);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function diamond(ctx: CanvasRenderingContext2D, r: number): void {
+  ctx.beginPath();
+  ctx.moveTo(pt.x, pt.y - r);
+  ctx.lineTo(pt.x + r, pt.y);
+  ctx.lineTo(pt.x, pt.y + r);
+  ctx.lineTo(pt.x - r, pt.y);
+  ctx.closePath();
 }
 
 function drawMarker(ctx: CanvasRenderingContext2D, friendly: boolean): void {
@@ -78,13 +123,14 @@ function drawTargetBox(ctx: CanvasRenderingContext2D, f: HudFrame, v: AircraftVi
   ctx.restore();
 }
 
-function drawOffscreenArrow(ctx: CanvasRenderingContext2D, p: Projector, f: HudFrame, v: AircraftView): void {
-  p.toCamera(f.camera, v.position, cam);
+/** An arrow at the screen edge pointing toward something off-screen, with a label. */
+function drawEdgeArrow(ctx: CanvasRenderingContext2D, p: Projector, f: HudFrame, worldPos: Vector3, text: string, color: string): void {
+  p.toCamera(f.camera, worldPos, cam);
   edgeMarker(cam.x, -cam.y, p.width, p.height, EDGE_MARGIN_PX, edge);
   ctx.save();
   ctx.translate(edge.x, edge.y);
   ctx.rotate(edge.angle);
-  ctx.fillStyle = FOE;
+  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(16, 0);
   ctx.lineTo(-6, -10);
@@ -93,9 +139,8 @@ function drawOffscreenArrow(ctx: CanvasRenderingContext2D, p: Projector, f: HudF
   ctx.fill();
   ctx.restore();
   ctx.save();
-  ctx.fillStyle = FOE;
+  ctx.fillStyle = color;
   ctx.font = FONT_SMALL;
-  const text = formatRange(f.view.flight.pos.distanceTo(v.flight.pos), f.view.config.hudUnits);
   ctx.fillText(text, edge.x - ctx.measureText(text).width / 2, edge.y + (edge.y > p.height / 2 ? -18 : 28));
   ctx.restore();
 }
@@ -183,9 +228,23 @@ function drawMissileWarning(ctx: CanvasRenderingContext2D, p: Projector, f: HudF
     const text = `MISSILE  ${formatRange(w.rangeM, f.view.config.hudUnits)}`;
     ctx.fillText(text, cx - ctx.measureText(text).width / 2, cy - 120);
   }
-  ctx.font = FONT_SMALL;
-  const hint = 'X  FLARES  ·  TURN HARD';
-  ctx.fillText(hint, cx - ctx.measureText(hint).width / 2, cy - 98);
+  const advice = missileAdvice(w.timeToImpactS);
+  if (advice.urgent) {
+    // The moment a hard break beats the missile: make it impossible to miss.
+    if (clock % 0.3 < 0.2) {
+      ctx.save();
+      ctx.fillStyle = AMBER;
+      ctx.font = FONT_BIG;
+      ctx.fillText(advice.text, cx - ctx.measureText(advice.text).width / 2, cy + 150);
+      ctx.restore();
+    }
+    ctx.font = FONT_SMALL;
+    const flares = 'X  FLARES';
+    ctx.fillText(flares, cx - ctx.measureText(flares).width / 2, cy - 98);
+  } else {
+    ctx.font = FONT_SMALL;
+    ctx.fillText(advice.text, cx - ctx.measureText(advice.text).width / 2, cy - 98);
+  }
   ctx.translate(cx + WARNING_RING_PX * Math.sin(w.bearingRad), cy - WARNING_RING_PX * Math.cos(w.bearingRad));
   ctx.rotate(w.bearingRad);
   ctx.beginPath();

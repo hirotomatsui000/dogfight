@@ -315,10 +315,10 @@ export async function startGame(
     }
     const aim = mapper.settings.mode === 'mouse-aim' ? mapper.aimDirection : null;
     cameraRig.update(active ? dt : 0, local ? target : null, aim);
-    sceneSync.update(session.views(), nowS);
+    sceneSync.update(session.views(), nowS, renderer.camera.position);
     renderer.webgl.getDrawingBufferSize(bufferSize);
     particleFrame.pixelScale = bufferSize.y / (2 * Math.tan((renderer.camera.fov * DEG) / 2));
-    effects.update(active ? dt : 0, session, particleFrame);
+    effects.update(active ? dt : 0, session, particleFrame, renderer.camera.position);
     sea.update(nowS);
     renderer.render();
 

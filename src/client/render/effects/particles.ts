@@ -31,6 +31,7 @@ export interface ParticleSpawn {
 
 const VERTEX = /* glsl */ `
 uniform float uPixelScale;
+uniform float uMinPointSize;
 attribute float aSize;
 attribute vec4 aColor;
 varying vec4 vColor;
@@ -41,7 +42,7 @@ void main() {
   vColor = aColor;
   vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
   vDepth = -mvPosition.z;
-  gl_PointSize = min(aSize * uPixelScale / max(vDepth, 1.0), 384.0);
+  gl_PointSize = clamp(aSize * uPixelScale / max(vDepth, 1.0), uMinPointSize, 384.0);
   gl_Position = projectionMatrix * mvPosition;
   #include <logdepthbuf_vertex>
 }`;
@@ -70,11 +71,18 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
+/**
+ * Glowing particles (motor flames, flares, flashes) stay at least this many framebuffer pixels wide, so a far missile
+ * or a flare shows as a bright point instead of vanishing (spec §15.4).
+ */
+const GLOW_MIN_POINT_PX = 4;
+
 /** Soft round camera-facing sprites that respect the log depth buffer and the haze. */
 export function createParticleMaterial(additive: boolean): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: {
       uPixelScale: { value: 1000 },
+      uMinPointSize: { value: additive ? GLOW_MIN_POINT_PX : 0 },
       uFogColor: { value: new Color() },
       uFogDensity: { value: 0 },
       uAdditive: { value: additive ? 1 : 0 },
