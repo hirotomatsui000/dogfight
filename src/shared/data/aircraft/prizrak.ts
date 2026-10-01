@@ -35,7 +35,7 @@ export const prizrak: AircraftConfig = {
     sensorFusion: false,
   },
   stores: { cannon: 'HC-30', cannonRounds: 150, srm: 2, mrm: 4, countermeasures: 30 },
-  damage: { hitPoints: 95, hitRadiusM: 7.5 },
+  damage: { hitPoints: 110, hitRadiusM: 7.5 },
   visual: {
     lengthM: 20.1,
     spanM: 14.1,

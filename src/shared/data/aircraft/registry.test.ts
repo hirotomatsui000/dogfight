@@ -26,17 +26,17 @@ describe('aircraft registry', () => {
     expect(listAircraft('russia').map((a) => a.id)).toEqual(['prizrak', 'yastreb', 'sapsan', 'kobchik']);
   });
 
-  it('matches the roster table in the spec (§9.3)', () => {
+  it('matches the roster table in the spec (§9.3, with the M3 balance changes of revision 10)', () => {
     // id: mass, wing area, thrust mil/AB kN, roll, HP, radar km/cone, stealth, SRM/MRM, cannon/rounds, salvos, TV
     const table: Record<string, [number, number, number, number, number, number, number, number, number, number, number, string, number, number, number]> = {
-      shade: [21000, 43, 120, 195, 130, 100, 60, 60, 0.85, 2, 4, 'RC-25', 180, 24, 0],
+      shade: [21000, 43, 120, 195, 130, 100, 60, 60, 0.85, 2, 4, 'RC-25', 180, 32, 0],
       tempest: [27000, 78, 225, 315, 155, 85, 50, 60, 0.8, 2, 4, 'RC-20', 480, 24, 0.5],
       kestrel: [12000, 28, 76, 130, 180, 80, 35, 60, 0.15, 4, 2, 'RC-20', 510, 40, 0],
-      condor: [20500, 56, 128, 212, 135, 120, 55, 60, 0, 4, 4, 'RC-20', 940, 60, 0],
-      prizrak: [26000, 78, 185, 300, 160, 95, 50, 75, 0.6, 2, 4, 'HC-30', 150, 30, 1],
-      yastreb: [25000, 62, 170, 285, 140, 115, 55, 60, 0.05, 4, 6, 'HC-30', 150, 60, 1],
-      sapsan: [26500, 62, 150, 250, 120, 130, 60, 60, 0, 4, 6, 'HC-30', 150, 60, 0],
-      kobchik: [15000, 38, 100, 165, 160, 85, 30, 60, 0.15, 4, 2, 'HC-30', 150, 40, 0],
+      condor: [20500, 56, 128, 212, 135, 105, 55, 60, 0, 4, 4, 'RC-20', 940, 60, 0],
+      prizrak: [26000, 78, 185, 300, 160, 110, 50, 75, 0.6, 2, 4, 'HC-30', 150, 30, 1],
+      yastreb: [25000, 62, 170, 285, 140, 100, 55, 60, 0.05, 4, 6, 'HC-30', 150, 60, 1],
+      sapsan: [26500, 62, 150, 250, 120, 100, 60, 60, 0, 4, 6, 'HC-30', 150, 60, 0],
+      kobchik: [15000, 38, 100, 165, 160, 90, 30, 60, 0.15, 4, 2, 'HC-30', 150, 40, 0],
     };
     for (const [id, row] of Object.entries(table)) {
       const c = getAircraft(id);

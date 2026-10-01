@@ -49,11 +49,13 @@ export function runDuel(map: MapDefinition, terrain: Terrain, sides: readonly [D
   for (const e of entities) vary(e, rng);
   for (let tick = 0; tick < maxTimeS * TICK_RATE; tick++) {
     world.step(NO_INPUTS);
-    for (const e of world.drainEvents()) {
-      if (e.type !== 'destroyed') continue;
-      const loser = entities.findIndex((a) => a.id === e.aircraftId);
-      return { winner: loser === 0 ? 1 : 0, cause: e.cause, timeS: (tick + 1) / TICK_RATE };
-    }
+    const deaths = world.drainEvents().filter((e) => e.type === 'destroyed');
+    if (deaths.length === 0) continue;
+    const timeS = (tick + 1) / TICK_RATE;
+    // Both down in the same tick (a mid-air collision): nobody won.
+    if (deaths.length > 1) return { winner: null, cause: deaths[0].cause, timeS };
+    const loser = entities.findIndex((a) => a.id === deaths[0].aircraftId);
+    return { winner: loser === 0 ? 1 : 0, cause: deaths[0].cause, timeS };
   }
   return { winner: null, cause: null, timeS: maxTimeS };
 }

@@ -7,7 +7,7 @@ export const sapsan: AircraftConfig = {
   team: 'russia',
   role: 'Two-seat multirole fighter',
   description:
-    'Two-seat multirole fighter: the back-seater runs the radar for the fastest locks, it takes the most damage and carries four short- and six medium-range missiles. Slow to accelerate and easy to see.',
+    'Two-seat multirole fighter: the back-seater runs the radar for the fastest locks, and it carries four short- and six medium-range missiles. Slow to accelerate and easy to see.',
   physics: {
     massKg: 26500,
     wingAreaM2: 62,
@@ -35,7 +35,7 @@ export const sapsan: AircraftConfig = {
     sensorFusion: false,
   },
   stores: { cannon: 'HC-30', cannonRounds: 150, srm: 4, mrm: 6, countermeasures: 60 },
-  damage: { hitPoints: 130, hitRadiusM: 7.5 },
+  damage: { hitPoints: 100, hitRadiusM: 7.5 },
   visual: {
     lengthM: 21.9,
     spanM: 14.7,

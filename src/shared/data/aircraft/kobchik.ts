@@ -35,7 +35,7 @@ export const kobchik: AircraftConfig = {
     sensorFusion: false,
   },
   stores: { cannon: 'HC-30', cannonRounds: 150, srm: 4, mrm: 2, countermeasures: 40 },
-  damage: { hitPoints: 85, hitRadiusM: 6.5 },
+  damage: { hitPoints: 90, hitRadiusM: 6.5 },
   visual: {
     lengthM: 17.3,
     spanM: 11.4,

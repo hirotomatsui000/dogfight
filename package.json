@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit",
     "server": "node src/server/main.ts",
     "start": "node src/server/main.ts",
-    "smoke": "node tools/smoke-test.ts"
+    "smoke": "node tools/smoke-test.ts",
+    "tournament": "node tools/tournament.ts"
   },
   "dependencies": {
     "@fontsource/rajdhani": "5.3.0",

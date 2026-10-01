@@ -35,7 +35,7 @@ export const condor: AircraftConfig = {
     sensorFusion: false,
   },
   stores: { cannon: 'RC-20', cannonRounds: 940, srm: 4, mrm: 4, countermeasures: 60 },
-  damage: { hitPoints: 120, hitRadiusM: 7 },
+  damage: { hitPoints: 105, hitRadiusM: 7 },
   visual: {
     lengthM: 19.4,
     spanM: 13.0,

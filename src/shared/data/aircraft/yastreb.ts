@@ -35,7 +35,7 @@ export const yastreb: AircraftConfig = {
     sensorFusion: false,
   },
   stores: { cannon: 'HC-30', cannonRounds: 150, srm: 4, mrm: 6, countermeasures: 60 },
-  damage: { hitPoints: 115, hitRadiusM: 7.5 },
+  damage: { hitPoints: 100, hitRadiusM: 7.5 },
   visual: {
     lengthM: 21.9,
     spanM: 15.3,
