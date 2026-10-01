@@ -4,16 +4,22 @@ import { DEG } from '../../shared/math/units.ts';
 import type { SeekerMode } from '../../shared/targeting/ir-seeker.ts';
 import type { AircraftView } from '../session/game-session.ts';
 import { formatClosure, formatRange } from './format.ts';
+import { WARNING_CAPTIONS } from './captions.ts';
 import type { HudFrame } from './hud-frame.ts';
 import { closureRate, type EdgeMarker, edgeMarker } from './hud-geometry.ts';
 import { missileAdvice } from './missile-advice.ts';
-import { AMBER, FONT, FONT_BIG, FONT_SMALL, FOE, FRIEND, GREEN, RED, WHITE } from './palette.ts';
+import { AMBER, FONT, FONT_BIG, FONT_SMALL, FOE, FRIEND, PRIMARY, RED, WHITE } from './palette.ts';
 import type { Projector, ScreenPoint } from './projector.ts';
 
 const TARGET_BOX_PX = 26;
 const EDGE_MARGIN_PX = 60;
 const WARNING_RING_PX = 95;
 const SEEKER_LABEL: Record<SeekerMode, string> = { off: '', search: 'SRCH', track: 'TRK', locked: 'LOCK' };
+
+/** The seeker state as the weapons status shows it after "SRM". */
+export function seekerLabel(mode: SeekerMode): string {
+  return SEEKER_LABEL[mode];
+}
 
 const pt: ScreenPoint = { x: 0, y: 0 };
 const edge: EdgeMarker = { x: 0, y: 0, angle: 0 };
@@ -167,7 +173,7 @@ function drawSeeker(ctx: CanvasRenderingContext2D, p: Projector, f: HudFrame, cl
   ctx.save();
   ctx.lineWidth = 1.6;
   if (s.mode === 'search') {
-    ctx.strokeStyle = GREEN;
+    ctx.strokeStyle = PRIMARY;
     ctx.globalAlpha = 0.7;
     ctx.setLineDash([6, 6]);
   } else if (s.mode === 'track') {
@@ -226,7 +232,7 @@ function drawMissileWarning(ctx: CanvasRenderingContext2D, p: Projector, f: HudF
   ctx.strokeStyle = RED;
   if (clock % 0.5 < 0.3) {
     ctx.font = FONT_BIG;
-    const text = `MISSILE  ${formatRange(w.rangeM, f.view.config.hudUnits)}`;
+    const text = `${WARNING_CAPTIONS['missile-warning']}  ${formatRange(w.rangeM, f.view.config.hudUnits)}`;
     ctx.fillText(text, cx - ctx.measureText(text).width / 2, cy - 120);
   }
   const advice = missileAdvice(w.timeToImpactS);

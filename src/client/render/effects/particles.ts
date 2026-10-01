@@ -159,7 +159,16 @@ export class ParticleSystem {
     return n;
   }
 
+  /** Share of spawns kept (graphics presets); thinning is evenly spaced, not random. */
+  density = 1;
+  private densityCredit = 0;
+
   spawn(p: ParticleSpawn): void {
+    if (this.density < 1) {
+      this.densityCredit += this.density;
+      if (this.densityCredit < 1) return;
+      this.densityCredit -= 1;
+    }
     const i = this.next;
     this.next = (this.next + 1) % this.capacity;
     const i3 = i * 3;

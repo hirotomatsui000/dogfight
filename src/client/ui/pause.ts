@@ -1,28 +1,12 @@
-import type { ControlMode } from '../input/control-mapper.ts';
-
-export interface PauseState {
-  controlMode: ControlMode;
-  reduceMotion: boolean;
-  sound: boolean;
-}
-
 export interface PauseHandlers {
   onResume(): void;
+  onSettings(): void;
   onQuit(): void;
-  onToggleControlMode(): ControlMode;
-  onToggleReduceMotion(): boolean;
-  onToggleSound(): boolean;
 }
 
-const controlText = (m: ControlMode) => `Controls: ${m === 'mouse-aim' ? 'Mouse aim' : 'Keyboard direct'}`;
-const motionText = (on: boolean) => `Camera shake: ${on ? 'Reduced' : 'Full'}`;
-const soundText = (on: boolean) => `Sound: ${on ? 'On' : 'Off'}`;
-
+/** Resume, Settings (the same dialog as the title screen's) and Quit. */
 export class PauseMenu {
   private readonly overlay = document.createElement('div');
-  private readonly controlButton = document.createElement('button');
-  private readonly motionButton = document.createElement('button');
-  private readonly soundButton = document.createElement('button');
 
   constructor(root: HTMLElement, handlers: PauseHandlers) {
     this.overlay.className = 'overlay translucent';
@@ -32,24 +16,12 @@ export class PauseMenu {
     const title = document.createElement('h2');
     title.textContent = 'Paused';
     title.style.margin = '0 0 8px';
-    const resume = this.button('Resume', 'button', () => handlers.onResume());
-    this.controlButton.type = 'button';
-    this.controlButton.className = 'button secondary';
-    this.controlButton.addEventListener('click', () => {
-      this.controlButton.textContent = controlText(handlers.onToggleControlMode());
-    });
-    this.motionButton.type = 'button';
-    this.motionButton.className = 'button secondary';
-    this.motionButton.addEventListener('click', () => {
-      this.motionButton.textContent = motionText(handlers.onToggleReduceMotion());
-    });
-    this.soundButton.type = 'button';
-    this.soundButton.className = 'button secondary';
-    this.soundButton.addEventListener('click', () => {
-      this.soundButton.textContent = soundText(handlers.onToggleSound());
-    });
-    const quit = this.button('Quit to menu', 'button secondary', () => handlers.onQuit());
-    panel.append(title, resume, this.controlButton, this.motionButton, this.soundButton, quit);
+    panel.append(
+      title,
+      this.button('Resume', 'button', () => handlers.onResume()),
+      this.button('Settings', 'button secondary', () => handlers.onSettings()),
+      this.button('Quit to menu', 'button secondary', () => handlers.onQuit()),
+    );
     this.overlay.appendChild(panel);
     root.appendChild(this.overlay);
   }
@@ -58,10 +30,7 @@ export class PauseMenu {
     return !this.overlay.hidden;
   }
 
-  show(state: PauseState): void {
-    this.controlButton.textContent = controlText(state.controlMode);
-    this.motionButton.textContent = motionText(state.reduceMotion);
-    this.soundButton.textContent = soundText(state.sound);
+  show(): void {
     this.overlay.hidden = false;
   }
 

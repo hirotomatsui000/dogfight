@@ -3,11 +3,13 @@ import { listAircraft, TEAM_NAMES } from '../../shared/data/aircraft/registry.ts
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import { STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
-import { controlsHelp } from './controls-help.ts';
+import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
 import { isTouchOnly } from './device.ts';
+import { openSettings } from './settings-screen.ts';
+import type { SettingsStore } from './settings.ts';
 import { loadSetting, saveSetting } from './storage.ts';
 
-export type MissionId = 'team-deathmatch' | 'free-flight' | 'strike';
+export type MissionId = 'team-deathmatch' | 'free-flight' | 'strike' | 'training';
 
 export interface StartOptions {
   aircraftId: string;
@@ -24,7 +26,7 @@ export interface StartMenuHandlers {
 }
 
 const CONTROL_MODES: readonly ControlMode[] = ['mouse-aim', 'direct'];
-type FlyMission = Exclude<MissionId, 'free-flight'>;
+type FlyMission = Exclude<MissionId, 'free-flight' | 'training'>;
 const MISSIONS: readonly { value: FlyMission; label: string }[] = [
   { value: 'team-deathmatch', label: 'Dogfight' },
   { value: 'strike', label: 'Strike' },
@@ -116,7 +118,7 @@ function credits(): HTMLParagraphElement {
   return p;
 }
 
-function controlsSheet(mode: ControlMode, onModeChange: (m: ControlMode) => void): HTMLDialogElement {
+function controlsSheet(settings: SettingsStore): HTMLDialogElement {
   const dialog = el('dialog', 'sheet');
   dialog.setAttribute('aria-labelledby', 'controls-title');
   const form = el('form');
@@ -126,34 +128,37 @@ function controlsSheet(mode: ControlMode, onModeChange: (m: ControlMode) => void
   const keys = el('dl', 'keys');
   const fillKeys = (m: ControlMode) => {
     keys.replaceChildren();
-    for (const [k, action] of controlsHelp(m)) keys.append(el('dt', undefined, k), el('dd', undefined, action));
+    for (const [k, action] of controlsHelp(m, settings.current.keys)) keys.append(el('dt', undefined, k), el('dd', undefined, action));
   };
   const steering = choiceGroup(
     'steering',
     'Steering',
     CONTROL_MODES.map((m) => ({ value: m, label: CONTROL_LABELS[m] })),
-    mode,
+    settings.current.controlMode,
     (m) => {
       fillKeys(m);
-      onModeChange(m);
+      settings.update({ controlMode: m });
     },
   );
-  fillKeys(mode);
-  const note = el('p', 'sheet-note', 'Click the game view to capture the mouse. Esc releases it and pauses.');
+  // Keys may have been rebound in Settings since the sheet was built.
+  dialog.addEventListener('toggle', () => fillKeys(settings.current.controlMode));
+  fillKeys(settings.current.controlMode);
+  const pad = el('dl', 'keys');
+  for (const [k, action] of GAMEPAD_HELP) pad.append(el('dt', undefined, k), el('dd', undefined, action));
+  const note = el('p', 'sheet-note', 'Click the game view to capture the mouse. Esc releases it and pauses. Change keys, mouse and gamepad in Settings.');
   const close = el('button', 'link', 'Close');
   close.value = 'close';
-  form.append(title, steering, keys, note, close);
+  form.append(title, steering, keys, el('h3', 'eyebrow', 'Gamepad'), pad, note, close);
   dialog.appendChild(form);
   return dialog;
 }
 
 /** Shows the title screen over the live scene. Returns a cleanup function that removes it. */
-export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers): () => void {
+export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, settings: SettingsStore): () => void {
   const aircraft = listAircraft();
   const ids = aircraft.map((a) => a.id);
   let aircraftId = pickValid(loadSetting<unknown>('aircraft', ids[0]), ids, ids[0]);
   let difficulty = pickValid(loadSetting<unknown>('difficulty', 'rookie'), Object.keys(DIFFICULTIES) as DifficultyId[], 'rookie');
-  let controlMode = pickValid(loadSetting<unknown>('controlMode', 'mouse-aim'), CONTROL_MODES, 'mouse-aim');
   let mission = pickValid(
     loadSetting<unknown>('mission', 'team-deathmatch'),
     MISSIONS.map((m) => m.value),
@@ -232,23 +237,22 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers): (
   const controlsLink = el('button', 'link', 'Controls');
   controlsLink.type = 'button';
   controlsLink.setAttribute('aria-haspopup', 'dialog');
-  links.append(freeFlight, controlsLink);
+  const settingsLink = el('button', 'link', 'Settings');
+  settingsLink.type = 'button';
+  settingsLink.setAttribute('aria-haspopup', 'dialog');
+  links.append(freeFlight, controlsLink, settingsLink);
   launch.append(fly, links);
 
   main.append(brand, missions, jets, skill, launch);
   form.append(top, main, credits());
 
-  const sheet = controlsSheet(controlMode, (m) => {
-    controlMode = m;
-    saveSetting('controlMode', m);
-  });
+  const sheet = controlsSheet(settings);
   screen.append(form, sheet);
 
   const start = (mission: MissionId) => {
-    const options: StartOptions = { aircraftId, callsign: sanitizeCallsign(callsign.value), controlMode, mission, difficulty };
+    const options: StartOptions = { aircraftId, callsign: sanitizeCallsign(callsign.value), controlMode: settings.current.controlMode, mission, difficulty };
     saveSetting('aircraft', options.aircraftId);
     saveSetting('callsign', options.callsign);
-    saveSetting('controlMode', options.controlMode);
     saveSetting('difficulty', options.difficulty);
     handlers.onStart(options);
   };
@@ -258,6 +262,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers): (
   });
   freeFlight.addEventListener('click', () => start('free-flight'));
   controlsLink.addEventListener('click', () => sheet.showModal());
+  settingsLink.addEventListener('click', () => openSettings(root, settings, 'controls'));
 
   root.appendChild(screen);
   handlers.onPreview(aircraftId);

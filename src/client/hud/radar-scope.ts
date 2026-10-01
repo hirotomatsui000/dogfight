@@ -3,7 +3,7 @@ import { headingRad } from '../../shared/physics/flight-model.ts';
 import { rangeLabel, rangeValue } from './format.ts';
 import type { HudFrame } from './hud-frame.ts';
 import { scopePoint, scopeScale } from './hud-geometry.ts';
-import { FOE, FONT_SMALL, FRIEND, GREEN, RED } from './palette.ts';
+import { FOE, FONT_SMALL, FRIEND, PRIMARY, RED } from './palette.ts';
 
 const pos = { x: 0, y: 0 };
 
@@ -49,12 +49,25 @@ export function drawRadarScope(ctx: CanvasRenderingContext2D, cx: number, cy: nu
     if (!scopePoint(v.position.x - me.position.x, v.position.z - me.position.z, heading, scale, radius, pos)) continue;
     ctx.strokeStyle = friendly ? FRIEND : FOE;
     ctx.fillStyle = friendly ? FRIEND : FOE;
-    if (target && v.id === target.id) ctx.fillRect(cx + pos.x - 4, cy + pos.y - 4, 8, 8);
-    else ctx.strokeRect(cx + pos.x - 4, cy + pos.y - 4, 8, 8);
+    const x = cx + pos.x;
+    const y = cy + pos.y;
+    if (friendly) {
+      // Friend and foe differ in shape as well as color (spec §24): friends are triangles, enemies squares.
+      ctx.beginPath();
+      ctx.moveTo(x, y - 5);
+      ctx.lineTo(x + 5, y + 4);
+      ctx.lineTo(x - 5, y + 4);
+      ctx.closePath();
+      ctx.stroke();
+    } else if (target && v.id === target.id) {
+      ctx.fillRect(x - 4, y - 4, 8, 8);
+    } else {
+      ctx.strokeRect(x - 4, y - 4, 8, 8);
+    }
   }
   for (const m of f.missiles) {
     if (!scopePoint(m.position.x - me.position.x, m.position.z - me.position.z, heading, scale, radius, pos)) continue;
-    ctx.fillStyle = m.team === me.team ? GREEN : RED;
+    ctx.fillStyle = m.team === me.team ? PRIMARY : RED;
     ctx.beginPath();
     ctx.arc(cx + pos.x, cy + pos.y, 2.5, 0, Math.PI * 2);
     ctx.fill();

@@ -1,33 +1,48 @@
+import { type Bindings, DEFAULT_BINDINGS, type KeyAction, keyLabel } from '../input/bindings.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 
-/** [keys, action] rows for the Controls panel, matching the bindings in input/control-mapper.ts and game.ts. */
+/** [keys, action] rows for the Controls panel, built from the current key bindings. */
 export type HelpRow = readonly [keys: string, action: string];
 
-const STICK: Record<ControlMode, readonly HelpRow[]> = {
-  'mouse-aim': [
-    ['Mouse', 'Aim: the jet turns toward where you point'],
-    ['W S · A D · Q E', 'Pitch · roll · rudder, overriding the mouse'],
-  ],
-  direct: [
-    ['W / S', 'Pitch (W = nose down)'],
-    ['A / D', 'Roll'],
-    ['Q / E', 'Rudder'],
-  ],
-};
-
-const SHARED: readonly HelpRow[] = [
-  ['Shift · Z · wheel', 'Throttle up · down (the top notch is afterburner)'],
-  ['Space · left click', 'Cannon'],
-  ['F', 'Missile, once the lock tone sounds'],
-  ['G', 'Bomb (Strike, Russian jets)'],
-  ['X', 'Flares'],
-  ['R', 'Next target'],
-  ['C · right click', 'Look around (hold)'],
-  ['B', 'Airbrake (hold)'],
-  ['Tab', 'Scores (hold)'],
-  ['P · Esc', 'Pause'],
-];
-
-export function controlsHelp(mode: ControlMode): HelpRow[] {
-  return [...STICK[mode], ...SHARED];
+export function controlsHelp(mode: ControlMode, bindings: Bindings = DEFAULT_BINDINGS): HelpRow[] {
+  const k = (a: KeyAction) => keyLabel(bindings[a][0]);
+  const pair = (a: KeyAction, b: KeyAction) => `${k(a)} / ${k(b)}`;
+  const stick: HelpRow[] =
+    mode === 'mouse-aim'
+      ? [
+          ['Mouse', 'Aim: the jet turns toward where you point'],
+          [`${k('pitchDown')} ${k('pitchUp')} · ${k('rollLeft')} ${k('rollRight')} · ${k('yawLeft')} ${k('yawRight')}`, 'Pitch · roll · rudder, overriding the mouse'],
+        ]
+      : [
+          [pair('pitchDown', 'pitchUp'), `Pitch (${k('pitchDown')} = nose down)`],
+          [pair('rollLeft', 'rollRight'), 'Roll'],
+          [pair('yawLeft', 'yawRight'), 'Rudder'],
+        ];
+  return [
+    ...stick,
+    [`${k('throttleUp')} · ${k('throttleDown')} · wheel`, 'Throttle up · down (the top notch is afterburner)'],
+    [`${k('cannon')} · left click`, 'Cannon'],
+    [k('missile'), 'Missile, once the lock tone sounds'],
+    [k('bomb'), 'Bomb (Strike, Russian jets)'],
+    [k('flares'), 'Flares'],
+    [k('nextTarget'), 'Next target'],
+    [`${k('look')} · right click`, 'Look around (hold)'],
+    [k('airbrake'), 'Airbrake (hold)'],
+    [k('scores'), 'Scores (hold)'],
+    [`${k('pause')} · Esc`, 'Pause'],
+  ];
 }
+
+/** The standard gamepad layout, for the Controls panel. */
+export const GAMEPAD_HELP: readonly HelpRow[] = [
+  ['Left stick', 'Pitch and roll'],
+  ['Right stick', 'Look around'],
+  ['LB / RB', 'Rudder'],
+  ['LT / RT', 'Throttle down / up'],
+  ['X', 'Cannon (hold)'],
+  ['A', 'Missile'],
+  ['B', 'Flares'],
+  ['Y', 'Next target'],
+  ['D-pad ↓ / ↑', 'Bomb · airbrake (hold)'],
+  ['Start · Back', 'Pause · scores (hold)'],
+];

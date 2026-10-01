@@ -6,6 +6,7 @@ import { DEG, G0 } from '../../shared/math/units.ts';
 import { type AircraftMeshes, aircraftModelFor } from './aircraft-meshes.ts';
 import type { AircraftModel } from './aircraft-model.ts';
 import type { SceneryTextures } from './assets.ts';
+import type { QualityPreset } from './quality.ts';
 import { Renderer } from './renderer.ts';
 import { Sea } from './sea.ts';
 import { SkySystem } from './sky.ts';
@@ -94,9 +95,9 @@ export class Showcase {
   private readonly still: boolean;
 
   /** `still`: the system asks for reduced motion, so show one fixed shot. */
-  constructor(root: HTMLElement, scenery: Promise<SceneryTextures>, aircraftMeshes: Promise<AircraftMeshes>, still: boolean) {
+  constructor(root: HTMLElement, scenery: Promise<SceneryTextures>, aircraftMeshes: Promise<AircraftMeshes>, still: boolean, quality?: QualityPreset) {
     this.still = still;
-    this.renderer = new Renderer(root);
+    this.renderer = new Renderer(root, quality);
     this.renderer.webgl.domElement.classList.add('showcase');
     this.renderer.camera.fov = SHOWCASE_FOV;
     this.renderer.camera.updateProjectionMatrix();

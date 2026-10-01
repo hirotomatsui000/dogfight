@@ -1,7 +1,10 @@
+import { type Bindings, DEFAULT_BINDINGS } from './bindings.ts';
 import type { InputSnapshot } from './control-mapper.ts';
 
-/** Keys whose browser default (scrolling, focus changes) must not fire while flying. */
-const CAPTURED = new Set(['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyF', 'KeyB']);
+/** Every bound key: their browser defaults (scrolling, focus changes, quick find) must not fire while flying. */
+export function capturedKeys(bindings: Bindings): Set<string> {
+  return new Set(Object.values(bindings).flat());
+}
 
 /** Collects DOM keyboard/mouse events into per-frame InputSnapshots. */
 export class DomInput {
@@ -15,6 +18,8 @@ export class DomInput {
   private right = false;
   /** true after the browser refused a pointer-lock request */
   pointerLockRefused = false;
+  /** keys whose browser default is suppressed; follows the key bindings */
+  captured: ReadonlySet<string> = capturedKeys(DEFAULT_BINDINGS);
 
   constructor(target: HTMLElement) {
     this.target = target;
@@ -83,7 +88,7 @@ export class DomInput {
 
   private readonly onKeyDown = (e: KeyboardEvent) => {
     if (e.ctrlKey || e.metaKey) return;
-    if (CAPTURED.has(e.code)) e.preventDefault();
+    if (this.captured.has(e.code)) e.preventDefault();
     if (!e.repeat) this.pressed.add(e.code);
     this.keys.add(e.code);
   };

@@ -25,6 +25,8 @@ export interface HudFrame {
   hint: string;
   killFeed: readonly KillFeedLine[];
   hitMarker: boolean;
+  /** the local aircraft was just hit: the HIT caption for the hit sound */
+  hitTaken: boolean;
   showScoreboard: boolean;
   dt: number;
   /** Strike targets (empty in other modes) */

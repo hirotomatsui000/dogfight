@@ -1,3 +1,5 @@
+import type { HudColor } from '../ui/settings.ts';
+
 /** HUD colors and fonts shared by all HUD layers. */
 export const GREEN = '#63ff95';
 export const AMBER = '#ffc14d';
@@ -11,3 +13,13 @@ const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 export const FONT = `600 15px ${MONO}`;
 export const FONT_BIG = `700 22px ${MONO}`;
 export const FONT_SMALL = `500 12px ${MONO}`;
+
+/** The HUD's own color choices (spec §15.2: clean green, with amber and white options). */
+export const HUD_COLOR_VALUES: Readonly<Record<HudColor, string>> = { green: GREEN, amber: AMBER, white: WHITE };
+
+/** Main HUD symbology color. Team colors and red warnings stay fixed whatever the choice. */
+export let PRIMARY = GREEN;
+
+export function setHudColor(color: HudColor): void {
+  PRIMARY = HUD_COLOR_VALUES[color];
+}

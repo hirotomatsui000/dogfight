@@ -42,3 +42,12 @@ describe('ParticleSystem', () => {
     expect(late).toBeLessThan(mid);
   });
 });
+
+describe('particle density', () => {
+  it('keeps an even share of spawns at reduced density', () => {
+    const ps = new ParticleSystem(100, false);
+    ps.density = 0.5;
+    for (let i = 0; i < 20; i++) ps.spawn(puff());
+    expect(ps.liveCount).toBe(10);
+  });
+});

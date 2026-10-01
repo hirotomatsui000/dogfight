@@ -4,7 +4,7 @@ import type { GroundTargetView } from '../session/game-session.ts';
 import { drawEdgeArrow } from './combat-layer.ts';
 import { formatRange } from './format.ts';
 import type { HudFrame } from './hud-frame.ts';
-import { AMBER, FONT, FONT_SMALL, FOE, FRIEND, GREEN, WHITE } from './palette.ts';
+import { AMBER, FONT, FONT_SMALL, FOE, FRIEND, PRIMARY, WHITE } from './palette.ts';
 import type { Projector, ScreenPoint } from './projector.ts';
 import { strikeStatusLines } from './strike-hud.ts';
 
@@ -71,7 +71,7 @@ function drawTargetMarker(ctx: CanvasRenderingContext2D, p: Projector, f: HudFra
 function drawBombCue(ctx: CanvasRenderingContext2D, p: Projector, f: HudFrame, impact: Vector3, clock: number): void {
   if (!p.point(f.camera, impact, pt)) return;
   ctx.save();
-  const cue = f.releaseCue ? AMBER : GREEN;
+  const cue = f.releaseCue ? AMBER : PRIMARY;
   ctx.strokeStyle = cue;
   ctx.fillStyle = cue;
   ctx.lineWidth = 1.6;

@@ -3,6 +3,8 @@ import { steerToward, type SteerOutput } from '../../shared/ai/steering.ts';
 import { approach, clamp, DEG, moveToward } from '../../shared/math/units.ts';
 import { type ControlInput, neutralInput, type WeaponSelect } from '../../shared/physics/controls.ts';
 import { type FlightState, headingRad } from '../../shared/physics/flight-model.ts';
+import { type Bindings, DEFAULT_BINDINGS, type KeyAction } from './bindings.ts';
+import type { PadAction, PadFrame } from './gamepad.ts';
 
 export interface InputSnapshot {
   /** KeyboardEvent.code values currently held */
@@ -28,9 +30,12 @@ export interface MapperSettings {
   /** radians per pixel */
   mouseSensitivity: number;
   invertY: boolean;
+  bindings: Bindings;
 }
 
-const DEFAULT_SETTINGS: MapperSettings = { mode: 'mouse-aim', mouseSensitivity: 0.0022, invertY: false };
+/** Mouse radians per pixel at the settings screen's 1× sensitivity. */
+export const BASE_MOUSE_SENSITIVITY = 0.0022;
+const DEFAULT_SETTINGS: MapperSettings = { mode: 'mouse-aim', mouseSensitivity: BASE_MOUSE_SENSITIVITY, invertY: false, bindings: DEFAULT_BINDINGS };
 const AXIS_RAMP_S = 0.15;
 const THROTTLE_RATE = 0.6;
 const WHEEL_THROTTLE_PER_UNIT = 0.0005;
@@ -39,10 +44,8 @@ const LOOK_YAW_LIMIT = 150 * DEG;
 const LOOK_PITCH_LIMIT = 80 * DEG;
 const LOOK_RETURN_TAU = 0.12;
 const OVERRIDE_THRESHOLD = 0.05;
-
-const anyHeld = (keys: ReadonlySet<string>, ...codes: string[]) => codes.some((c) => keys.has(c));
-const axisTarget = (keys: ReadonlySet<string>, pos: string[], neg: string[]) =>
-  (anyHeld(keys, ...pos) ? 1 : 0) - (anyHeld(keys, ...neg) ? 1 : 0);
+/** A throttle lever must move this much before it takes over from the keyboard. */
+const LEVER_MOVE = 0.01;
 
 /** Pure mapping from raw input snapshots to pilot commands. Holds throttle, axis ramps, aim and head state. */
 export class ControlMapper {
@@ -59,6 +62,7 @@ export class ControlMapper {
   private pitchAxis = 0;
   private rollAxis = 0;
   private yawAxis = 0;
+  private lever: number | null = null;
   private readonly out: ControlInput = neutralInput();
   private readonly steer: SteerOutput = { pitch: 0, roll: 0, yaw: 0 };
   private readonly nose = new Vector3();
@@ -69,32 +73,40 @@ export class ControlMapper {
 
   /** Points the aim along the aircraft's nose (call on spawn). */
   resetAim(flight: FlightState): void {
-    this.aimHeading = headingRad(flight);
-    this.nose.set(0, 0, -1).applyQuaternion(flight.quat);
-    this.aimPitch = clamp(Math.asin(clamp(this.nose.y, -1, 1)), -AIM_PITCH_LIMIT, AIM_PITCH_LIMIT);
-    this.updateAimDirection();
+    this.aimAlongNose(flight);
     this.throttle = flight.throttle;
   }
 
-  map(snap: InputSnapshot, flight: FlightState | null, dt: number): ControlInput {
+  /** Pilot commands for this frame from the keyboard and mouse snapshot, plus a gamepad or flight stick if any. */
+  map(snap: InputSnapshot, flight: FlightState | null, dt: number, pad: PadFrame | null = null): ControlInput {
     const keys = snap.keys;
     const out = this.out;
+    const held = (a: KeyAction) => this.settings.bindings[a].some((c) => keys.has(c));
+    const tapped = (a: KeyAction) => this.settings.bindings[a].some((c) => snap.pressed.has(c));
+    const axisTarget = (pos: KeyAction, neg: KeyAction) => (held(pos) ? 1 : 0) - (held(neg) ? 1 : 0);
 
-    // Throttle.
-    const throttleDir = (anyHeld(keys, 'ShiftLeft', 'ShiftRight') ? 1 : 0) - (keys.has('KeyZ') ? 1 : 0);
+    // Throttle: keys, wheel and pad triggers move it; a throttle lever sets it once the lever moves.
+    const throttleDir = axisTarget('throttleUp', 'throttleDown') + (pad ? pad.throttleRate : 0);
     this.throttle = clamp(this.throttle + throttleDir * THROTTLE_RATE * dt - snap.wheel * WHEEL_THROTTLE_PER_UNIT, 0, 1);
+    const lever = pad ? pad.throttle : null;
+    if (lever !== null && this.lever !== null && Math.abs(lever - this.lever) > LEVER_MOVE) this.throttle = lever;
+    if (lever === null || this.lever === null || Math.abs(lever - this.lever) > LEVER_MOVE) this.lever = lever;
 
     // Keyboard axes with ramping.
     const step = dt / AXIS_RAMP_S;
-    this.pitchAxis = moveToward(this.pitchAxis, axisTarget(keys, ['KeyS', 'ArrowDown'], ['KeyW', 'ArrowUp']), step);
-    this.rollAxis = moveToward(this.rollAxis, axisTarget(keys, ['KeyD', 'ArrowRight'], ['KeyA', 'ArrowLeft']), step);
-    this.yawAxis = moveToward(this.yawAxis, axisTarget(keys, ['KeyE'], ['KeyQ']), step);
+    this.pitchAxis = moveToward(this.pitchAxis, axisTarget('pitchUp', 'pitchDown'), step);
+    this.rollAxis = moveToward(this.rollAxis, axisTarget('rollRight', 'rollLeft'), step);
+    this.yawAxis = moveToward(this.yawAxis, axisTarget('yawRight', 'yawLeft'), step);
 
-    // Head / free look.
-    this.freeLook = keys.has('KeyC') || snap.rightButton;
+    // Head / free look: the pad's right stick, or the look key with the mouse.
+    const padLook = pad !== null && (pad.lookX !== 0 || pad.lookY !== 0);
+    this.freeLook = padLook || held('look') || snap.rightButton;
     const ySign = this.settings.invertY ? -1 : 1;
     const sens = this.settings.mouseSensitivity;
-    if (this.freeLook) {
+    if (padLook && pad) {
+      this.lookYaw = pad.lookX * LOOK_YAW_LIMIT;
+      this.lookPitch = -pad.lookY * LOOK_PITCH_LIMIT;
+    } else if (this.freeLook) {
       this.lookYaw = clamp(this.lookYaw + snap.mouseDX * sens, -LOOK_YAW_LIMIT, LOOK_YAW_LIMIT);
       this.lookPitch = clamp(this.lookPitch - snap.mouseDY * sens * ySign, -LOOK_PITCH_LIMIT, LOOK_PITCH_LIMIT);
     } else {
@@ -107,33 +119,58 @@ export class ControlMapper {
       }
     }
 
-    // Stick.
+    // Stick: a held key wins, then the pad stick, then the mouse-aim autopilot.
+    const pick = (key: number, stick: number, auto: number) =>
+      Math.abs(key) > OVERRIDE_THRESHOLD ? key : Math.abs(stick) > OVERRIDE_THRESHOLD ? stick : auto;
+    const padPitch = pad ? pad.pitch : 0;
+    const padRoll = pad ? pad.roll : 0;
+    const padYaw = pad ? pad.yaw : 0;
     if (this.settings.mode === 'mouse-aim' && flight) {
       steerToward(flight, this.aimDirection, {}, this.steer);
-      out.pitch = Math.abs(this.pitchAxis) > OVERRIDE_THRESHOLD ? this.pitchAxis : this.steer.pitch;
-      out.roll = Math.abs(this.rollAxis) > OVERRIDE_THRESHOLD ? this.rollAxis : this.steer.roll;
-      out.yaw = Math.abs(this.yawAxis) > OVERRIDE_THRESHOLD ? this.yawAxis : this.steer.yaw;
+      out.pitch = pick(this.pitchAxis, padPitch, this.steer.pitch);
+      out.roll = pick(this.rollAxis, padRoll, this.steer.roll);
+      out.yaw = pick(this.yawAxis, padYaw, this.steer.yaw);
+      // A pad pilot never touches the mouse: keep the aim on the nose so letting go of the stick holds the heading.
+      if (Math.max(Math.abs(padPitch), Math.abs(padRoll), Math.abs(padYaw)) > OVERRIDE_THRESHOLD) this.aimAlongNose(flight);
     } else {
-      out.pitch = this.pitchAxis;
-      out.roll = this.rollAxis;
-      out.yaw = this.yawAxis;
+      out.pitch = pick(this.pitchAxis, padPitch, 0);
+      out.roll = pick(this.rollAxis, padRoll, 0);
+      out.yaw = pick(this.yawAxis, padYaw, 0);
     }
 
     // Buttons.
-    if (snap.pressed.has('Digit1')) this.weapon = 'srm';
-    if (snap.pressed.has('Digit2')) this.weapon = 'mrm';
+    const padDown = (a: PadAction) => pad !== null && pad.down.has(a);
+    const padPressed = (a: PadAction) => pad !== null && pad.pressed.has(a);
+    if (tapped('weaponSrm')) this.weapon = 'srm';
+    if (tapped('weaponMrm')) this.weapon = 'mrm';
     out.throttle = this.throttle;
-    out.airbrake = keys.has('KeyB');
-    out.fireCannon = keys.has('Space') || snap.leftButton;
-    out.fireMissile = snap.pressed.has('KeyF');
-    out.countermeasures = snap.pressed.has('KeyX');
-    out.dropBomb = snap.pressed.has('KeyG');
-    out.cycleTarget = snap.pressed.has('KeyR');
+    out.airbrake = held('airbrake') || padDown('airbrake');
+    out.fireCannon = held('cannon') || snap.leftButton || padDown('cannon');
+    out.fireMissile = tapped('missile') || padPressed('missile');
+    out.countermeasures = tapped('flares') || padPressed('flares');
+    out.dropBomb = tapped('bomb') || padPressed('bomb');
+    out.cycleTarget = tapped('nextTarget') || padPressed('nextTarget');
     out.weapon = this.weapon;
     out.helmetSight = this.freeLook;
     out.lookYaw = this.lookYaw;
     out.lookPitch = this.lookPitch;
     return out;
+  }
+
+  /** Esc always pauses (browsers use it to release the mouse); so do the pause key and the pad's Start. */
+  pauseRequested(snap: InputSnapshot, pad: PadFrame | null): boolean {
+    return snap.pressed.has('Escape') || this.settings.bindings.pause.some((c) => snap.pressed.has(c)) || (pad !== null && pad.pressed.has('pause'));
+  }
+
+  scoresHeld(snap: InputSnapshot, pad: PadFrame | null): boolean {
+    return this.settings.bindings.scores.some((c) => snap.keys.has(c)) || (pad !== null && pad.down.has('scores'));
+  }
+
+  private aimAlongNose(flight: FlightState): void {
+    this.aimHeading = headingRad(flight);
+    this.nose.set(0, 0, -1).applyQuaternion(flight.quat);
+    this.aimPitch = clamp(Math.asin(clamp(this.nose.y, -1, 1)), -AIM_PITCH_LIMIT, AIM_PITCH_LIMIT);
+    this.updateAimDirection();
   }
 
   private updateAimDirection(): void {

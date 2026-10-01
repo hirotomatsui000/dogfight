@@ -5,6 +5,7 @@ import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import kestrelUrl from '../assets/models/kestrel.glb?url';
 import kobchikUrl from '../assets/models/kobchik.glb?url';
 import { addEngines, type AircraftModel, buildAircraftModel } from './aircraft-model.ts';
+import type { LoadProgress } from './load-progress.ts';
 
 /**
  * How an imported model sits in its jet. tools/prepare-models.ts writes every model 1 long with the nose toward -z,
@@ -34,13 +35,17 @@ export const IMPORTED_MODELS: Readonly<Record<string, ModelFit>> = {
 export type AircraftMeshes = ReadonlyMap<string, Object3D>;
 
 /** Never rejects: a model that fails to load is logged and left out, so its jet falls back to the generated model. */
-export async function loadAircraftMeshes(fits: Readonly<Record<string, ModelFit>> = IMPORTED_MODELS): Promise<AircraftMeshes> {
+export async function loadAircraftMeshes(
+  fits: Readonly<Record<string, ModelFit>> = IMPORTED_MODELS,
+  progress?: LoadProgress,
+): Promise<AircraftMeshes> {
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   const meshes = new Map<string, Object3D>();
   await Promise.all(
     Object.entries(fits).map(async ([id, fit]) => {
       try {
-        meshes.set(id, (await loader.loadAsync(fit.url)).scene);
+        const loading = loader.loadAsync(fit.url);
+        meshes.set(id, (await (progress ? progress.track(loading) : loading)).scene);
       } catch (err) {
         console.error(`The ${id} model could not load; that jet uses the generated model.`, err);
       }

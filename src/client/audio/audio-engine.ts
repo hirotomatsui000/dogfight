@@ -35,6 +35,8 @@ export class AudioEngine {
   private readonly lockGain: GainNode;
   private readonly warnGain: GainNode;
   private muted = false;
+  /** master volume from the settings, 0..1 */
+  private volume = 1;
 
   /** Null when the browser has no Web Audio; the game then runs silently. */
   static create(): AudioEngine | null {
@@ -91,7 +93,12 @@ export class AudioEngine {
 
   setMuted(muted: boolean): void {
     this.muted = muted;
-    this.set(this.master.gain, muted ? 0 : MASTER_GAIN);
+    this.set(this.master.gain, muted ? 0 : MASTER_GAIN * this.volume);
+  }
+
+  setVolume(volume: number): void {
+    this.volume = Math.min(1, Math.max(0, volume));
+    this.setMuted(this.muted);
   }
 
   update(f: SoundFrame): void {

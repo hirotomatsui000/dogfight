@@ -5,6 +5,7 @@ import forestUrl from '../assets/sat-forest.jpg';
 import mountainUrl from '../assets/sat-mountain.jpg';
 import skyUrl from '../assets/sky.jpg';
 import waterNormalsUrl from '../assets/waternormals.jpg';
+import type { LoadProgress } from './load-progress.ts';
 
 /** The photo textures of the realistic scenery (sources and licenses: CREDITS.md). */
 export interface SceneryTextures {
@@ -19,10 +20,11 @@ export interface SceneryTextures {
 /** three.js lowers this to what the graphics card supports, so loading needs no renderer. */
 const ANISOTROPY = 8;
 
-export async function loadSceneryTextures(): Promise<SceneryTextures> {
+export async function loadSceneryTextures(progress?: LoadProgress): Promise<SceneryTextures> {
   const loader = new TextureLoader();
+  const load = (url: string) => (progress ? progress.track(loader.loadAsync(url)) : loader.loadAsync(url));
   const [sky, farm, forest, mountain, detail, waterNormals] = await Promise.all(
-    [skyUrl, farmUrl, forestUrl, mountainUrl, detailUrl, waterNormalsUrl].map((url) => loader.loadAsync(url)),
+    [skyUrl, farmUrl, forestUrl, mountainUrl, detailUrl, waterNormalsUrl].map(load),
   );
   sky.colorSpace = SRGBColorSpace;
   // Real photos are not seamless: mirrored tiling hides the edges.
@@ -40,4 +42,13 @@ export async function loadSceneryTextures(): Promise<SceneryTextures> {
   waterNormals.wrapS = RepeatWrapping;
   waterNormals.wrapT = RepeatWrapping;
   return { sky, farm, forest, mountain, detail, waterNormals };
+}
+
+/** Sharper ground photos at grazing angles cost texture bandwidth: the graphics preset sets how much. */
+export function setSceneryAnisotropy(textures: SceneryTextures, anisotropy: number): void {
+  for (const t of [textures.farm, textures.forest, textures.mountain, textures.detail]) {
+    if (t.anisotropy === anisotropy) continue;
+    t.anisotropy = anisotropy;
+    t.needsUpdate = true;
+  }
 }

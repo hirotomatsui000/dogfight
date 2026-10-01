@@ -1,7 +1,9 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { createFlightState } from '../../shared/physics/flight-model.ts';
+import { DEFAULT_BINDINGS, rebind } from './bindings.ts';
 import { ControlMapper, emptySnapshot, type InputSnapshot } from './control-mapper.ts';
+import type { PadFrame } from './gamepad.ts';
 
 const northbound = () => createFlightState({ position: new Vector3(0, 3000, 0), headingRad: 0, speed: 200, throttle: 0.8 });
 const snap = (over: Partial<InputSnapshot>): InputSnapshot => ({ ...emptySnapshot(), ...over });
@@ -12,6 +14,19 @@ const run = (m: ControlMapper, s: InputSnapshot, frames: number, flight = northb
   for (let i = 1; i < frames; i++) out = m.map({ ...s, mouseDX: 0, mouseDY: 0, wheel: 0, pressed: new Set() }, flight, 1 / 60);
   return out;
 };
+
+const idlePad = (): PadFrame => ({
+  active: true,
+  pitch: 0,
+  roll: 0,
+  yaw: 0,
+  throttle: null,
+  throttleRate: 0,
+  lookX: 0,
+  lookY: 0,
+  down: new Set(),
+  pressed: new Set(),
+});
 
 describe('ControlMapper', () => {
   it('raises and lowers the throttle and clamps it', () => {
@@ -77,5 +92,60 @@ describe('ControlMapper', () => {
     const next = m.map(snap({ keys: new Set(['KeyF']) }), northbound(), 1 / 60);
     expect(next.cycleTarget || next.countermeasures || next.fireMissile || next.dropBomb).toBe(false);
     expect(next.weapon).toBe('mrm');
+  });
+});
+
+describe('ControlMapper with rebound keys and a gamepad', () => {
+  it('follows rebound keys', () => {
+    const m = new ControlMapper({ mode: 'direct', bindings: rebind(DEFAULT_BINDINGS, 'pitchUp', 'KeyK') });
+    expect(run(m, hold('KeyK'), 18).pitch).toBe(1);
+    expect(run(m, hold('KeyS'), 18).pitch).toBe(0);
+    const swapped = new ControlMapper({ bindings: rebind(DEFAULT_BINDINGS, 'missile', 'Space') });
+    const out = swapped.map(snap({ keys: new Set(['Space']), pressed: new Set(['Space']) }), northbound(), 1 / 60);
+    expect(out.fireMissile).toBe(true);
+    expect(out.fireCannon).toBe(false);
+  });
+
+  it('flies with the pad stick, overriding the mouse aim, and keeps the aim on the nose', () => {
+    const m = new ControlMapper();
+    const flight = northbound();
+    m.resetAim(flight);
+    const out = m.map(emptySnapshot(), flight, 1 / 60, { ...idlePad(), roll: 0.6, pitch: -0.4 });
+    expect(out.roll).toBe(0.6);
+    expect(out.pitch).toBe(-0.4);
+    expect(m.aimDirection.z).toBeLessThan(-0.99);
+  });
+
+  it('adds pad buttons and throttle to the keyboard', () => {
+    const m = new ControlMapper();
+    const pad = { ...idlePad(), throttleRate: 1, down: new Set(['cannon'] as const), pressed: new Set(['flares', 'nextTarget'] as const) };
+    const out = m.map(emptySnapshot(), northbound(), 0.5, pad);
+    expect(out.throttle).toBeCloseTo(1, 5);
+    expect(out.fireCannon).toBe(true);
+    expect(out.countermeasures).toBe(true);
+    expect(out.cycleTarget).toBe(true);
+    expect(out.fireMissile).toBe(false);
+  });
+
+  it('takes a throttle lever only once it moves', () => {
+    const m = new ControlMapper();
+    expect(m.map(emptySnapshot(), northbound(), 1 / 60, { ...idlePad(), throttle: 0 }).throttle).toBeCloseTo(0.8, 5);
+    expect(m.map(emptySnapshot(), northbound(), 1 / 60, { ...idlePad(), throttle: 0.5 }).throttle).toBeCloseTo(0.5, 5);
+  });
+
+  it('looks around with the right stick', () => {
+    const m = new ControlMapper();
+    const out = m.map(emptySnapshot(), northbound(), 1 / 60, { ...idlePad(), lookX: 1 });
+    expect(out.helmetSight).toBe(true);
+    expect(out.lookYaw).toBeGreaterThan(2);
+  });
+
+  it('reports pause and the scoreboard from keys or the pad', () => {
+    const m = new ControlMapper();
+    expect(m.pauseRequested(snap({ pressed: new Set(['KeyP']) }), null)).toBe(true);
+    expect(m.pauseRequested(snap({ pressed: new Set(['Escape']) }), null)).toBe(true);
+    expect(m.pauseRequested(emptySnapshot(), { ...idlePad(), pressed: new Set(['pause'] as const) })).toBe(true);
+    expect(m.scoresHeld(hold('Tab'), null)).toBe(true);
+    expect(m.scoresHeld(emptySnapshot(), { ...idlePad(), down: new Set(['scores'] as const) })).toBe(true);
   });
 });

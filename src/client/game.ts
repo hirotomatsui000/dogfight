@@ -20,11 +20,14 @@ import { CameraRig, type CameraTarget } from './camera/camera-rig.ts';
 import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
 import { releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
-import { ControlMapper, type ControlMode } from './input/control-mapper.ts';
-import { DomInput } from './input/dom-input.ts';
+import { BASE_MOUSE_SENSITIVITY, ControlMapper, type ControlMode } from './input/control-mapper.ts';
+import { capturedKeys, DomInput } from './input/dom-input.ts';
+import { GamepadReader, pollGamepad } from './input/gamepad.ts';
 import { type AircraftMeshes, aircraftModelFor } from './render/aircraft-meshes.ts';
-import type { SceneryTextures } from './render/assets.ts';
+import { type SceneryTextures, setSceneryAnisotropy } from './render/assets.ts';
 import { Effects } from './render/effects/effects.ts';
+import type { LoadProgress } from './render/load-progress.ts';
+import { QUALITY_PRESETS, QualityGovernor, type QualityLevel, resolveQuality } from './render/quality.ts';
 import { GroundTargetModels } from './render/ground-target-models.ts';
 import type { ParticleFrame } from './render/effects/particles.ts';
 import { Renderer } from './render/renderer.ts';
@@ -34,14 +37,19 @@ import { SkySystem } from './render/sky.ts';
 import { createTerrainMaterial } from './render/terrain-material.ts';
 import { TerrainMesh } from './render/terrain-mesh.ts';
 import { LocalSession } from './session/local-session.ts';
+import { setHudColor } from './hud/palette.ts';
 import { matchResult, type ResultRow, showEndScreen } from './ui/end-screen.ts';
+import { loadingText } from './ui/load-bar.ts';
 import type { StartOptions } from './ui/menu.ts';
 import { PauseMenu } from './ui/pause.ts';
-import { loadSetting, saveSetting } from './ui/storage.ts';
+import { openSettings } from './ui/settings-screen.ts';
+import type { Settings, SettingsStore } from './ui/settings.ts';
 
 /** The gun lead marker shows for a designated target inside this range. */
 const LEAD_MARKER_RANGE_M = 2000;
 const HIT_MARKER_S = 0.25;
+/** How long HIT shows after the local jet is hit (the caption of the hit sound). */
+const HIT_TAKEN_S = 0.6;
 const BANNER_S = 1.5;
 const EXPLOSION_SHAKE_RANGE_M = 1500;
 
@@ -91,19 +99,27 @@ export async function startGame(
   handlers: GameHandlers,
   scenery: Promise<SceneryTextures>,
   aircraftMeshes: Promise<AircraftMeshes>,
+  settings: SettingsStore,
+  progress: LoadProgress,
 ): Promise<() => void> {
   // Created before the first await: browsers only let sound start from a click.
-  let soundOn = loadSetting('sound', true);
   const audio = AudioEngine.create();
-  audio?.setMuted(!soundOn);
-  const loading = showLoading(root, 'Loading scenery…');
-  const renderer = new Renderer(root);
+  audio?.setVolume(settings.current.volume);
+  audio?.setMuted(!settings.current.sound);
+  const loading = showLoading(root, loadingText(progress));
+  const stopLoadingText = progress.subscribe((p) => {
+    loading.firstElementChild!.textContent = loadingText(p);
+  });
+  const s0 = settings.current;
+  let quality: QualityLevel = resolveQuality(s0.graphics, s0.autoGraphics, window.innerWidth, window.innerHeight, window.devicePixelRatio);
+  const renderer = new Renderer(root, QUALITY_PRESETS[quality]);
   let textures;
   try {
     textures = await scenery;
   } catch (err) {
     renderer.dispose();
     audio?.dispose();
+    stopLoadingText();
     loading.remove();
     throw new Error(`Could not load the scenery photos: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -126,6 +142,7 @@ export async function startGame(
   renderer.scene.add(new TerrainMesh(terrain, map, createTerrainMaterial(textures)).group);
   const sea = new Sea(textures.waterNormals);
   renderer.scene.add(sea.mesh);
+  stopLoadingText();
   loading.remove();
   const sceneSync = new SceneSync(renderer.scene, (config) => aircraftModelFor(config, meshes));
   const targetModels = new GroundTargetModels(renderer.scene);
@@ -134,11 +151,41 @@ export async function startGame(
   const impactPoint = new Vector3();
   const effects = new Effects(renderer.scene);
   const cameraRig = new CameraRig(renderer.camera);
-  cameraRig.reduceMotion = loadSetting('reduceMotion', false);
   const hud = new Hud(root);
   const input = new DomInput(renderer.webgl.domElement);
   input.attach();
   const mapper = new ControlMapper({ mode: options.controlMode });
+  const pad = new GamepadReader();
+  const governor = s0.graphics === 'auto' ? new QualityGovernor(quality) : null;
+
+  const applyQuality = (level: QualityLevel) => {
+    quality = level;
+    const preset = QUALITY_PRESETS[level];
+    renderer.setQuality(preset);
+    effects.setParticleDensity(preset.particles);
+    setSceneryAnisotropy(textures, preset.anisotropy);
+  };
+  /** Settings changed (or the match starts): apply everything that can change live. */
+  const applySettings = (s: Readonly<Settings>) => {
+    audio?.setVolume(s.volume);
+    audio?.setMuted(!s.sound);
+    if (mapper.settings.mode !== s.controlMode) {
+      mapper.settings.mode = s.controlMode;
+      const me = session.localView();
+      if (me) mapper.resetAim(me.flight);
+    }
+    mapper.settings.mouseSensitivity = BASE_MOUSE_SENSITIVITY * s.mouseSensitivity;
+    mapper.settings.invertY = s.invertY;
+    mapper.settings.bindings = s.keys;
+    input.captured = capturedKeys(s.keys);
+    cameraRig.reduceMotion = s.reduceMotion;
+    setHudColor(s.hudColor);
+    hud.setScale(s.hudScale);
+    if (s.graphics !== 'auto' && s.graphics !== quality) applyQuality(s.graphics);
+  };
+  applySettings(s0);
+  applyQuality(quality);
+  const stopSettings = settings.subscribe(applySettings);
   const killFeed = new KillFeed();
   const fog = renderer.scene.fog instanceof FogExp2 ? renderer.scene.fog : null;
   const particleFrame: ParticleFrame = { pixelScale: 1000, fogColor: new Color(), fogDensity: fog ? fog.density : 0 };
@@ -156,6 +203,8 @@ export async function startGame(
   let deathMessage: string | null = null;
   let respawnAt = 0;
   let hitMarkerUntil = 0;
+  let hitTakenUntil = 0;
+  let settingsOpen = false;
   let banner: string | null = null;
   let bannerUntil = 0;
   let closeEndScreen: (() => void) | null = null;
@@ -176,34 +225,24 @@ export async function startGame(
       last = performance.now();
       input.requestPointerLock();
     },
+    onSettings: () => {
+      settingsOpen = true;
+      openSettings(root, settings, 'controls', () => {
+        settingsOpen = false;
+        // The Esc that closed the dialog must not also toggle the pause menu.
+        input.snapshot();
+      });
+    },
     onQuit: () => {
       cleanup();
       handlers.onQuit();
-    },
-    onToggleControlMode: () => {
-      mapper.settings.mode = mapper.settings.mode === 'mouse-aim' ? 'direct' : 'mouse-aim';
-      saveSetting('controlMode', mapper.settings.mode);
-      const me = session.localView();
-      if (me) mapper.resetAim(me.flight);
-      return mapper.settings.mode;
-    },
-    onToggleReduceMotion: () => {
-      cameraRig.reduceMotion = !cameraRig.reduceMotion;
-      saveSetting('reduceMotion', cameraRig.reduceMotion);
-      return cameraRig.reduceMotion;
-    },
-    onToggleSound: () => {
-      soundOn = !soundOn;
-      saveSetting('sound', soundOn);
-      audio?.setMuted(!soundOn);
-      return soundOn;
     },
   });
   const openPause = () => {
     if (paused) return;
     paused = true;
     audio?.quiet();
-    pause.show({ controlMode: mapper.settings.mode, reduceMotion: cameraRig.reduceMotion, sound: soundOn });
+    pause.show();
   };
   // Browsers swallow Esc while the pointer is locked and release the lock instead: treat that as "pause".
   const onPointerLockChange = () => {
@@ -245,6 +284,7 @@ export async function startGame(
       if (e.aircraftId === session.localId) {
         cameraRig.addTrauma(0.3);
         audio?.hit();
+        hitTakenUntil = nowS + HIT_TAKEN_S;
       }
     } else if (e.type === 'missileLaunched') {
       if (e.shooterId === session.localId) audio?.launch();
@@ -306,7 +346,16 @@ export async function startGame(
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
     const snap = input.snapshot();
-    if (!matchOver && (snap.pressed.has('KeyP') || snap.pressed.has('Escape'))) {
+    const padFrame = pad.read(pollGamepad(), settings.current.gamepad);
+    if (padFrame.active) audio?.resume();
+    if (governor && !paused && !matchOver) {
+      const lower = governor.frame(dt);
+      if (lower) {
+        applyQuality(lower);
+        settings.update({ autoGraphics: lower });
+      }
+    }
+    if (!matchOver && !settingsOpen && mapper.pauseRequested(snap, padFrame)) {
       if (paused) {
         pause.hide();
         paused = false;
@@ -325,7 +374,7 @@ export async function startGame(
         hud.resetMaxG();
         deathMessage = null;
       }
-      const controls = mapper.map(snap, me && me.alive ? me.flight : null, dt);
+      const controls = mapper.map(snap, me && me.alive ? me.flight : null, dt, padFrame);
       session.update(dt, controls);
       for (const e of session.drainEvents()) handleEvent(e, nowS);
       killFeed.update(dt);
@@ -387,7 +436,8 @@ export async function startGame(
         hint: local.bombLoad > 0 ? `${HINTS[mapper.settings.mode]} · G bomb` : HINTS[mapper.settings.mode],
         killFeed: killFeed.lines,
         hitMarker: nowS < hitMarkerUntil,
-        showScoreboard: snap.keys.has('Tab') && !paused,
+        hitTaken: nowS < hitTakenUntil,
+        showScoreboard: mapper.scoresHeld(snap, padFrame) && !paused,
         dt,
         groundTargets: targets,
         bombImpact,
@@ -416,6 +466,7 @@ export async function startGame(
   function cleanup(): void {
     running = false;
     cancelAnimationFrame(rafId);
+    stopSettings();
     document.removeEventListener('pointerlockchange', onPointerLockChange);
     root.removeEventListener('pointerdown', onPointerDown);
     input.detach();

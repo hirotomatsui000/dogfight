@@ -1,5 +1,6 @@
 import { Vector3 } from 'three';
 import { clamp, DEG, RAD } from '../../shared/math/units.ts';
+import { WARNING_CAPTIONS } from './captions.ts';
 import { drawCombatLayer } from './combat-layer.ts';
 import {
   altitudeLabel,
@@ -14,7 +15,7 @@ import {
 } from './format.ts';
 import { drawGameLayer } from './game-layer.ts';
 import type { HudFrame } from './hud-frame.ts';
-import { AMBER, FONT, FONT_BIG, FONT_SMALL, GREEN, RED, SHADOW, WHITE } from './palette.ts';
+import { AMBER, FONT, FONT_BIG, FONT_SMALL, GREEN, PRIMARY, RED, SHADOW, WHITE } from './palette.ts';
 import { Projector, type ScreenPoint } from './projector.ts';
 import { drawRadarScope } from './radar-scope.ts';
 import { drawStrikeMarkers, drawStrikeStatus } from './strike-layer.ts';
@@ -29,8 +30,10 @@ export class Hud {
   readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly projector = new Projector();
+  /** layout size in HUD units: CSS pixels divided by the HUD scale */
   private width = 0;
   private height = 0;
+  private scale = 1;
   private maxG = 1;
   private gOverTime = 0;
   private clock = 0;
@@ -52,6 +55,12 @@ export class Hud {
     this.maxG = 1;
   }
 
+  /** HUD size from the settings (0.8–1.4): everything scales together around the same layout. */
+  setScale(scale: number): void {
+    this.scale = scale;
+    this.resize();
+  }
+
   dispose(): void {
     window.removeEventListener('resize', this.onResize);
     this.canvas.remove();
@@ -70,8 +79,8 @@ export class Hud {
     }
     ctx.save();
     ctx.font = FONT;
-    ctx.fillStyle = GREEN;
-    ctx.strokeStyle = GREEN;
+    ctx.fillStyle = PRIMARY;
+    ctx.strokeStyle = PRIMARY;
     ctx.lineWidth = 1.6;
     ctx.shadowColor = SHADOW;
     ctx.shadowBlur = 3;
@@ -101,14 +110,16 @@ export class Hud {
 
   private resize(): void {
     const dpr = Math.min(window.devicePixelRatio, 2);
-    this.width = window.innerWidth;
-    this.height = window.innerHeight;
+    const cssW = window.innerWidth;
+    const cssH = window.innerHeight;
+    this.width = cssW / this.scale;
+    this.height = cssH / this.scale;
     this.projector.setSize(this.width, this.height);
-    this.canvas.width = Math.round(this.width * dpr);
-    this.canvas.height = Math.round(this.height * dpr);
-    this.canvas.style.width = `${this.width}px`;
-    this.canvas.style.height = `${this.height}px`;
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.canvas.width = Math.round(cssW * dpr);
+    this.canvas.height = Math.round(cssH * dpr);
+    this.canvas.style.width = `${cssW}px`;
+    this.canvas.style.height = `${cssH}px`;
+    this.ctx.setTransform(dpr * this.scale, 0, 0, dpr * this.scale, 0, 0);
   }
 
   private drawBoresight(f: HudFrame): void {
@@ -233,7 +244,7 @@ export class Hud {
     ctx.strokeRect(x, y, 16, h);
     const ab = t > 0.9;
     ctx.save();
-    ctx.fillStyle = ab ? AMBER : GREEN;
+    ctx.fillStyle = ab ? AMBER : PRIMARY;
     ctx.globalAlpha = 0.75;
     ctx.fillRect(x + 2, y + h - (h - 4) * t - 2, 12, (h - 4) * t);
     ctx.restore();
@@ -265,6 +276,7 @@ export class Hud {
   private drawWarnings(f: HudFrame): void {
     const blinkOn = this.clock % 0.6 < 0.4;
     const stalled = f.view.flight.alpha > f.view.config.physics.alphaMaxDeg * DEG;
+    if (f.hitTaken) this.drawCenterText(WARNING_CAPTIONS['hit-taken'], this.height / 2 + 150, RED, FONT_BIG);
     if (f.pullUp && blinkOn) this.drawCenterText('PULL UP', this.height / 2 + 110, RED, FONT_BIG);
     else if (stalled && blinkOn) this.drawCenterText('STALL', this.height / 2 + 110, AMBER, FONT_BIG);
     const left = f.view.boundarySecondsLeft;

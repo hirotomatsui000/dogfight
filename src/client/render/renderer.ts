@@ -1,4 +1,5 @@
 import { NeutralToneMapping, PerspectiveCamera, Scene, SRGBColorSpace, WebGLRenderer } from 'three';
+import { QUALITY_PRESETS, type QualityPreset } from './quality.ts';
 
 const NEAR_M = 0.5;
 const FAR_M = 200000;
@@ -9,15 +10,21 @@ export class Renderer {
   readonly camera = new PerspectiveCamera(70, 1, NEAR_M, FAR_M);
   private readonly onResize = () => this.resize();
 
-  constructor(container: HTMLElement) {
-    this.webgl = new WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
-    this.webgl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  /** Antialiasing is fixed when the renderer is made; the pixel ratio can change later (`setQuality`). */
+  constructor(container: HTMLElement, quality: QualityPreset = QUALITY_PRESETS.high) {
+    this.webgl = new WebGLRenderer({ antialias: quality.antialias, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
+    this.webgl.setPixelRatio(Math.min(window.devicePixelRatio, quality.pixelRatio));
     this.webgl.outputColorSpace = SRGBColorSpace;
     this.webgl.toneMapping = NeutralToneMapping;
     this.webgl.toneMappingExposure = 1;
     container.appendChild(this.webgl.domElement);
     this.resize();
     window.addEventListener('resize', this.onResize);
+  }
+
+  setQuality(quality: QualityPreset): void {
+    this.webgl.setPixelRatio(Math.min(window.devicePixelRatio, quality.pixelRatio));
+    this.resize();
   }
 
   resize(): void {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { kestrel } from '../../shared/data/aircraft/kestrel.ts';
 import { kobchik } from '../../shared/data/aircraft/kobchik.ts';
 import { STRIKE_DEFAULTS } from '../../shared/modes/strike.ts';
+import { DEFAULT_BINDINGS, rebind } from '../input/bindings.ts';
 import { controlsHelp } from './controls-help.ts';
 import { aircraftSummary, pickValid, sanitizeCallsign, strikeRole } from './menu.ts';
 
@@ -49,5 +50,12 @@ describe('strike role', () => {
     expect(strikeRole(kobchik)).toBe('Kobchik · Russia: destroy two of the three targets');
     // the words above are written out, so they must follow the rules
     expect([STRIKE_DEFAULTS.timeLimitS, STRIKE_DEFAULTS.targetsToWin]).toEqual([480, 2]);
+  });
+});
+
+describe('controls list with rebound keys', () => {
+  it('shows the keys the player chose', () => {
+    const rows = controlsHelp('direct', rebind(DEFAULT_BINDINGS, 'flares', 'KeyV'));
+    expect(rows.find(([, a]) => a === 'Flares')?.[0]).toBe('V');
   });
 });

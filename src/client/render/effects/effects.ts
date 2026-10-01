@@ -56,6 +56,12 @@ export class Effects {
     scene.add(this.smoke.points, this.fire.points, this.tracers.lines, this.tracers.heads);
   }
 
+  /** Share of smoke and fire particles kept (graphics presets). */
+  setParticleDensity(density: number): void {
+    this.smoke.density = density;
+    this.fire.density = density;
+  }
+
   /** Live smoke and fire particles (tests and debugging). */
   get particleCount(): number {
     return this.smoke.liveCount + this.fire.liveCount;
