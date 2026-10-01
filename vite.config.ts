@@ -1,10 +1,20 @@
 import { defineConfig } from 'vitest/config';
 
+/**
+ * Social sites need an absolute URL for the preview image. Set SITE_URL (for example https://example.netlify.app/)
+ * when building for a known address; without it the links stay relative to the page.
+ */
+function siteUrl(): string {
+  const url = process.env.SITE_URL ?? '';
+  return url === '' || url.endsWith('/') ? url : `${url}/`;
+}
+
 // `--mode single` inlines every imported asset (photos included) as a data URI so tools/build-single.ts
 // can produce one self-contained HTML file.
 const SINGLE_FILE_INLINE_LIMIT = 100_000_000;
 
 export default defineConfig(({ mode }) => ({
+  plugins: [{ name: 'site-url', transformIndexHtml: (html: string) => html.replaceAll('__SITE_URL__', siteUrl()) }],
   server: { port: 5173 },
   build: {
     chunkSizeWarningLimit: mode === 'single' ? 20000 : 1500,
