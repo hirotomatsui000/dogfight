@@ -427,8 +427,10 @@ The "Anvil" is an abstract, unguided free-fall bomb for the Strike mode (§13.1)
   with the aircraft's velocity.
 - **Flight:** gravity plus a simple speed-squared drag, like cannon projectiles (§10.1); no guidance. It detonates on
   reaching the surface (land or water). A bomb that leaves the combat area or falls for 60 s disappears.
-- **Effect:** bombs damage ground targets only, never aircraft. Damage is 40 within 15 m of a target's center,
-  falling linearly to 0 at 60 m, so three good hits destroy a target (100 HP, §11).
+- **Effect:** bombs damage ground targets only, never aircraft. Damage is 40 within 30 m of a target's center,
+  falling linearly to 0 at 90 m, so three good hits destroy a target (100 HP, §11). The blast is generous on
+  purpose: at 250 m/s the impact point sweeps about 4 m per frame, so a release a fraction of a second late should
+  still count.
 - **Impact prediction:** a shared function integrates the same bomb physics from the current aircraft state until the
   path meets the terrain. The HUD and the bots use it; it must agree with the real impact within 5 m.
 - **After the launcher dies:** bombs already falling keep going and still count. Impacts after the match has ended
@@ -578,7 +580,7 @@ and the player's jet decides the side: the Kestrel defends for the USA, the Kobc
 | Time-to-impact judgement spread | 45% | 20% | 7% |
 | Gun range | 500 m | 700 m | 900 m |
 | Fire threshold | 2.5° | 1.5° | 0.8° |
-| Bomb impact error, 1σ (Strike) | 35 m | 18 m | 6 m |
+| Bomb impact error, RMS miss distance (Strike) | 35 m | 18 m | 6 m |
 
 - **Mode-specific AI:** Sentinel aircraft (Team Objective) fly orbits and flee threats; bots contest zones in Air
   Superiority.
@@ -588,9 +590,11 @@ and the player's jet decides the side: the Kestrel defends for the USA, the Kobc
      - Pick the standing target that needs the fewest further hits, nearest first.
      - Approach about 1,500 m above the ground at full military power, steering so the predicted impact point
        (§10.4) runs across the target.
-     - Release when the predicted impact point lies within the target's 15 m full-damage radius, plus an error drawn
-       from the profile's bomb impact error. Release up to 3 bombs per pass, at least 0.4 s apart.
-     - Then climb and turn back for another pass, or move on to the next target.
+     - Release a two-bomb stick that straddles the target: the first bomb when the predicted impact point, offset by
+       an error drawn from the profile's bomb impact error, enters the target's 30 m full-damage radius, and the
+       second 0.25 s later.
+     - Then fly on until about 5 km beyond the release distance and turn back for another pass, unless the next
+       target is already ahead.
   6. **Out of bombs:** fight the defender as in Team Deathmatch.
 - **Strike defender (USA, M1d):** priorities 1–3 above stay first. Then:
   4. Engage the attacker nearest to any standing target, if it is within 15 km of one.
@@ -631,7 +635,7 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   - **Targets (both sides):** each target has a ground marker with its letter and an HP bar, and an edge arrow when
     off-screen. Destroyed targets are crossed out.
   - **Attacker:** bombs left (`BMB 8`) in the weapons status. The predicted impact point is drawn on the ground,
-    joined to the flight-path marker by a fall line. `RELEASE` flashes while it lies within a target's 15 m radius.
+    joined to the flight-path marker by a fall line. `RELEASE` flashes while it lies within a target's 30 m radius.
   - **Defender:** banners `TARGET B UNDER ATTACK` (when a target is hit, at most once per 3 s per target) and
     `TARGET B DESTROYED`; the kill feed also records destroyed targets.
 - **G effects:** blackout vignette when > 7 G is sustained for more than 2 s; red tint below −2.5 G.
