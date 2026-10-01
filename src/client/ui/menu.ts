@@ -29,7 +29,6 @@ const MISSIONS: readonly { value: FlyMission; label: string }[] = [
   { value: 'team-deathmatch', label: 'Dogfight' },
   { value: 'strike', label: 'Strike' },
 ];
-const DOGFIGHT_ROLE = 'Shoot down the enemy jet: first to 15 kills, or the most after 10 minutes';
 const CONTROL_LABELS: Record<ControlMode, string> = { 'mouse-aim': 'Mouse aim', direct: 'Keyboard' };
 
 export function sanitizeCallsign(s: string): string {
@@ -186,9 +185,10 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers): (
 
   const summary = el('p', 'pick-note');
   summary.setAttribute('aria-live', 'polite');
+  // In Strike the line under the jets says what the chosen jet must do; otherwise it describes the jet.
   const showSummary = () => {
     const a = aircraft.find((x) => x.id === aircraftId) ?? aircraft[0];
-    summary.textContent = aircraftSummary(a);
+    summary.textContent = mission === 'strike' ? strikeRole(a) : aircraftSummary(a);
   };
   const jets = choiceGroup(
     'aircraft',
@@ -199,26 +199,17 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers): (
       aircraftId = id;
       saveSetting('aircraft', id);
       showSummary();
-      showRole();
       handlers.onPreview(id);
     },
   );
   jets.appendChild(summary);
   showSummary();
 
-  const role = el('p', 'pick-note');
-  role.setAttribute('aria-live', 'polite');
-  function showRole(): void {
-    const a = aircraft.find((x) => x.id === aircraftId) ?? aircraft[0];
-    role.textContent = mission === 'strike' ? strikeRole(a) : DOGFIGHT_ROLE;
-  }
   const missions = choiceGroup('mission', 'Mission', MISSIONS, mission, (m) => {
     mission = m;
     saveSetting('mission', m);
-    showRole();
+    showSummary();
   });
-  missions.appendChild(role);
-  showRole();
 
   const skill = choiceGroup(
     'skill',

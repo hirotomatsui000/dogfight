@@ -110,6 +110,7 @@ body {
 .start-main > :nth-child(2) { animation-delay: 0.08s; }
 .start-main > :nth-child(3) { animation-delay: 0.16s; }
 .start-main > :nth-child(4) { animation-delay: 0.24s; }
+.start-main > :nth-child(5) { animation-delay: 0.32s; }
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(12px); }
@@ -372,6 +373,14 @@ input:focus-visible + .option { color: var(--hud); }
   .start { background: rgb(8 16 24 / 0.72); }
   .fly { width: 100%; }
   .option-name { font-size: 26px; }
+}
+
+/* Short screens (a 720 p laptop): tighten the column so FLY, the links and the credits stay in view. */
+@media (max-height: 820px) {
+  .start-form { gap: 16px; padding-block: 16px; }
+  .start-main { gap: 18px; }
+  .brand-word { font-size: clamp(64px, min(12vw, 15vh), 150px); }
+  .brand-tag { margin-top: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
