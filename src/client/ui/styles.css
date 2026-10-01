@@ -261,7 +261,7 @@ input:focus-visible + .option { color: var(--hud); }
   50% { transform: skewY(-1.4deg); }
 }
 
-.links { display: flex; flex-wrap: wrap; gap: 8px 28px; }
+.links { display: flex; flex-wrap: wrap; gap: 8px 22px; }
 
 .link {
   padding: 4px 0;
@@ -276,6 +276,7 @@ input:focus-visible + .option { color: var(--hud); }
 }
 
 .link:hover { color: var(--canopy); border-bottom-color: currentColor; }
+.link-badge { margin-left: 8px; padding: 2px 6px; font: 600 10px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); background: var(--hud); border-radius: 2px; vertical-align: 2px; }
 
 .pilot { display: grid; gap: 6px; justify-items: end; }
 

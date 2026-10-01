@@ -231,6 +231,10 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   const fly = el('button', 'fly', 'Fly');
   fly.type = 'submit';
   const links = el('div', 'links');
+  const training = el('button', 'link', 'Training');
+  training.type = 'button';
+  training.title = 'Learn to fly, shoot and beat a missile (about 3 minutes)';
+  if (!settings.current.trainingDone) training.appendChild(el('span', 'link-badge', 'New'));
   const freeFlight = el('button', 'link', 'Free flight');
   freeFlight.type = 'button';
   freeFlight.title = 'Fly without enemies';
@@ -240,7 +244,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   const settingsLink = el('button', 'link', 'Settings');
   settingsLink.type = 'button';
   settingsLink.setAttribute('aria-haspopup', 'dialog');
-  links.append(freeFlight, controlsLink, settingsLink);
+  links.append(training, freeFlight, controlsLink, settingsLink);
   launch.append(fly, links);
 
   main.append(brand, missions, jets, skill, launch);
@@ -261,6 +265,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
     start(mission);
   });
   freeFlight.addEventListener('click', () => start('free-flight'));
+  training.addEventListener('click', () => start('training'));
   controlsLink.addEventListener('click', () => sheet.showModal());
   settingsLink.addEventListener('click', () => openSettings(root, settings, 'controls'));
 

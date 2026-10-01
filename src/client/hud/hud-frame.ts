@@ -2,6 +2,7 @@ import type { PerspectiveCamera, Vector3 } from 'three';
 import type { ModeStatus } from '../../shared/modes/mode.ts';
 import type { AircraftView, GroundTargetView, MissileView } from '../session/game-session.ts';
 import type { KillFeedLine } from './kill-feed.ts';
+import type { TrainingPrompt } from './training-prompts.ts';
 
 /** Everything the HUD draws in one frame. */
 export interface HudFrame {
@@ -35,4 +36,6 @@ export interface HudFrame {
   bombImpact: Vector3 | null;
   /** the impact point is on a standing target */
   releaseCue: boolean;
+  /** the lesson panel in training, otherwise null */
+  training: TrainingPrompt | null;
 }

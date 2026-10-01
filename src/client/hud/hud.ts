@@ -19,6 +19,7 @@ import { AMBER, FONT, FONT_BIG, FONT_SMALL, GREEN, PRIMARY, RED, SHADOW, WHITE }
 import { Projector, type ScreenPoint } from './projector.ts';
 import { drawRadarScope } from './radar-scope.ts';
 import { drawStrikeMarkers, drawStrikeStatus } from './strike-layer.ts';
+import { drawTrainingLayer } from './training-layer.ts';
 
 export type { HudFrame } from './hud-frame.ts';
 
@@ -102,6 +103,7 @@ export class Hud {
     }
     drawGameLayer(ctx, this.width, this.height, f);
     if (f.status.strike) drawStrikeStatus(ctx, f, f.status.strike);
+    if (f.training) drawTrainingLayer(ctx, this.projector, f, f.training, this.width);
     this.drawModeAndHint(f);
     if (f.banner) this.drawCenterText(f.banner, this.height * 0.3, AMBER, FONT_BIG);
     if (f.message) this.drawCenterText(f.message, this.height * 0.38, WHITE, FONT_BIG);

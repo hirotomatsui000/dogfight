@@ -9,6 +9,7 @@ import { FreeFlightMode } from '../shared/modes/free-flight.ts';
 import type { GameMode } from '../shared/modes/mode.ts';
 import { StrikeMode } from '../shared/modes/strike.ts';
 import { TeamDeathmatchMode } from '../shared/modes/team-deathmatch.ts';
+import { TrainingMode } from '../shared/modes/training.ts';
 import { atmosphere } from '../shared/physics/atmosphere.ts';
 import { predictImpact } from '../shared/weapons/bomb.ts';
 import { leadDirection } from '../shared/weapons/lead.ts';
@@ -19,7 +20,9 @@ import { explosionGain, seekerTone } from './audio/sound-mix.ts';
 import { CameraRig, type CameraTarget } from './camera/camera-rig.ts';
 import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
+import { setHudColor } from './hud/palette.ts';
 import { releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
+import { trainingPrompt } from './hud/training-prompts.ts';
 import { BASE_MOUSE_SENSITIVITY, ControlMapper, type ControlMode } from './input/control-mapper.ts';
 import { capturedKeys, DomInput } from './input/dom-input.ts';
 import { GamepadReader, pollGamepad } from './input/gamepad.ts';
@@ -36,8 +39,8 @@ import { Sea } from './render/sea.ts';
 import { SkySystem } from './render/sky.ts';
 import { createTerrainMaterial } from './render/terrain-material.ts';
 import { TerrainMesh } from './render/terrain-mesh.ts';
+import { TrainingRings } from './render/training-rings.ts';
 import { LocalSession } from './session/local-session.ts';
-import { setHudColor } from './hud/palette.ts';
 import { matchResult, type ResultRow, showEndScreen } from './ui/end-screen.ts';
 import { loadingText } from './ui/load-bar.ts';
 import type { StartOptions } from './ui/menu.ts';
@@ -79,6 +82,7 @@ function showLoading(root: HTMLElement, text: string): HTMLElement {
 
 function createMode(options: StartOptions): GameMode {
   if (options.mission === 'strike') return new StrikeMode();
+  if (options.mission === 'training') return new TrainingMode();
   return options.mission === 'team-deathmatch' ? new TeamDeathmatchMode() : new FreeFlightMode();
 }
 
@@ -136,7 +140,8 @@ export async function startGame(
     callsign: options.callsign,
     // A fresh seed per match varies gunfire spread, flare luck and the bot's aim; the World stays deterministic.
     seed: Math.floor(Math.random() * 0x7fffffff),
-    opponents: options.mission === 'free-flight' ? undefined : { count: 1, profile: DIFFICULTIES[options.difficulty] },
+    // Training brings its own drones.
+    opponents: options.mission === 'free-flight' || options.mission === 'training' ? undefined : { count: 1, profile: DIFFICULTIES[options.difficulty] },
   });
   new SkySystem(renderer.scene, renderer.webgl, textures.sky);
   renderer.scene.add(new TerrainMesh(terrain, map, createTerrainMaterial(textures)).group);
@@ -146,6 +151,7 @@ export async function startGame(
   loading.remove();
   const sceneSync = new SceneSync(renderer.scene, (config) => aircraftModelFor(config, meshes));
   const targetModels = new GroundTargetModels(renderer.scene);
+  const trainingRings = new TrainingRings(renderer.scene);
   const targetAlerts = new TargetAlerts();
   const strikeTeams = session.modeStatus().strike ?? null;
   const impactPoint = new Vector3();
@@ -328,10 +334,13 @@ export async function startGame(
     const rows: ResultRow[] = [...session.views()]
       .map((v) => ({ callsign: v.callsign, aircraft: v.config.name, team: v.team, kills: v.kills, deaths: v.deaths, isLocal: v.isLocal }))
       .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+    const training = options.mission === 'training';
+    if (training) settings.update({ trainingDone: true });
     closeEndScreen = showEndScreen(root, matchResult(session.modeStatus(), me ? me.team : 'usa', destroyed), rows, {
+      againLabel: training ? 'Fly a dogfight' : undefined,
       onAgain: () => {
         cleanup();
-        handlers.onRestart(options);
+        handlers.onRestart(training ? { ...options, mission: 'team-deathmatch' } : options);
       },
       onMenu: () => {
         cleanup();
@@ -401,6 +410,7 @@ export async function startGame(
     cameraRig.update(active ? dt : 0, local ? target : null, aim);
     sceneSync.update(session.views(), nowS, renderer.camera.position);
     targetModels.update(session.groundTargets());
+    trainingRings.update(session.modeStatus().training?.ring, renderer.camera.position);
     renderer.webgl.getDrawingBufferSize(bufferSize);
     particleFrame.pixelScale = bufferSize.y / (2 * Math.tan((renderer.camera.fov * DEG) / 2));
     effects.update(active ? dt : 0, session, particleFrame, renderer.camera.position);
@@ -419,6 +429,7 @@ export async function startGame(
       }
       const message = paused || !deathMessage ? null : `${deathMessage} — RESPAWN IN ${Math.max(0, Math.ceil(respawnAt - nowS))}`;
       const targets = session.groundTargets();
+      const status = session.modeStatus();
       const bombImpact = local.alive && local.stores.bombs > 0 ? predictImpact(f.pos, f.vel, BOMB_ANVIL, terrain, DT, impactPoint) : null;
       hud.draw({
         view: local,
@@ -428,7 +439,7 @@ export async function startGame(
         leadDirection: leadDir,
         camera: renderer.camera,
         aimDirection: aim,
-        status: session.modeStatus(),
+        status,
         radarAltitudeM: f.pos.y - terrain.surfaceAt(f.pos.x, f.pos.z),
         pullUp: local.alive && timeToImpact(f, terrain) !== null,
         message,
@@ -442,6 +453,7 @@ export async function startGame(
         groundTargets: targets,
         bombImpact,
         releaseCue: releaseCue(bombImpact, targets),
+        training: status.training ? trainingPrompt(status.training, settings.current.keys, mapper.settings.mode, padFrame.active) : null,
       });
       if (audio && active) {
         audio.update({
@@ -476,6 +488,7 @@ export async function startGame(
     effects.dispose();
     sceneSync.dispose();
     targetModels.dispose();
+    trainingRings.dispose();
     session.dispose();
     renderer.dispose();
     audio?.dispose();

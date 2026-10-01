@@ -20,6 +20,7 @@ export interface MatchResult {
 
 /** "Victory" / "Defeat" / "Draw" with the score, or with the reason in Strike, from the local team's point of view. */
 export function matchResult(status: ModeStatus, localTeam: TeamId, destroyedTargets: readonly string[] = []): MatchResult {
+  if (status.training) return { title: 'Training complete', detail: 'You can fly, shoot and beat a missile', note: 'Next: a dogfight against an AI pilot.' };
   const title = status.winner === localTeam ? 'Victory' : status.winner === 'draw' ? 'Draw' : 'Defeat';
   const s = status.strike;
   if (s && s.reason) {
@@ -38,6 +39,8 @@ export function matchResult(status: ModeStatus, localTeam: TeamId, destroyedTarg
 export interface EndScreenHandlers {
   onAgain(): void;
   onMenu(): void;
+  /** the main button's text; "Fly again" by default */
+  againLabel?: string;
 }
 
 /** Match results with "Fly again" and "Main menu". Returns a cleanup function. */
@@ -75,7 +78,7 @@ export function showEndScreen(root: HTMLElement, result: MatchResult, rows: read
   const again = document.createElement('button');
   again.type = 'button';
   again.className = 'button';
-  again.textContent = 'Fly again';
+  again.textContent = handlers.againLabel ?? 'Fly again';
   again.addEventListener('click', () => handlers.onAgain());
   const menu = document.createElement('button');
   menu.type = 'button';
