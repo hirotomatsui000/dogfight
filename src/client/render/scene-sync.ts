@@ -1,14 +1,16 @@
-import type { Scene, Vector3 } from 'three';
+import type { Group, Scene, Vector3 } from 'three';
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import { DEG } from '../../shared/math/units.ts';
 import type { AircraftView } from '../session/game-session.ts';
 import { type AircraftModel, parametricModel } from './aircraft-model.ts';
 import { navLights } from './environment/night-lights.ts';
+import { landingGear, setGear } from './landing-gear.ts';
 import { visibilityScale } from './visibility.ts';
 
 interface Entry {
   model: AircraftModel;
   configId: string;
+  gear: Group;
 }
 
 const AFTERBURNER_THRESHOLD = 0.9;
@@ -35,8 +37,10 @@ export class SceneSync {
       let entry = this.entries.get(v.id);
       if (!entry || entry.configId !== v.config.id) {
         if (entry) this.scene.remove(entry.model.root);
-        entry = { model: this.build(v.config), configId: v.config.id };
-        entry.model.root.add(navLights(v.config.visual));
+        const model = this.build(v.config);
+        const gear = landingGear(v.config.visual);
+        model.root.add(navLights(v.config.visual), gear);
+        entry = { model, configId: v.config.id, gear };
         this.entries.set(v.id, entry);
         this.scene.add(entry.model.root);
       }
@@ -48,6 +52,7 @@ export class SceneSync {
         ? 1
         : visibilityScale(v.position.distanceTo(cameraPos), v.config.visual.lengthM, MIN_APPARENT_ANGLE, MAX_VISIBILITY_SCALE);
       root.scale.setScalar(scale);
+      setGear(entry.gear, v.alive ? v.flight.gear : 0);
 
       const ab = (v.flight.throttle - AFTERBURNER_THRESHOLD) / (1 - AFTERBURNER_THRESHOLD);
       for (const [i, flame] of entry.model.afterburners.entries()) {

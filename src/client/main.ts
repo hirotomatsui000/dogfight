@@ -67,6 +67,7 @@ function run(scenery: Promise<SceneryTextures>, world: Promise<LoadedMap>, aircr
     const showcase = new Showcase(app, scenery, world, aircraftMeshes, prefersReducedMotion(), quality);
     const close = showStartMenu(app, {
       onPreview: (id) => showcase.setAircraft(id),
+      onWorld: (environment) => showcase.setEnvironment(environment),
       onStart: (options) => {
         close();
         showcase.dispose();

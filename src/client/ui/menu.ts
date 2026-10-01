@@ -1,10 +1,10 @@
 import { DIFFICULTIES, type DifficultyId } from '../../shared/ai/difficulty.ts';
 import { listAircraft, TEAM_NAMES } from '../../shared/data/aircraft/registry.ts';
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
-import type { MapId } from '../../shared/data/maps/registry.ts';
+import { MAP_IDS, MAP_NAMES, type MapId } from '../../shared/data/maps/registry.ts';
 import { SPAWN_STARTS, type SpawnStart } from '../../shared/world/spawns.ts';
-import { type EnvironmentSettings, START_HOURS, TIME_OF_DAY_IDS } from '../../shared/world/time-of-day.ts';
-import { WEATHER_IDS } from '../../shared/world/weather.ts';
+import { type EnvironmentSettings, START_HOURS, TIME_OF_DAY_IDS, TIME_OF_DAY_LABELS, type TimeOfDayId } from '../../shared/world/time-of-day.ts';
+import { WEATHER, WEATHER_IDS, type WeatherId } from '../../shared/world/weather.ts';
 import { STRIKE_DEFAULTS, STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
@@ -36,6 +36,8 @@ export interface StartMenuHandlers {
   onStart(options: StartOptions): void;
   /** The jet currently chosen, for the live scene behind the menu. */
   onPreview(aircraftId: string): void;
+  /** The weather and time currently chosen, for the live scene behind the menu (M4). */
+  onWorld?(environment: EnvironmentSettings): void;
 }
 
 const CONTROL_MODES: readonly ControlMode[] = ['mouse-aim', 'direct'];
@@ -125,6 +127,115 @@ function choiceGroup<T extends string>(
     row.append(input, label);
   }
   return set;
+}
+
+/** The world the next match flies in (M4): map, start, time of day, clock and weather. */
+export interface WorldChoice {
+  map: MapId;
+  start: SpawnStart;
+  time: TimeOfDayId;
+  clock: boolean;
+  weather: WeatherId;
+}
+
+export function loadWorldChoice(): WorldChoice {
+  return {
+    map: pickValid(loadSetting<unknown>('map', 'lechovia'), MAP_IDS, 'lechovia'),
+    start: pickValid(loadSetting<unknown>('start', 'air'), SPAWN_STARTS, 'air'),
+    time: pickValid(loadSetting<unknown>('timeOfDay', 'day'), TIME_OF_DAY_IDS, 'day'),
+    clock: loadSetting<unknown>('clock', true) !== false,
+    weather: pickValid(loadSetting<unknown>('weather', 'scattered'), WEATHER_IDS, 'scattered'),
+  };
+}
+
+export function environmentOf(w: WorldChoice): EnvironmentSettings {
+  return { weather: w.weather, startHour: START_HOURS[w.time], clockRunning: w.clock };
+}
+
+/**
+ * The map a mission flies on and whether a runway start is possible there: Strike and Training keep the Test Range
+ * they were laid out on, which has no airfields.
+ */
+export function effectiveWorld(w: WorldChoice, mission: MissionId): WorldChoice {
+  const map: MapId = mission === 'strike' || mission === 'training' ? 'test-range' : w.map;
+  return { ...w, map, start: map === 'lechovia' && mission !== 'strike' && mission !== 'training' ? w.start : 'air' };
+}
+
+const START_LABELS: Record<SpawnStart, string> = { air: 'Air start', runway: 'Runway start' };
+
+function select<T extends string>(label: string, values: readonly T[], names: (v: T) => string, value: T, onChange: (v: T) => void): HTMLSelectElement {
+  const sel = el('select', 'world-select');
+  sel.setAttribute('aria-label', label);
+  sel.title = label;
+  for (const v of values) {
+    const o = el('option', undefined, names(v));
+    o.value = v;
+    sel.appendChild(o);
+  }
+  sel.value = value;
+  sel.addEventListener('change', () => onChange(sel.value as T));
+  return sel;
+}
+
+function worldGroup(initial: WorldChoice, onChange: (w: WorldChoice) => void): { set: HTMLFieldSetElement; refresh(mission: MissionId): void } {
+  const w = { ...initial };
+  const set = el('fieldset', 'pick pick-world');
+  set.appendChild(el('legend', 'eyebrow', 'World'));
+  const row = el('div', 'world-row');
+  const changed = () => {
+    saveSetting('map', w.map);
+    saveSetting('start', w.start);
+    saveSetting('timeOfDay', w.time);
+    saveSetting('clock', w.clock);
+    saveSetting('weather', w.weather);
+    onChange({ ...w });
+  };
+  const map = select('Map', MAP_IDS, (m) => MAP_NAMES[m], w.map, (m) => {
+    w.map = m;
+    changed();
+    refreshStart();
+  });
+  const start = select('Start', ['air', 'runway'] as const, (v) => START_LABELS[v], w.start, (v) => {
+    w.start = v;
+    changed();
+  });
+  const time = select('Time of day', TIME_OF_DAY_IDS, (t) => TIME_OF_DAY_LABELS[t], w.time, (t) => {
+    w.time = t;
+    changed();
+  });
+  const weather = select('Weather', WEATHER_IDS, (id) => WEATHER[id].label, w.weather, (id) => {
+    w.weather = id;
+    changed();
+  });
+  const clockLabel = el('label', 'world-clock');
+  const clock = el('input');
+  clock.type = 'checkbox';
+  clock.checked = w.clock;
+  clock.addEventListener('change', () => {
+    w.clock = clock.checked;
+    changed();
+  });
+  clockLabel.title = 'The clock runs at one hour per minute: a long match flies into the night';
+  clockLabel.append(clock, el('span', undefined, 'Clock runs'));
+  row.append(map, start, time, weather, clockLabel);
+  set.appendChild(row);
+  let mission: MissionId = 'team-deathmatch';
+  // Strike and Training keep the Test Range; runway starts need Lechovia's airfields.
+  const refreshStart = () => {
+    const fixed = effectiveWorld(w, mission);
+    map.disabled = fixed.map !== w.map || mission === 'strike';
+    map.value = fixed.map;
+    start.disabled = fixed.map !== 'lechovia' || mission === 'strike';
+    start.value = fixed.start;
+  };
+  refreshStart();
+  return {
+    set,
+    refresh(m: MissionId) {
+      mission = m;
+      refreshStart();
+    },
+  };
 }
 
 function titleLockup(): HTMLHeadingElement {
@@ -245,11 +356,18 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   jets.appendChild(summary);
   showSummary();
 
+  let world = loadWorldChoice();
+  const worldRow = worldGroup(world, (w) => {
+    world = w;
+    handlers.onWorld?.(environmentOf(w));
+  });
   const missions = choiceGroup('mission', 'Mission', MISSIONS, mission, (m) => {
     mission = m;
     saveSetting('mission', m);
     showSummary();
+    worldRow.refresh(m);
   });
+  worldRow.refresh(mission);
 
   const skill = choiceGroup(
     'skill',
@@ -288,7 +406,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   links.append(training, freeFlight, controlsLink, settingsLink);
   launch.append(launchRow, links);
 
-  main.append(brand, missions, jets, skill, launch);
+  main.append(brand, missions, jets, skill, worldRow.set, launch);
   form.append(top, main, credits());
 
   const sheet = controlsSheet(settings);
@@ -297,13 +415,18 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   screen.append(form, sheet, online);
 
   const start = (mission: MissionId, onlineRoom?: { room: string }) => {
-    const start = pickValid(loadSetting<unknown>('start', 'air'), SPAWN_STARTS, 'air');
-    const environment: EnvironmentSettings = {
-      weather: pickValid(loadSetting<unknown>('weather', 'scattered'), WEATHER_IDS, 'scattered'),
-      startHour: START_HOURS[pickValid(loadSetting<unknown>('timeOfDay', 'day'), TIME_OF_DAY_IDS, 'day')],
-      clockRunning: loadSetting<unknown>('clock', true) !== false,
+    const w = effectiveWorld(world, mission);
+    const options: StartOptions = {
+      aircraftId,
+      callsign: sanitizeCallsign(callsign.value),
+      controlMode: settings.current.controlMode,
+      mission,
+      difficulty,
+      online: onlineRoom,
+      map: w.map,
+      start: w.start,
+      environment: environmentOf(w),
     };
-    const options: StartOptions = { aircraftId, callsign: sanitizeCallsign(callsign.value), controlMode: settings.current.controlMode, mission, difficulty, online: onlineRoom, start, environment };
     saveSetting('aircraft', options.aircraftId);
     saveSetting('callsign', options.callsign);
     saveSetting('difficulty', options.difficulty);
@@ -321,6 +444,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
 
   root.appendChild(screen);
   handlers.onPreview(aircraftId);
+  handlers.onWorld?.(environmentOf(world));
   fly.focus();
   // An invite link (?room=name) opens the online sheet on that room.
   if (invitedRoom) online.showModal();

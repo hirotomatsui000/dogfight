@@ -4,7 +4,7 @@ import { kobchik } from '../../shared/data/aircraft/kobchik.ts';
 import { STRIKE_DEFAULTS } from '../../shared/modes/strike.ts';
 import { DEFAULT_BINDINGS, rebind } from '../input/bindings.ts';
 import { controlsHelp } from './controls-help.ts';
-import { aircraftSummary, pickValid, sanitizeCallsign, strikeRole } from './menu.ts';
+import { aircraftSummary, effectiveWorld, environmentOf, pickValid, sanitizeCallsign, strikeRole, type WorldChoice } from './menu.ts';
 
 describe('start menu helpers', () => {
   it('cleans callsigns', () => {
@@ -57,5 +57,23 @@ describe('controls list with rebound keys', () => {
   it('shows the keys the player chose', () => {
     const rows = controlsHelp('direct', rebind(DEFAULT_BINDINGS, 'flares', 'KeyV'));
     expect(rows.find(([, a]) => a === 'Flares and chaff')?.[0]).toBe('V');
+  });
+});
+
+describe('world choice (M4)', () => {
+  const choice: WorldChoice = { map: 'lechovia', start: 'runway', time: 'dusk', clock: false, weather: 'rain' };
+
+  it('keeps the chosen map and runway start for a dogfight or free flight', () => {
+    expect(effectiveWorld(choice, 'team-deathmatch')).toEqual(choice);
+    expect(effectiveWorld(choice, 'free-flight')).toEqual(choice);
+  });
+
+  it('flies Strike and Training on the Test Range from the air', () => {
+    for (const m of ['strike', 'training'] as const) expect(effectiveWorld(choice, m)).toMatchObject({ map: 'test-range', start: 'air' });
+    expect(effectiveWorld({ ...choice, map: 'test-range' }, 'team-deathmatch').start).toBe('air');
+  });
+
+  it('turns the choice into the weather and clock of the match', () => {
+    expect(environmentOf(choice)).toEqual({ weather: 'rain', startHour: 17.5, clockRunning: false });
   });
 });

@@ -23,6 +23,7 @@ import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
 import { setHudColor } from './hud/palette.ts';
 import { releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
+import { takeoffHint } from './hud/takeoff.ts';
 import { trainingPrompt } from './hud/training-prompts.ts';
 import { BASE_MOUSE_SENSITIVITY, ControlMapper, type ControlMode } from './input/control-mapper.ts';
 import { capturedKeys, DomInput } from './input/dom-input.ts';
@@ -517,6 +518,7 @@ export async function startGame(
         cameraRig.reset();
         hud.resetMaxG();
         deathMessage = null;
+        if (me.flight.onGround) showBanner('CLEARED FOR TAKE-OFF', nowS);
       }
       // Online the jet keeps flying while the menu is open: hold the throttle, centre the stick.
       if (!active && me) idle.throttle = me.flight.throttle;
@@ -603,7 +605,10 @@ export async function startGame(
         pullUp: local.alive && f.gear === 0 && timeToImpact(f, terrain) !== null,
         message,
         banner: nowS < bannerUntil ? banner : null,
-        hint: `${HINTS[mapper.settings.mode]}${local.bombLoad > 0 ? ' · G bomb' : ''}${online ? ' · 7-0 chat' : ''}`,
+        hint:
+          local.alive && f.onGround
+            ? takeoffHint(mapper.settings.mode, local.config.hudUnits, settings.current.keys, padFrame.active)
+            : `${HINTS[mapper.settings.mode]}${local.bombLoad > 0 ? ' · G bomb' : ''}${online ? ' · 7-0 chat' : ''}`,
         killFeed: killFeed.lines,
         hitMarker: nowS < hitMarkerUntil,
         hitTaken: nowS < hitTakenUntil,
