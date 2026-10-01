@@ -24,7 +24,7 @@ import { describeDeath, KillFeed } from './hud/kill-feed.ts';
 import { setHudColor, setTeamColors } from './hud/palette.ts';
 import { setStrobes } from './render/environment/night-lights.ts';
 import { releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
-import { formatTimeOfDay } from './hud/format.ts';
+import { formatClock, formatTimeOfDay, speedLabel, speedValue } from './hud/format.ts';
 import { sentinelDownText, zoneEventText, zoneFeedText } from './hud/objective-hud.ts';
 import { takeoffHint } from './hud/takeoff.ts';
 import { trainingPrompt } from './hud/training-prompts.ts';
@@ -53,6 +53,7 @@ import type { GameSession } from './session/game-session.ts';
 import { LocalSession } from './session/local-session.ts';
 import type { NetworkSession } from './session/network-session.ts';
 import { matchResult, type ResultRow, showEndScreen } from './ui/end-screen.ts';
+import { MatchStats } from './match-stats.ts';
 import { MapScreen } from './ui/map-screen.ts';
 import { loadingText } from './ui/load-bar.ts';
 import type { StartOptions } from './ui/menu.ts';
@@ -267,6 +268,8 @@ export async function startGame(
   applyQuality(quality);
   const stopSettings = settings.subscribe(applySettings);
   const killFeed = new KillFeed();
+  // For the end-of-match summary (M5).
+  const stats = new MatchStats();
   const mapScreen = new MapScreen(root, map, terrain);
   // Free Flight (M5): the map flies you from wherever you click; the mouse is set free while it is open.
   const freeFlight = (online ? online.modeId : options.mission) === 'free-flight';
@@ -432,6 +435,7 @@ export async function startGame(
 
   const handleEvent = (e: GameEvent, nowS: number) => {
     effects.onEvent(e, session);
+    stats.onEvent(e, (id) => session.view(id)?.config.support === true);
     const camPos = renderer.camera.position;
     if (e.type === 'destroyed') {
       const victim = session.view(e.aircraftId);
@@ -509,6 +513,7 @@ export async function startGame(
 
   const endMatch = () => {
     matchOver = true;
+    const training = options.mission === 'training';
     audio?.quiet();
     if (input.pointerLocked) document.exitPointerLock();
     const me = session.localView();
@@ -518,9 +523,25 @@ export async function startGame(
       .map((t) => `${t.id} (${t.label})`);
     const rows: ResultRow[] = [...session.views()]
       .filter((v) => !v.config.support)
-      .map((v) => ({ callsign: v.callsign, aircraft: v.config.name, team: v.team, kills: v.kills, deaths: v.deaths, isLocal: v.isLocal }))
-      .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
-    const training = options.mission === 'training';
+      .map((v) => ({ callsign: v.callsign, aircraft: v.config.name, team: v.team, kills: v.kills, deaths: v.deaths, damage: stats.of(v.id).damage, isLocal: v.isLocal }))
+      .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || (b.damage ?? 0) - (a.damage ?? 0));
+    const mine = me ? stats.of(me.id) : null;
+    const fl = stats.flight;
+    const units = me?.config.hudUnits ?? 'metric';
+    const flight: [string, string][] =
+      me && mine && !training
+        ? [
+            ['Kills', String(me.kills)],
+            ['Deaths', String(me.deaths)],
+            ['Missiles', `${mine.missilesFired} fired · ${mine.missileHits} hit`],
+            ['Gun hits', String(mine.gunHits)],
+            ['Damage', String(Math.round(mine.damage))],
+            ['Top speed', `${Math.round(speedValue(fl.topSpeedMs, units))} ${speedLabel(units)}`],
+            ['Max G', fl.maxG.toFixed(1)],
+            ['In the air', formatClock(fl.airborneS)],
+          ]
+        : [];
+    if (me && mine && mine.sentinels > 0) flight.push(['Sentinels', String(mine.sentinels)]);
     if (training) settings.update({ trainingDone: true });
     const final = session.modeStatus();
     const result = matchResult(final, me ? me.team : 'usa', destroyed);
@@ -542,7 +563,7 @@ export async function startGame(
         cleanup();
         handlers.onQuit();
       },
-    });
+    }, flight);
   };
 
   const frame = (now: number) => {
@@ -579,6 +600,7 @@ export async function startGame(
       // The room started its next match: new jets, fresh scores.
       closeEndScreen?.();
       closeEndScreen = null;
+      stats.reset();
       matchOver = false;
       spawnGen = -1;
       deathMessage = null;
@@ -607,6 +629,7 @@ export async function startGame(
       // Online a slow frame still has to send every input the server's clock asks for (down to 4 fps).
       session.update(online ? Math.min(frameS, 0.25) : dt, controls);
       for (const e of session.drainEvents()) handleEvent(e, nowS);
+      if (me && active) stats.sampleFlight(me.alive, me.flight.onGround, me.flight.airspeed, me.flight.gLoad, dt);
       if (online) {
         if (active) CHAT_KEYS.forEach((code, i) => snap.pressed.has(code) && online?.sendChat(i));
         for (const c of online.drainChat()) {
