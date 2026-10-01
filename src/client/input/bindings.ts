@@ -61,7 +61,7 @@ export const ACTION_LABELS: Readonly<Record<KeyAction, string>> = {
   cannon: 'Cannon (hold)',
   missile: 'Missile, once the lock tone sounds',
   bomb: 'Bomb (Strike, Russian jets)',
-  flares: 'Flares',
+  flares: 'Flares and chaff',
   nextTarget: 'Next target',
   airbrake: 'Airbrake (hold)',
   look: 'Look around (hold)',

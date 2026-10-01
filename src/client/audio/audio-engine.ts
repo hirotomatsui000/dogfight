@@ -6,6 +6,8 @@ export interface SoundFrame {
   airspeedMs: number;
   seeker: SeekerTone;
   missileWarning: boolean;
+  /** RWR: an enemy radar lock is on the jet */
+  rwrLock: boolean;
   firingCannon: boolean;
   /** cannon projectiles per second, for the "brrt" rhythm */
   cannonRateHz: number;
@@ -16,8 +18,8 @@ const MASTER_GAIN = 0.7;
 const SMOOTH_S = 0.05;
 
 /**
- * Synthesized cockpit sound (spec §15.5): engine, afterburner, wind, cannon, seeker growl and lock tone, missile
- * warning, and one-shot launches, hits, flares and explosions. No audio files.
+ * Synthesized cockpit sound (spec §15.5): engine, afterburner, wind, cannon, seeker growl and lock tone, radar-lock
+ * beeps, missile and radar-lock (RWR) warnings, and one-shot launches, hits, flares and explosions. No audio files.
  */
 export class AudioEngine {
   private readonly ctx: AudioContext;
@@ -34,6 +36,7 @@ export class AudioEngine {
   private readonly growlGain: GainNode;
   private readonly lockGain: GainNode;
   private readonly warnGain: GainNode;
+  private readonly rwrGain: GainNode;
   private muted = false;
   /** master volume from the settings, 0..1 */
   private volume = 1;
@@ -83,6 +86,12 @@ export class AudioEngine {
 
     this.warnGain = this.gain(0, this.master);
     this.osc('square', 950, this.warnGain);
+
+    // RWR: a two-tone warble, low enough not to be mistaken for the missile warning.
+    this.rwrGain = this.gain(0, this.master);
+    const rwr = this.osc('triangle', 620, this.rwrGain);
+    const rwrSwing = this.gain(140, rwr.frequency);
+    this.osc('square', 7, rwrSwing);
   }
 
   /** Browsers start audio suspended until a click; call this from input handlers. */
@@ -114,13 +123,15 @@ export class AudioEngine {
     this.set(this.cannonDepth.gain, firing ? 0.25 : 0);
     this.set(this.cannonLfo.frequency, f.cannonRateHz);
     this.set(this.growlGain.gain, f.alive && f.seeker === 'growl' ? 0.07 : 0);
-    this.set(this.lockGain.gain, f.alive && f.seeker === 'lock' ? 0.06 : 0);
+    const lockOn = f.seeker === 'lock' || f.seeker === 'radar-lock' || (f.seeker === 'radar-track' && beepOn(f.timeS, 4, 0.35));
+    this.set(this.lockGain.gain, f.alive && lockOn ? 0.06 : 0, 0.005);
+    this.set(this.rwrGain.gain, f.alive && f.rwrLock && !f.missileWarning ? 0.045 : 0);
     this.set(this.warnGain.gain, f.alive && f.missileWarning && beepOn(f.timeS, 5) ? 0.05 : 0, 0.005);
   }
 
   /** Silences the loops (pause, match end) without muting one-shots already playing. */
   quiet(): void {
-    for (const g of [this.engineGain, this.abGain, this.windGain, this.cannonGain, this.cannonDepth, this.growlGain, this.lockGain, this.warnGain]) {
+    for (const g of [this.engineGain, this.abGain, this.windGain, this.cannonGain, this.cannonDepth, this.growlGain, this.lockGain, this.warnGain, this.rwrGain]) {
       this.set(g.gain, 0);
     }
   }

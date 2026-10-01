@@ -37,6 +37,8 @@ const PAD_ACTION_LABELS: Readonly<Record<PadAction, string>> = {
   rudderRight: 'Rudder right',
   throttleUp: 'Throttle up',
   throttleDown: 'Throttle down',
+  weaponSrm: 'Select SRM',
+  weaponMrm: 'Select MRM',
 };
 const AXIS_LABELS: Readonly<Record<AxisRole, string>> = { roll: 'Roll', pitch: 'Pitch', yaw: 'Rudder', throttle: 'Throttle' };
 const GRAPHICS_LABELS: Readonly<Record<GraphicsSetting, string>> = { auto: 'Auto', low: 'Low', medium: 'Medium', high: 'High' };

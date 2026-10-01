@@ -2,7 +2,7 @@ import { Color, type Scene, Vector3 } from 'three';
 import { damageState } from '../../../shared/damage/damage.ts';
 import type { GameEvent } from '../../../shared/world/events.ts';
 import type { AircraftView, GameSession, GroundTargetView, MissileView } from '../../session/game-session.ts';
-import { BOMB_LOOK, MISSILE_LOOK, OrdnanceModels } from './ordnance-models.ts';
+import { BOMB_LOOK, LANCE_LOOK, MISSILE_LOOK, OrdnanceModels } from './ordnance-models.ts';
 import { type ParticleFrame, ParticleSystem } from './particles.ts';
 import { Tracers } from './tracers.ts';
 
@@ -11,6 +11,7 @@ const FIRE_CAPACITY = 3000;
 const TRAIL_SPACING_M = 9;
 const FLARES_PER_SALVO = 2;
 const FLARE_BURN_S = 3;
+const CHAFF_BITS = 36;
 const DAMAGE_SMOKE_INTERVAL_S = 0.04;
 const TARGET_SMOKE_INTERVAL_S = 0.2;
 const TARGET_FIRE_INTERVAL_S = 0.08;
@@ -19,6 +20,9 @@ const FIRE = [new Color(0xffd27a), new Color(0xff8a2a), new Color(0xff5a14)];
 const DARK_SMOKE = new Color(0x2a2a2a);
 const GREY_SMOKE = new Color(0x7d7d7d);
 const TRAIL_SMOKE = new Color(0xd8d8d8);
+const LANCE_SMOKE = new Color(0xeeeeee);
+const CHAFF = new Color(0xc8ced6);
+const CHAFF_GLINT = new Color(0xf2f6ff);
 const MOTOR = new Color(0xffe2b0);
 const FLARE = new Color(0xfff4d0);
 const SPARK = new Color(0xffc977);
@@ -39,7 +43,10 @@ export class Effects {
   private readonly fire = new ParticleSystem(FIRE_CAPACITY, true);
   private readonly tracers = new Tracers();
   private readonly missileModels: OrdnanceModels;
+  private readonly lanceModels: OrdnanceModels;
   private readonly bombModels: OrdnanceModels;
+  private readonly darts: MissileView[] = [];
+  private readonly lances: MissileView[] = [];
   private readonly flares: Flare[] = [];
   private readonly targetTimers = new Map<string, number>();
   private readonly trailFrom = new Map<number, Vector3>();
@@ -52,6 +59,7 @@ export class Effects {
   constructor(scene: Scene) {
     this.scene = scene;
     this.missileModels = new OrdnanceModels(scene, MISSILE_LOOK);
+    this.lanceModels = new OrdnanceModels(scene, LANCE_LOOK);
     this.bombModels = new OrdnanceModels(scene, BOMB_LOOK);
     scene.add(this.smoke.points, this.fire.points, this.tracers.lines, this.tracers.heads);
   }
@@ -75,7 +83,10 @@ export class Effects {
       this.explosion(this.tmp.set(e.x, e.y, e.z), this.zero, e.nearAircraft ? 0.6 : 0.45);
     } else if (e.type === 'countermeasures') {
       const v = session.view(e.aircraftId);
-      if (v) this.releaseFlares(v);
+      if (v) {
+        this.releaseFlares(v);
+        this.releaseChaff(v);
+      }
     } else if (e.type === 'hit' && e.weapon === 'cannon') {
       const v = session.view(e.aircraftId);
       if (v) this.sparks(v.position, 8);
@@ -99,7 +110,11 @@ export class Effects {
       }
       this.targetSmoke(dt, session.groundTargets());
     }
-    this.missileModels.update(session.missiles(), cameraPos);
+    this.darts.length = 0;
+    this.lances.length = 0;
+    for (const m of session.missiles()) (m.kind === 'lance' ? this.lances : this.darts).push(m);
+    this.missileModels.update(this.darts, cameraPos);
+    this.lanceModels.update(this.lances, cameraPos);
     this.bombModels.update(session.bombs(), cameraPos);
     this.tracers.update(session.projectiles(), frame);
     this.smoke.update(dt, frame);
@@ -112,6 +127,7 @@ export class Effects {
     this.fire.dispose();
     this.tracers.dispose();
     this.missileModels.dispose();
+    this.lanceModels.dispose();
     this.bombModels.dispose();
   }
 
@@ -211,6 +227,19 @@ export class Effects {
     }
   }
 
+  /** A cloud of metal strips behind the jet: a grey haze that drifts and glints for the chaff's 4 s (spec §10.2). */
+  private releaseChaff(v: AircraftView): void {
+    this.tailOf(v, this.tail);
+    for (let i = 0; i < CHAFF_BITS; i++) {
+      this.randomDir(this.dir).multiplyScalar(rand(4, 14));
+      const vx = v.flight.vel.x * 0.15 + this.dir.x;
+      const vy = v.flight.vel.y * 0.15 + this.dir.y;
+      const vz = v.flight.vel.z * 0.15 + this.dir.z;
+      this.smoke.spawn({ x: this.tail.x, y: this.tail.y, z: this.tail.z, vx, vy, vz, lifeS: rand(3, 4), size0: 1.5, size1: rand(6, 10), color: CHAFF, alpha: 0.35, lift: -0.5, drag: 1.2 });
+      if (i % 3 === 0) this.fire.spawn({ x: this.tail.x, y: this.tail.y, z: this.tail.z, vx, vy, vz, lifeS: rand(0.4, 2.5), size0: 1.2, size1: 0.6, color: CHAFF_GLINT, alpha: 0.9, lift: -1, drag: 1.2 });
+    }
+  }
+
   private updateFlares(dt: number): void {
     for (let i = this.flares.length - 1; i >= 0; i--) {
       const f = this.flares[i];
@@ -244,9 +273,24 @@ export class Effects {
     this.fire.spawn({ x: this.tail.x, y: this.tail.y, z: this.tail.z, vx: 0, vy: 0, vz: 0, lifeS: 0.06, size0: 6, size1: 3, color: MOTOR, alpha: 1 });
     const gap = from.distanceTo(this.tail);
     const puffs = Math.floor(gap / TRAIL_SPACING_M);
+    // The Lance burns longer and leaves a whiter, longer-lasting trail.
+    const lance = m.kind === 'lance';
     for (let i = 1; i <= puffs; i++) {
       this.tmp.lerpVectors(from, this.tail, (i * TRAIL_SPACING_M) / gap);
-      this.smoke.spawn({ x: this.tmp.x, y: this.tmp.y, z: this.tmp.z, vx: rand(-1, 1), vy: rand(-1, 1), vz: rand(-1, 1), lifeS: rand(5, 7), size0: 3, size1: rand(16, 22), color: TRAIL_SMOKE, alpha: 0.6, lift: 1 });
+      this.smoke.spawn({
+        x: this.tmp.x,
+        y: this.tmp.y,
+        z: this.tmp.z,
+        vx: rand(-1, 1),
+        vy: rand(-1, 1),
+        vz: rand(-1, 1),
+        lifeS: lance ? rand(7, 9) : rand(5, 7),
+        size0: 3,
+        size1: lance ? rand(20, 26) : rand(16, 22),
+        color: lance ? LANCE_SMOKE : TRAIL_SMOKE,
+        alpha: lance ? 0.65 : 0.6,
+        lift: 1,
+      });
     }
     if (puffs > 0) from.lerpVectors(from, this.tail, (puffs * TRAIL_SPACING_M) / gap);
   }

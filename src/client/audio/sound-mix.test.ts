@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beepOn, engineMix, explosionGain, seekerTone } from './sound-mix.ts';
+import { beepOn, engineMix, explosionGain, missileTone, seekerTone } from './sound-mix.ts';
 
 describe('sound mix', () => {
   it('raises engine pitch and volume with the throttle and adds afterburner roar above 90%', () => {
@@ -23,6 +23,10 @@ describe('sound mix', () => {
     expect(seekerTone('track')).toBe('growl');
     expect(seekerTone('locked')).toBe('lock');
     expect(seekerTone('off')).toBe('none');
+    expect(missileTone('off', 'tracking')).toBe('radar-track');
+    expect(missileTone('off', 'locked')).toBe('radar-lock');
+    expect(missileTone('track', 'off')).toBe('growl');
+    expect(missileTone('off', 'search')).toBe('none');
   });
 
   it('fades explosions with distance and beeps on a duty cycle', () => {

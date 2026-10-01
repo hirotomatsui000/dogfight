@@ -14,6 +14,8 @@ export const PAD_ACTIONS = [
   'rudderRight',
   'throttleUp',
   'throttleDown',
+  'weaponSrm',
+  'weaponMrm',
 ] as const;
 
 export type PadAction = (typeof PAD_ACTIONS)[number];
@@ -86,6 +88,8 @@ export const DEFAULT_CUSTOM_PROFILE: CustomPadProfile = {
     rudderRight: -1,
     throttleUp: -1,
     throttleDown: -1,
+    weaponSrm: -1,
+    weaponMrm: -1,
   },
 };
 
@@ -105,6 +109,8 @@ const STANDARD_BUTTONS: Readonly<Record<PadAction, number>> = {
   pause: 9, // Start / Menu
   airbrake: 12, // D-pad up
   bomb: 13, // D-pad down
+  weaponSrm: 14, // D-pad left
+  weaponMrm: 15, // D-pad right
 };
 
 export function applyDeadZone(v: number, zone = DEAD_ZONE): number {

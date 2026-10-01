@@ -1,7 +1,8 @@
 import { Vector3 } from 'three';
-import { SRM_DART } from '../../shared/data/weapons.ts';
+import { MRM_LANCE, SRM_DART } from '../../shared/data/weapons.ts';
 import { DEG } from '../../shared/math/units.ts';
 import type { SeekerMode } from '../../shared/targeting/ir-seeker.ts';
+import { radarLockProgress } from '../../shared/targeting/radar-lock.ts';
 import type { AircraftView } from '../session/game-session.ts';
 import { formatClosure, formatRange } from './format.ts';
 import { WARNING_CAPTIONS } from './captions.ts';
@@ -10,6 +11,7 @@ import { closureRate, type EdgeMarker, edgeMarker } from './hud-geometry.ts';
 import { missileAdvice } from './missile-advice.ts';
 import { AMBER, FONT, FONT_BIG, FONT_SMALL, FOE, FRIEND, PRIMARY, RED, WHITE } from './palette.ts';
 import type { Projector, ScreenPoint } from './projector.ts';
+import { lockDiamondPx, type Tone, weaponsLine } from './weapons-hud.ts';
 
 const TARGET_BOX_PX = 26;
 const EDGE_MARGIN_PX = 60;
@@ -39,13 +41,14 @@ export function drawCombatLayer(ctx: CanvasRenderingContext2D, p: Projector, f: 
       if (!friendly) drawEdgeArrow(ctx, p, f, v.position, formatRange(me.flight.pos.distanceTo(v.flight.pos), me.config.hudUnits), FOE);
       continue;
     }
-    if (designated) drawTargetBox(ctx, f, v);
+    if (designated) drawTargetBox(ctx, f, v, clock);
     else drawMarker(ctx, friendly);
   }
   drawMissileMarkers(ctx, p, f, clock);
   if (f.leadDirection && p.direction(f.camera, f.leadDirection, pt)) drawPipper(ctx);
   drawSeeker(ctx, p, f, clock);
   drawWeaponsStatus(ctx, p, f);
+  drawRadarWarning(ctx, p, f, clock);
   drawMissileWarning(ctx, p, f, clock);
 }
 
@@ -112,7 +115,7 @@ function drawMarker(ctx: CanvasRenderingContext2D, friendly: boolean): void {
   ctx.restore();
 }
 
-function drawTargetBox(ctx: CanvasRenderingContext2D, f: HudFrame, v: AircraftView): void {
+function drawTargetBox(ctx: CanvasRenderingContext2D, f: HudFrame, v: AircraftView, clock: number): void {
   const me = f.view;
   const units = me.config.hudUnits;
   const h = TARGET_BOX_PX / 2;
@@ -121,6 +124,18 @@ function drawTargetBox(ctx: CanvasRenderingContext2D, f: HudFrame, v: AircraftVi
   ctx.fillStyle = FOE;
   ctx.lineWidth = 2;
   ctx.strokeRect(pt.x - h, pt.y - h, TARGET_BOX_PX, TARGET_BOX_PX);
+  // The Lance's radar lock: a diamond that closes onto the box as the lock builds, red once it holds.
+  const lock = me.radarLock;
+  if (lock.targetId === v.id && (lock.mode === 'tracking' || lock.mode === 'locked')) {
+    ctx.save();
+    const locked = lock.mode === 'locked';
+    ctx.strokeStyle = locked ? RED : AMBER;
+    ctx.globalAlpha = locked || clock % 0.3 < 0.18 ? 1 : 0.5;
+    ctx.lineWidth = locked ? 2.4 : 1.6;
+    diamond(ctx, lockDiamondPx(h, radarLockProgress(lock, MRM_LANCE, me.config)));
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.font = FONT_SMALL;
   const range = me.flight.pos.distanceTo(v.flight.pos);
   const closure = closureRate(me.flight.pos, me.flight.vel, v.flight.pos, v.flight.vel);
@@ -204,21 +219,42 @@ function drawSeeker(ctx: CanvasRenderingContext2D, p: Projector, f: HudFrame, cl
   ctx.restore();
 }
 
+const TONE_COLOR: Record<Tone, string | null> = { normal: null, amber: AMBER, red: RED };
+const CELL_GAP_PX = 14;
+
+/** GUN · SRM · MRM · CM (· BMB) along the bottom right, the selected missile boxed, its lock state underneath. */
 function drawWeaponsStatus(ctx: CanvasRenderingContext2D, p: Projector, f: HudFrame): void {
-  const me = f.view;
-  const x = p.width - 230;
+  const line = weaponsLine(f.view, f.weapon);
   const y = p.height - 64;
   ctx.save();
   ctx.font = FONT;
-  ctx.fillText(`GUN ${me.stores.cannonRounds}`, x, y);
-  ctx.fillText(`SRM ${me.stores.srm}`, x + 90, y);
-  ctx.fillText(`FLR ${me.stores.countermeasures}`, x + 160, y);
-  if (me.bombLoad > 0) ctx.fillText(`BMB ${me.stores.bombs}`, x + 160, y + 22);
-  const label = me.stores.srm > 0 ? SEEKER_LABEL[me.seeker.mode] : 'EMPTY';
-  if (label) {
-    ctx.fillStyle = me.seeker.mode === 'locked' ? RED : me.seeker.mode === 'track' ? AMBER : ctx.fillStyle;
-    ctx.fillText(`SRM ${label}`, x, y + 22);
-  }
+  const widths = line.cells.map((c) => ctx.measureText(c.text).width);
+  let x = p.width - 24 - widths.reduce((a, w) => a + w + CELL_GAP_PX, -CELL_GAP_PX);
+  const left = x;
+  line.cells.forEach((c, i) => {
+    ctx.fillText(c.text, x, y);
+    if (c.selected) {
+      ctx.save();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.strokeRect(x - 4, y - 15, widths[i] + 8, 21);
+      ctx.restore();
+    }
+    x += widths[i] + CELL_GAP_PX;
+  });
+  ctx.fillStyle = TONE_COLOR[line.status.tone] ?? ctx.fillStyle;
+  ctx.fillText(line.status.text, left, y + 24);
+  ctx.restore();
+}
+
+/** RWR (spec §10.3): an enemy radar lock, or a Lance its launcher still guides, is on you. */
+function drawRadarWarning(ctx: CanvasRenderingContext2D, p: Projector, f: HudFrame, clock: number): void {
+  if (!f.view.lockedByRadar || clock % 0.6 >= 0.4) return;
+  ctx.save();
+  ctx.fillStyle = AMBER;
+  ctx.font = FONT_BIG;
+  const text = WARNING_CAPTIONS['rwr-lock'];
+  ctx.fillText(text, p.width / 2 - ctx.measureText(text).width / 2, p.height / 2 - 160);
   ctx.restore();
 }
 

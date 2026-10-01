@@ -36,6 +36,25 @@ describe('Effects', () => {
     fx.dispose();
   });
 
+  it('drops a chaff cloud with the flares, and draws a Lance with its own model', () => {
+    const scene = new Scene();
+    const fx = new Effects(scene);
+    const session = new LocalSession({ map, terrain, mode: new TeamDeathmatchMode(), aircraftId: 'kestrel', callsign: 'P' });
+    session.update(1 / 60, neutralInput(0.8));
+    const me = session.localView();
+    if (!me) throw new Error('no local view');
+    const before = fx.particleCount;
+    fx.onEvent({ type: 'countermeasures', aircraftId: me.id }, session);
+    // 36 chaff bits as grey haze plus every third as a glint; the flares only start burning on update.
+    expect(fx.particleCount - before).toBe(36 + 12);
+    const lance = { id: 1, kind: 'lance' as const, team: 'usa' as const, ownerId: me.id, targetId: null, position: new Vector3(0, 3000, 0), velocity: new Vector3(0, 0, -800), motorBurning: true };
+    const fake = { ...session, missiles: () => [lance], views: () => session.views(), projectiles: () => [], bombs: () => [], groundTargets: () => [] };
+    fx.update(1 / 60, fake as unknown as LocalSession, frame, new Vector3(0, 3000, 100));
+    expect(scene.getObjectByName('lance')).toBeDefined();
+    expect(scene.getObjectByName('missile')).toBeUndefined();
+    fx.dispose();
+  });
+
   it('blasts dust and fire where a bomb lands', () => {
     const scene = new Scene();
     const fx = new Effects(scene);

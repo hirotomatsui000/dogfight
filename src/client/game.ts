@@ -18,7 +18,7 @@ import { leadDirection } from '../shared/weapons/lead.ts';
 import type { DeathCause, GameEvent } from '../shared/world/events.ts';
 import { DT } from '../shared/world/world.ts';
 import { AudioEngine } from './audio/audio-engine.ts';
-import { explosionGain, seekerTone } from './audio/sound-mix.ts';
+import { explosionGain, missileTone } from './audio/sound-mix.ts';
 import { CameraRig, type CameraTarget } from './camera/camera-rig.ts';
 import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
@@ -558,6 +558,7 @@ export async function startGame(
       const bombImpact = local.alive && local.stores.bombs > 0 ? predictImpact(f.pos, f.vel, BOMB_ANVIL, terrain, DT, impactPoint) : null;
       hud.draw({
         view: local,
+        weapon: mapper.selectedWeapon,
         views: [...session.views()],
         missiles: [...session.missiles()],
         target: targetView,
@@ -585,8 +586,9 @@ export async function startGame(
           alive: local.alive,
           throttle: f.throttle,
           airspeedMs: f.airspeed,
-          seeker: seekerTone(local.seeker.mode),
+          seeker: missileTone(local.seeker.mode, local.radarLock.mode),
           missileWarning: local.incoming !== null,
+          rwrLock: local.lockedByRadar,
           firingCannon: local.firingCannon,
           cannonRateHz: CANNONS[local.config.stores.cannon].projectilesPerS,
           timeS: nowS,

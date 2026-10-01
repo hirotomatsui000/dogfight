@@ -37,7 +37,7 @@ describe('controls help', () => {
   it('lists the weapons and pause in both modes', () => {
     for (const mode of ['mouse-aim', 'direct'] as const) {
       const actions = controlsHelp(mode).map(([, a]) => a);
-      for (const needed of ['Cannon', 'Flares', 'Pause']) expect(actions).toContain(needed);
+      for (const needed of ['Cannon', 'Flares and chaff', 'Pause']) expect(actions).toContain(needed);
       expect(actions.some((a) => a.startsWith('Missile'))).toBe(true);
       expect(actions.some((a) => a.startsWith('Bomb'))).toBe(true);
     }
@@ -56,6 +56,6 @@ describe('strike role', () => {
 describe('controls list with rebound keys', () => {
   it('shows the keys the player chose', () => {
     const rows = controlsHelp('direct', rebind(DEFAULT_BINDINGS, 'flares', 'KeyV'));
-    expect(rows.find(([, a]) => a === 'Flares')?.[0]).toBe('V');
+    expect(rows.find(([, a]) => a === 'Flares and chaff')?.[0]).toBe('V');
   });
 });

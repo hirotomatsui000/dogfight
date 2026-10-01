@@ -15,6 +15,8 @@ export interface OrdnanceLook {
 }
 
 export const MISSILE_LOOK: OrdnanceLook = { name: 'missile', lengthM: 2.9, radiusM: 0.09, color: 0xc9cdd1, minApparentAngleRad: 0.4 * DEG, maxScale: 12 };
+/** The Lance (M3) is longer than the Dart. */
+export const LANCE_LOOK: OrdnanceLook = { name: 'lance', lengthM: 3.7, radiusM: 0.1, color: 0xe2e5e8, minApparentAngleRad: 0.4 * DEG, maxScale: 12 };
 export const BOMB_LOOK: OrdnanceLook = { name: 'bomb', lengthM: 2.2, radiusM: 0.2, color: 0x3f4537, minApparentAngleRad: 0.3 * DEG, maxScale: 10 };
 
 export interface OrdnanceItem {

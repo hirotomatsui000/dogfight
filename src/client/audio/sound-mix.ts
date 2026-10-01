@@ -1,6 +1,7 @@
 import { AFTERBURNER_THROTTLE } from '../../shared/data/weapons.ts';
 import { clamp } from '../../shared/math/units.ts';
 import type { SeekerMode } from '../../shared/targeting/ir-seeker.ts';
+import type { RadarLockMode } from '../../shared/targeting/radar-lock.ts';
 
 export interface EngineMix {
   engineHz: number;
@@ -27,13 +28,23 @@ export function engineMix(throttle: number, airspeedMs: number, alive: boolean):
   };
 }
 
-export type SeekerTone = 'none' | 'growl' | 'lock';
+export type SeekerTone = 'none' | 'growl' | 'lock' | 'radar-track' | 'radar-lock';
 
 /** Missile seeker audio: a growl while tracking, a steady tone when locked (spec §15.5). */
 export function seekerTone(mode: SeekerMode): SeekerTone {
   if (mode === 'track') return 'growl';
   if (mode === 'locked') return 'lock';
   return 'none';
+}
+
+/**
+ * The selected missile's tone: the Dart's seeker, or for the Lance (radar lock on, M3) quick beeps while the lock
+ * builds and a steady tone once it holds.
+ */
+export function missileTone(seeker: SeekerMode, radar: RadarLockMode): SeekerTone {
+  if (radar === 'tracking') return 'radar-track';
+  if (radar === 'locked') return 'radar-lock';
+  return seekerTone(seeker);
 }
 
 /** Loudness of an explosion heard from `distanceM` away. */

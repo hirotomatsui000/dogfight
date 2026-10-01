@@ -72,6 +72,11 @@ export class ControlMapper {
   }
 
   /** Points the aim along the aircraft's nose (call on spawn). */
+  /** the missile the player has selected (1 / 2, D-pad left / right) */
+  get selectedWeapon(): WeaponSelect {
+    return this.weapon;
+  }
+
   resetAim(flight: FlightState): void {
     this.aimAlongNose(flight);
     this.throttle = flight.throttle;
@@ -141,8 +146,8 @@ export class ControlMapper {
     // Buttons.
     const padDown = (a: PadAction) => pad !== null && pad.down.has(a);
     const padPressed = (a: PadAction) => pad !== null && pad.pressed.has(a);
-    if (tapped('weaponSrm')) this.weapon = 'srm';
-    if (tapped('weaponMrm')) this.weapon = 'mrm';
+    if (tapped('weaponSrm') || padPressed('weaponSrm')) this.weapon = 'srm';
+    if (tapped('weaponMrm') || padPressed('weaponMrm')) this.weapon = 'mrm';
     out.throttle = this.throttle;
     out.airbrake = held('airbrake') || padDown('airbrake');
     out.fireCannon = held('cannon') || snap.leftButton || padDown('cannon');
