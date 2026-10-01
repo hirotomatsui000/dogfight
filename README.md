@@ -4,7 +4,14 @@ A browser-based flight-combat prototype. Two teams, **USA** and **Russia**, fly 
 real aircraft over a fictional landscape inspired by Poland. This repository is being built in milestones (see
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
-**Current milestone: M2 "Multiplayer"** (after M1a "Fly", M1b "Fight", M1d "Strike" and M1c "Website basics")
+**Current milestone: M3 "Roster & weapons"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics"
+and M2 "Multiplayer")
+- **Eight aircraft**, four per team: USA Shade, Tempest, Kestrel and Condor; Russia Prizrak, Yastreb, Sapsan and
+  Kobchik, each with its own flight model, sensors, stores and strengths. The Shade and the Prizrak wear the owner's
+  3D models (inspired by the F-35A and the Su-57); the others are generated with team paint schemes.
+- The medium-range radar missile **Lance** (key 2) with radar locks, chaff, and a RADAR LOCK warning when an enemy
+  radar locks on to you. AI pilots fly a mix of jets and use Lances beyond Dart range.
+- Balanced by a bot tournament: every USA jet against every Russian jet, Ace against Ace, within 35–65% wins.
 - **Online play** through a small Node.js game server: rooms of up to 16 pilots, bots in the empty seats, Dogfight
   or Strike, invite links, quick chat, and automatic reconnects. The server is the referee; your own jet is predicted
   so it answers the stick at once, and everyone else is drawn smoothly about 0.1 s in the past.
@@ -12,11 +19,10 @@ real aircraft over a fictional landscape inspired by Poland. This repository is 
 - **Settings**: volume, mouse sensitivity and invert, rebindable keys, gamepad and flight-stick setup, HUD color and
   size, graphics (Auto, Low, Medium, High) and camera shake.
 - **Gamepads and flight sticks** through the browser's Gamepad API.
-- Two aircraft: the Kestrel (USA) and the Kobchik (Russia), drawn with the owner's 3D models (inspired by the F-35A
-  and the Su-57).
 - Dogfight an AI pilot (Rookie, Veteran or Ace) in Team Deathmatch: first to 15 kills, or the most after 10 minutes.
-- **Strike** mode: Russia bombs three fictional targets while the USA holds them for 8 minutes; 4 aircraft per team.
-- Weapons: a cannon with a lead marker, heat-seeking missiles that need a lock, and flares.
+- **Strike** mode: Russia bombs three fictional targets while the USA holds them for 9 minutes; 4 aircraft per team.
+- Weapons: a cannon with a lead marker, heat-seeking (Dart) and radar (Lance) missiles that need a lock, and flares
+  with chaff.
 - Damage, kill credit and respawns; tracers, missile trails, flares, explosions and smoke; synthesized sound.
 - A combat HUD with target box, missile lock, missile warning, radar display, kill feed and scoreboard.
 - A third-person camera that follows your jet, and a title screen over a live 3D view of the jet you pick.
@@ -98,8 +104,9 @@ test pilots who join a room, fly for 15 seconds, see each other and swap a chat 
 | Airbrake | B (hold) |
 | Cannon | Space or left mouse (hold) |
 | Missile (needs the lock tone) | F |
+| Select short-range Dart / medium-range Lance | 1 / 2 |
 | Bomb (Strike, Russian jets) | G |
-| Flares | X |
+| Flares and chaff | X |
 | Next target | R |
 | Look around (swings the camera round your jet) | C or right mouse (hold) |
 | Scoreboard | Tab (hold) |
@@ -117,8 +124,9 @@ A pad with the standard layout (Xbox, PlayStation and most others) works straigh
 | Right stick | Look around |
 | LB / RB | Rudder |
 | LT / RT | Throttle down / up |
-| X · A · B · Y | Cannon (hold) · missile · flares · next target |
+| X · A · B · Y | Cannon (hold) · missile · flares and chaff · next target |
 | D-pad ↓ / ↑ | Bomb · airbrake (hold) |
+| D-pad ← / → | Select Dart / Lance |
 | Start · Back | Pause · scores (hold) |
 
 Flight sticks and other devices: open **Settings → Gamepad**, assign the roll, pitch, rudder and throttle axes and the
@@ -127,17 +135,22 @@ buttons (move or press each one), then **Calibrate**.
 In a fight:
 - The nearest enemy ahead is targeted automatically; R picks the next one.
 - The missile seeker growls while it tracks and gives a steady tone when locked. Then press F.
+- For targets beyond about 6 km, press 2 for the Lance: a diamond closes on the target box while the radar locks
+  (quick beeps), then turns red with a steady tone. Press F, and keep the target inside your radar cone (roughly
+  ahead) until the missile is about 10 km from it; after that it guides itself. Press 1 to go back to the Dart.
+- RADAR LOCK flashes when an enemy radar has locked on to you or its Lance is on the way: expect a missile.
 - Inside 2 km a gun aim circle appears. Put the nose on it and fire.
 - A missile fired at you shows as MISSILE with its range from the moment it launches, and a red marker (or an arrow
   at the screen edge) shows where it is. You can beat it without flares: when the HUD flashes TURN HARD NOW, about
   two seconds before impact, turn hard to put the missile on your wing. Breaking too early or too late does not
-  work. Flares (X) help too, and work better off afterburner.
+  work. Flares and chaff (X) help too: flares against the Dart (better off afterburner), chaff against the Lance
+  (better for the stealthy jets).
 - Distant jets and missiles are drawn a little larger than life so they never shrink to a single pixel.
 
 In Strike (choose **Strike** under Mission on the title screen):
-- The Kestrel defends for the USA: keep at least two of the three targets standing for 8 minutes, or shoot Russia's
-  jets down four times.
-- The Kobchik attacks for Russia with 8 bombs: destroy two targets, or shoot the USA's jets down four times.
+- The USA jets defend: keep at least two of the three targets standing for 9 minutes, or shoot Russia's jets down
+  four times.
+- The Russian jets attack with 8 bombs each: destroy two targets, or shoot the USA's jets down four times.
 - Fly level about 1,500 m above a target. The circle on the ground shows where a bomb would land; press G as it
   crosses the target (RELEASE flashes). Three good hits destroy a target.
 - Each side has 4 aircraft. Losing the fourth loses the match.
@@ -155,6 +168,10 @@ npm run build
 top speed, turn rate, stall speed and G-limits.
 
 `npm run build` type-checks with TypeScript and builds the production bundle into `dist/`.
+
+`npm run tournament` plays the balance tournament on all CPU cores (about 15 s): every USA jet against every Russian
+jet, Ace bots, 100 seeded duels each, and fails if a pairing wins outside 35–65% of its decided duels.
+`TOURNAMENT=1 npm test` runs the same check inside the test suite (a minute or two).
 
 `npm run smoke` checks a running game server (default http://localhost:8080) with two test pilots; see
 [Run the server with Docker](#run-the-server-with-docker).
@@ -199,8 +216,10 @@ forest and the Tatra mountains (EOX, CC BY 4.0), tiled across the fictional map 
 
 1. Copy `src/shared/data/aircraft/kestrel.ts`, change the numbers, and register the new file in `registry.ts`.
 2. Run `npm test`. The flight-model tests check the new aircraft against its own `performance` targets.
+3. Run `npm run tournament` and tune the data file until every pairing is within 35–65%.
 
-The 3-D model is generated from the `visual` block, so no rendering code changes are needed.
+The 3-D model is generated from the `visual` block (fuselage, wing and tail sizes, engines and their spacing, intake
+type, LERX, canards), painted in its team's scheme, so no rendering code changes are needed.
 
 ### Using your own 3D model for an aircraft
 

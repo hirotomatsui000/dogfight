@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 9)
+# Contested Skies — Design Spec (revision 10)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -21,6 +21,10 @@
     passes `/ws` and `/api` on to the game server instead of running inside it; the room travels in the hello message;
     a pilot's jet sets their team; Strike online gives each team 4 aircraft per pilot; the deploy smoke test drives two
     headless pilots over real WebSockets instead of a browser. Plan: `docs/superpowers/plans/2026-10-01-m2-multiplayer.md`.
+  - Revision 10 (2026-10-01): milestone M3 "Roster & weapons" as built (§9, §10, §13.1, §15, §19, §20, §22). The
+    owner's models move to the jets they depict (F-35A → Shade, Su-57 → Prizrak); the balance pass changes some
+    numbers in §9.3; the tournament runs 100 seeds; Strike lasts 9 minutes now that defenders carry Lances. Plan:
+    `docs/superpowers/plans/2026-10-01-m3-roster-weapons.md`.
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -63,7 +67,7 @@ A browser-based, online multiplayer flight-combat simulator prototype.
 | Handling | Slower, smoother rotation: max roll rates ×0.64, roll response lag 0.35 s, pitch response lag 0.15 s | Owner feedback, 2026-09-30 |
 | Missile evasion | Short-range missiles guide with N = 3, a 20 g limit and a 0.5 s response lag, so a hard break timed shortly before impact beats them. Missile warnings start at launch | Owner feedback, 2026-09-30 |
 | Visibility | Distant aircraft and missiles keep a minimum apparent size; missiles get HUD markers, a motor flame and a thicker smoke trail | Owner feedback, 2026-09-30 |
-| Strike mode | A fifth mode: Russia must destroy two of three fictional ground targets; the USA must hold them for 8 minutes. Each team has 4 aircraft; losing the 4th loses the match. No draws | Owner request, 2026-09-30 |
+| Strike mode | A fifth mode: Russia must destroy two of three fictional ground targets; the USA must hold them for 9 minutes (8 until revision 10). Each team has 4 aircraft; losing the 4th loses the match. No draws | Owner request, 2026-09-30 |
 | Air-to-ground | Allowed only as the Strike mode's abstract free-fall bomb, which damages ground targets and never aircraft. The out-of-scope rule (§23) is narrowed accordingly | Owner request, 2026-09-30 |
 | Training | A sixth mode, Training: four lessons (rings, gun, missile, defend) against drones that never fire back except one scripted missile; the player cannot lose, a shot-down lesson restarts | M1c, 2026-10-01 |
 | Graphics presets | Low/Medium/High set the pixel ratio, antialiasing, particle share and ground-photo anisotropy. Auto starts on High (Medium above 6 M device pixels), steps down one level after 3 s under 45 fps in a match, never steps up within a session, and remembers the level | M1c, 2026-10-01 |
@@ -353,15 +357,24 @@ All names and numbers are fictional. The "inspired by" column is for design refe
 | Cannon / rounds | RC-25 / 180 | RC-20 / 480 | RC-20 / 510 | RC-20 / 940 | HC-30 / 150 | HC-30 / 150 | HC-30 / 150 | HC-30 / 150 |
 | Countermeasure salvos | 24 | 24 | 40 | 60 | 30 | 60 | 60 | 40 |
 
+Revision 10 (M3 balance pass, §9.4) changed these from the table above, in the data files only: hit points Condor 105,
+Prizrak 110, Yastreb 100, Sapsan 100, Kobchik 90 (a proximity hit does about 85 damage, so hit points decided most
+fights); the Shade has 32 countermeasure salvos, a 5.5 m hit radius and α_max 28° / limiter 32°; drag was tuned so the
+Condor is fastest, the Tempest accelerates best and the Sapsan slowest (Condor CD0 .015 and α_max 22°, Tempest CD0 .018
+and K .125, Shade CD0 .025, Yastreb K .14). The Sapsan's two-seat crew still locks fastest, but it no longer has the
+most hit points.
+
 G limits are +9 / −3 for all. Performance targets per aircraft live in the data files. Example for Kestrel: top speed
 M 1.9–2.3 at 11 km and M 1.1–1.4 at sea level; instantaneous turn 20–27 °/s at 170 m/s and 1 km; 1 G stall 50–75 m/s.
 
 ### 9.4 Balance process
 
 - A seeded bot-vs-bot tournament runs in tests (M3): every aircraft pairing, ace bots, a neutral head-on merge,
-  50 seeds per pairing.
-- Each pairing's win rate must be 35–65%. If one isn't, adjust that aircraft's data file (never the flight code) and
-  re-run.
+  100 seeds per pairing (revision 10: about 60% of Ace duels end undecided after 3 minutes, so 50 seeds left too few
+  decided duels). `npm run tournament` runs it on all cores in about 15 s; `TOURNAMENT=1 npm test` runs it as a test.
+- Each pairing's win rate (of the decided duels; a mid-air collision is a draw) must be 35–65%. If one isn't, adjust
+  that aircraft's data file (never the flight code) and re-run.
+- Result (revision 10): every pairing within 35–65% over seeds 1–100, and between 38% and 62% over seeds 1–200.
 
 ## 10. Weapons, targeting and countermeasures (abstracted)
 
@@ -431,10 +444,15 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
   - It looks toward the designated target when that is inside the off-boresight limit; otherwise along the nose, or
     along the helmet-sight direction when active.
   - Its lock is kept while the target stays inside the limit, within 1.2× range, and visible.
-- **Radar lock (MRM):** the designated target must be an own-radar contact inside the cone. Lock builds over the lock
-  time and is kept while detected.
+- **Radar lock (MRM):** builds only while the MRM is selected (keys 1 / 2) and one is left. The designated target must
+  be an own-radar contact inside the cone. Lock builds over the lock time and is kept while detected; it also counts
+  toward kill credit like an IR lock.
+- **Lance flight (M3):** until the missile is within its active range, the launcher must stay alive with the target on
+  its radar (inside the cone), or the missile loses the target and flies ballistic. Inside the active range its own
+  seeker takes over (gimbal limit and terrain masking as for the Dart). The IR seeker runs only while the Dart is
+  selected.
 - **Warnings:**
-  - `LOCK` when an enemy radar lock is on you.
+  - `LOCK` when an enemy radar lock is on you, or a Lance its launcher still guides (HUD "RADAR LOCK", a warble).
   - `MISSILE` (with bearing, range and time to impact) from the moment a missile guides on you. When the time to
     impact drops below 2 s the HUD tells you to turn hard.
 
@@ -541,7 +559,7 @@ All modes implement `GameMode`: setup, per-tick update, scoring on events, spawn
 | **Team Deathmatch** | +1 per enemy kill; each death of a team's aircraft gives the other team +1; first to 15 or most after 10 min | M1 (vs AI), M2 (online) |
 | **Air Superiority** | Three capture zones (cylinders, 4 km radius, 1–7 km altitude) along the front. A zone's capture progress moves toward the team with more aircraft inside (rate ∝ numeric advantage, 10 s to capture with +1). Each owned zone gives +1 point every 2 s. First to 300 or most after 12 min | M5 |
 | **Team Objective** | Each team protects two AI-flown high-value "Sentinel" radar aircraft (slow, 400 HP) orbiting behind its lines. Destroying one gives +20 and cuts the enemy team's datalink for 60 s; kills give +1; destroyed Sentinels return after 120 s. First to 60 or most after 15 min | M5 |
-| **Strike** | Russia must destroy two of three ground targets; the USA must hold them for 8 min. 4 aircraft per team. Details in §13.1 | M1d (vs AI) |
+| **Strike** | Russia must destroy two of three ground targets; the USA must hold them for 9 min. 4 aircraft per team. Details in §13.1 | M1d (vs AI) |
 | **Training** | A guided first flight in four lessons; no score, cannot be lost. Details in §13.2 | M1c |
 
 **Spawning:** airborne at the team's spawn line (5,000 m, 250 m/s, facing the front) or, from M4, at the team's airfield
@@ -557,7 +575,8 @@ and the player's jet decides the side: the Kestrel defends for the USA, the Kobc
 - **Aircraft:** each team has 4 aircraft. Any loss uses one: shot down, crashed, mid-air collision, or leaving the
   combat area. After a loss the next aircraft spawns 5 s later with full stores; a team with none left does not
   respawn. (Online, from M2, each team gets 4 aircraft per player.)
-- **Time limit:** 8 minutes.
+- **Time limit:** 9 minutes (8 before revision 10: with Lances on both sides the Veteran attacker's win rate fell to
+  29%; 9 minutes brings it back to 49% over 80 seeds).
 - **Russia wins** when two targets are destroyed, or when the USA loses its 4th aircraft.
 - **The USA wins** when the time runs out, or when Russia loses its 4th aircraft.
 - **No draws.** The checks run each tick in this order, and the first that applies decides the match:
@@ -689,8 +708,8 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   pitch and roll.
 - **Gamepad and flight stick (M1c):** the browser Gamepad API.
   - Standard layout: left stick pitch/roll (push = nose down), right stick look, LB/RB rudder, LT/RT throttle
-    down/up, X cannon (hold), A missile, B flares, Y next target, D-pad down bomb, D-pad up airbrake (hold), Start
-    pause, Back scores (hold).
+    down/up, X cannon (hold), A missile, B flares and chaff, Y next target, D-pad down bomb, D-pad up airbrake (hold),
+    D-pad left / right select SRM / MRM (M3), Start pause, Back scores (hold).
   - Other devices (flight sticks): assignable roll, pitch, rudder and throttle axes with invert flags and assignable
     buttons; calibration records each axis's travel and rest position (levers use mid-travel); 0.08 dead zone.
   - Stick input overrides the mouse aim like the keyboard; in mouse-aim mode the aim follows the nose while the pad
@@ -717,8 +736,15 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 ### 15.4 Graphics
 
 - **M1 prototype:**
-  - Procedural parametric aircraft models; from revision 7 the Kestrel and the Kobchik use the owner's imported
-    models (about 25,000–32,000 triangles, 1024 px textures, about 0.4 MB each).
+  - Procedural parametric aircraft models; from revision 7 two jets use the owner's imported models (about
+    25,000–32,000 triangles, 1024 px textures, about 0.4 MB each): since revision 10 the F-35A model flies as the
+    Shade and the Su-57 model as the Prizrak.
+  - The upgraded generator (M3): a body lofted through superellipse sections (round, or chined on the stealthy jets)
+    with an ogive nose, cockpit, spine and engine bulges; chin, side or caret intakes; separate nacelles for widely
+    spaced twins; thin-airfoil wings, tails, canards and LERX; a tinted glass canopy (longer on the two-seater) with
+    frames; a painted texture per jet (USA soft two-tone greys, Russia blue-grey splinter camouflage, panel lines,
+    radome, anti-glare panel, wing roundels and a fin flash in the team colour) that reflects the sky. Models are
+    built once per type and cloned.
   - A photographed sky that also lights the scene, satellite-photo terrain, an animated sea and distance haze
     (`2026-09-29-realistic-graphics-design.md`).
   - Simple effects: afterburner, tracers, missile trails, flares, explosions, smoke.
@@ -746,7 +772,7 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   - Typography: the display font Rajdhani (SIL Open Font License 1.1) is bundled with the page, Latin subset only;
     small text uses the system font.
 - **Mission choice (M1d):** the title screen offers DOGFIGHT (Team Deathmatch) or STRIKE. With STRIKE selected, one
-  line states the selected jet's role: "Kestrel · USA: hold all three targets for 8 minutes" or "Kobchik · Russia:
+  line states the selected jet's role: "Kestrel · USA: hold all three targets for 9 minutes" or "Kobchik · Russia:
   destroy two of the three targets". Free Flight stays a link.
 - **Later menus:** map, time of day, weather and bots arrive with the features that need them (M2–M5).
 - **Other screens:** loading, pause/settings, death/respawn (killer, weapon, countdown, aircraft change), match end.
@@ -832,7 +858,7 @@ pane at each stage.
     impact prediction agrees with the real impact within 5 m for level and diving releases from 500 to 3,000 m above
     the ground at 200–350 m/s; damage falloff; a target is destroyed at 0 HP.
   - Layout: every target sits on dry land with a gentle slope, inside the combat area.
-  - AI: unopposed, Veteran and Ace attackers destroy two targets within 8 minutes in at least 80% of seeded runs; a
+  - AI: unopposed, Veteran and Ace attackers destroy two targets within 9 minutes in at least 80% of seeded runs; a
     defender bot intercepts an attacker; over 20 seeded Veteran-vs-Veteran matches the attacker wins 35–65% (so neither
     side is automatically superior).
 - **AI:**
@@ -885,8 +911,9 @@ brief (§11 of the brief: steps 1–11).
 
 - **Fictional content:** aircraft, weapons, the country, cities, villages and airfields are fictional.
   - Aircraft are only "inspired by" real types; no real designations or real specifications are shown.
-  - Revision 7: at the owner's request the Kestrel and the Kobchik look like the F-35A and the Su-57, using the
-    owner's own models (some textures carry markings). Their names and specifications stay fictional.
+  - Revision 7: at the owner's request two jets look like the F-35A and the Su-57, using the owner's own models (some
+    textures carry markings); since revision 10 these are the Shade and the Prizrak, the jets inspired by those types.
+    Their names and specifications stay fictional.
   - No real-world military installations are reproduced.
   - Strike targets are fictional facilities in open country (a supply depot, a radar site, a fuel depot). Towns,
     villages and people are never targets, and no casualties are shown.
