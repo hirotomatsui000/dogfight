@@ -5,6 +5,7 @@ import { STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
 import { isTouchOnly } from './device.ts';
+import { onlineSheet } from './online-sheet.ts';
 import { openSettings } from './settings-screen.ts';
 import type { SettingsStore } from './settings.ts';
 import { loadSetting, saveSetting } from './storage.ts';
@@ -17,6 +18,8 @@ export interface StartOptions {
   controlMode: ControlMode;
   mission: MissionId;
   difficulty: DifficultyId;
+  /** set for online play (M2): the room to join */
+  online?: { room: string };
 }
 
 export interface StartMenuHandlers {
@@ -230,6 +233,12 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   const launch = el('div', 'launch');
   const fly = el('button', 'fly', 'Fly');
   fly.type = 'submit';
+  const onlineButton = el('button', 'online-button', 'Online');
+  onlineButton.type = 'button';
+  onlineButton.title = 'Fly against other people in a room';
+  onlineButton.setAttribute('aria-haspopup', 'dialog');
+  const launchRow = el('div', 'launch-row');
+  launchRow.append(fly, onlineButton);
   const links = el('div', 'links');
   const training = el('button', 'link', 'Training');
   training.type = 'button';
@@ -245,16 +254,18 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   settingsLink.type = 'button';
   settingsLink.setAttribute('aria-haspopup', 'dialog');
   links.append(training, freeFlight, controlsLink, settingsLink);
-  launch.append(fly, links);
+  launch.append(launchRow, links);
 
   main.append(brand, missions, jets, skill, launch);
   form.append(top, main, credits());
 
   const sheet = controlsSheet(settings);
-  screen.append(form, sheet);
+  const invitedRoom = new URLSearchParams(location.search).get('room');
+  const online = onlineSheet(invitedRoom ?? 'public', () => (mission === 'strike' ? 'Strike' : 'Dogfight'), (room) => start(mission, { room }));
+  screen.append(form, sheet, online);
 
-  const start = (mission: MissionId) => {
-    const options: StartOptions = { aircraftId, callsign: sanitizeCallsign(callsign.value), controlMode: settings.current.controlMode, mission, difficulty };
+  const start = (mission: MissionId, onlineRoom?: { room: string }) => {
+    const options: StartOptions = { aircraftId, callsign: sanitizeCallsign(callsign.value), controlMode: settings.current.controlMode, mission, difficulty, online: onlineRoom };
     saveSetting('aircraft', options.aircraftId);
     saveSetting('callsign', options.callsign);
     saveSetting('difficulty', options.difficulty);
@@ -267,10 +278,13 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   freeFlight.addEventListener('click', () => start('free-flight'));
   training.addEventListener('click', () => start('training'));
   controlsLink.addEventListener('click', () => sheet.showModal());
+  onlineButton.addEventListener('click', () => online.showModal());
   settingsLink.addEventListener('click', () => openSettings(root, settings, 'controls'));
 
   root.appendChild(screen);
   handlers.onPreview(aircraftId);
   fly.focus();
+  // An invite link (?room=name) opens the online sheet on that room.
+  if (invitedRoom) online.showModal();
   return () => screen.remove();
 }

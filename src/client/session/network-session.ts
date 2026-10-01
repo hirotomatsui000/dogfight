@@ -40,6 +40,8 @@ const CORRECTION_TAU_S = 0.1;
 /** A correction bigger than this is a teleport: snap instead of blending. */
 const SNAP_DISTANCE_M = 60;
 const PING_INTERVAL_MS = 2000;
+/** The server's clock does not wait for a slow frame: catch up to a quarter second (15 inputs) per frame. */
+export const MAX_STEPS_PER_FRAME = 15;
 const CLOCK_SAMPLES = 10;
 const TARGET_QUEUE = 2;
 const MAX_NUDGE = 0.02;
@@ -155,7 +157,7 @@ export class NetworkSession implements GameSession {
   private readonly transport: Transport;
   private readonly now: () => number;
   private readonly mode: GameMode;
-  private readonly stepper = new FixedStepper(DT);
+  private readonly stepper = new FixedStepper(DT, MAX_STEPS_PER_FRAME);
   private readonly aircraft = new Map<number, NetAircraft>();
   private readonly roster = new Map<number, RosterEntry>();
   private readonly snapshots: Snapshot[] = [];
@@ -188,6 +190,8 @@ export class NetworkSession implements GameSession {
   rttMs = 0;
   queueDepth = 0;
   private nudge = 0;
+  /** the newest snapshot not yet reconciled with the own jet */
+  private toReconcile: Snapshot | null = null;
 
   // Views.
   private readonly missileViews = new Map<number, MissileView & { samplesFrom: number }>();
@@ -283,6 +287,10 @@ export class NetworkSession implements GameSession {
     l.countermeasures ||= input.countermeasures;
     l.fireMissile ||= input.fireMissile;
     l.dropBomb ||= input.dropBomb;
+    if (this.toReconcile) {
+      this.reconcile(this.toReconcile);
+      this.toReconcile = null;
+    }
     const me = this.aircraft.get(this.localId);
     this.stepper.advance(frameDtS * (1 + this.nudge), () => {
       Object.assign(this.stepInput, input, l);
@@ -353,7 +361,7 @@ export class NetworkSession implements GameSession {
   }
 
   sendChat(index: number): void {
-    this.transport.send(JSON.stringify({ type: 'chat', index }));
+    if (!this.closed) this.transport.send(JSON.stringify({ type: 'chat', index }));
   }
 
   /** True once after the server started a new match in this room (new aircraft ids). */
@@ -523,6 +531,7 @@ export class NetworkSession implements GameSession {
     this.aircraft.clear();
     this.roster.clear();
     this.snapshots.length = 0;
+    this.toReconcile = null;
     this.pending.length = 0;
     this.pendingEvents = [];
     this.predictedValid = false;
@@ -570,7 +579,8 @@ export class NetworkSession implements GameSession {
       v.hp = t.hpFraction * v.maxHp;
       v.destroyed = t.destroyed;
     });
-    this.reconcile(snap);
+    // Replaying the own inputs is the costly part: do it once per frame, for the newest snapshot only.
+    this.toReconcile = snap;
   }
 
   /** Resets the own jet to the server's state for the acknowledged input and replays the inputs after it. */

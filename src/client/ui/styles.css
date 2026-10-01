@@ -209,6 +209,34 @@ input:focus-visible + .option { color: var(--hud); }
 }
 
 .launch { display: grid; gap: 18px; justify-items: start; }
+.launch-row { display: flex; gap: 12px; width: 100%; align-items: stretch; }
+.online-button {
+  flex: 0 0 auto;
+  min-width: 108px;
+  padding: 0 16px;
+  font: 700 18px/1 var(--display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--canopy);
+  background: rgb(8 16 24 / 0.4);
+  border: 0;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.3);
+  cursor: pointer;
+}
+.online-button:hover { box-shadow: inset 0 0 0 1px var(--canopy); }
+.online-button:focus-visible { outline: 2px solid var(--hud); outline-offset: 4px; }
+.online .online-room { grid-template-columns: max-content 1fr; }
+.online .pilot-input { text-align: left; }
+.online-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+.room-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.room-list:empty { display: none; }
+.room-chip { padding: 6px 10px; font: 600 12px/1.2 var(--mono); color: var(--canopy); background: rgb(255 255 255 / 0.06); border: 1px solid rgb(255 255 255 / 0.22); border-radius: 3px; cursor: pointer; }
+.room-chip:hover { border-color: var(--canopy); }
+.button:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+.update-notice { position: absolute; z-index: 30; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; padding: 8px 12px; font-size: 13px; color: var(--ink); background: var(--warn); border-radius: 3px; }
+.update-notice button { font: 600 12px/1 var(--mono); padding: 6px 10px; border: 0; border-radius: 2px; cursor: pointer; }
+.debug-overlay { position: absolute; right: 12px; top: 120px; padding: 6px 8px; font: 500 11px/1.5 var(--mono); color: var(--hud); background: rgb(0 0 0 / 0.55); white-space: pre; pointer-events: none; }
 
 /* The main action is a red "remove before flight" streamer: stitched edge, grommet, a flutter on hover. */
 .fly {
@@ -426,7 +454,7 @@ input:focus-visible + .option { color: var(--hud); }
 
 @media (max-width: 640px) {
   .start { background: rgb(8 16 24 / 0.72); }
-  .fly { width: 100%; }
+  .fly { width: auto; flex: 1 1 auto; }
   .option-name { font-size: 26px; }
 }
 

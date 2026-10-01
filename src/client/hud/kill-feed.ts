@@ -30,6 +30,10 @@ export function describeDeath(victim: string, killer: string | null, cause: Deat
 export class KillFeed {
   readonly lines: KillFeedLine[] = [];
 
+  clear(): void {
+    this.lines.length = 0;
+  }
+
   add(text: string, team: TeamId, involvesLocal: boolean): void {
     this.lines.unshift({ text, team, involvesLocal, ageS: 0 });
     if (this.lines.length > KILL_FEED_MAX_LINES) this.lines.length = KILL_FEED_MAX_LINES;

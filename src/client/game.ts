@@ -5,12 +5,14 @@ import { createTestRange } from '../shared/data/maps/test-range.ts';
 import { BOMB_ANVIL, CANNONS } from '../shared/data/weapons.ts';
 import { timeToImpact } from '../shared/map/ground-proximity.ts';
 import { DEG } from '../shared/math/units.ts';
+import { QUICK_CHAT } from '../shared/net/protocol.ts';
 import { FreeFlightMode } from '../shared/modes/free-flight.ts';
 import type { GameMode } from '../shared/modes/mode.ts';
 import { StrikeMode } from '../shared/modes/strike.ts';
 import { TeamDeathmatchMode } from '../shared/modes/team-deathmatch.ts';
 import { TrainingMode } from '../shared/modes/training.ts';
 import { atmosphere } from '../shared/physics/atmosphere.ts';
+import { type ControlInput, neutralInput } from '../shared/physics/controls.ts';
 import { predictImpact } from '../shared/weapons/bomb.ts';
 import { leadDirection } from '../shared/weapons/lead.ts';
 import type { DeathCause, GameEvent } from '../shared/world/events.ts';
@@ -40,7 +42,10 @@ import { SkySystem } from './render/sky.ts';
 import { createTerrainMaterial } from './render/terrain-material.ts';
 import { TerrainMesh } from './render/terrain-mesh.ts';
 import { TrainingRings } from './render/training-rings.ts';
+import { CHAT_KEYS, ConnectionOverlay, connectOnline, DebugOverlay, isOutdated, RECONNECT_DELAYS_MS, reportErrors, showUpdateNotice } from './online-play.ts';
+import type { GameSession } from './session/game-session.ts';
 import { LocalSession } from './session/local-session.ts';
+import type { NetworkSession } from './session/network-session.ts';
 import { matchResult, type ResultRow, showEndScreen } from './ui/end-screen.ts';
 import { loadingText } from './ui/load-bar.ts';
 import type { StartOptions } from './ui/menu.ts';
@@ -132,17 +137,34 @@ export async function startGame(
   const map = createTestRange(1);
   const terrain = buildTerrain(map);
   const mode = createMode(options);
-  const session = new LocalSession({
-    map,
-    terrain,
-    mode,
-    aircraftId: options.aircraftId,
-    callsign: options.callsign,
-    // A fresh seed per match varies gunfire spread, flare luck and the bot's aim; the World stays deterministic.
-    seed: Math.floor(Math.random() * 0x7fffffff),
-    // Training brings its own drones.
-    opponents: options.mission === 'free-flight' || options.mission === 'training' ? undefined : { count: 1, profile: DIFFICULTIES[options.difficulty] },
-  });
+  /** the server connection in online play (M2), otherwise null */
+  let online: NetworkSession | null = null;
+  let session: GameSession;
+  if (options.online) {
+    stopLoadingText();
+    loading.firstElementChild!.textContent = 'Connecting to the game server…';
+    try {
+      online = await connectOnline(options, map, terrain);
+    } catch (err) {
+      renderer.dispose();
+      audio?.dispose();
+      loading.remove();
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+    session = online;
+  } else {
+    session = new LocalSession({
+      map,
+      terrain,
+      mode,
+      aircraftId: options.aircraftId,
+      callsign: options.callsign,
+      // A fresh seed per match varies gunfire spread, flare luck and the bot's aim; the World stays deterministic.
+      seed: Math.floor(Math.random() * 0x7fffffff),
+      // Training brings its own drones.
+      opponents: options.mission === 'free-flight' || options.mission === 'training' ? undefined : { count: 1, profile: DIFFICULTIES[options.difficulty] },
+    });
+  }
   new SkySystem(renderer.scene, renderer.webgl, textures.sky);
   renderer.scene.add(new TerrainMesh(terrain, map, createTerrainMaterial(textures)).group);
   const sea = new Sea(textures.waterNormals);
@@ -153,7 +175,8 @@ export async function startGame(
   const targetModels = new GroundTargetModels(renderer.scene);
   const trainingRings = new TrainingRings(renderer.scene);
   const targetAlerts = new TargetAlerts();
-  const strikeTeams = session.modeStatus().strike ?? null;
+  // Online, the mode status arrives from the server after the first frames: read it when needed.
+  const strikeTeams = () => session.modeStatus().strike ?? null;
   const impactPoint = new Vector3();
   const effects = new Effects(renderer.scene);
   const cameraRig = new CameraRig(renderer.camera);
@@ -213,7 +236,72 @@ export async function startGame(
   let settingsOpen = false;
   let banner: string | null = null;
   let bannerUntil = 0;
+  // Online (M2): the line can drop and come back; the match never pauses.
+  // The debug readout goes in first so every dialog covers it.
+  const debug = new URLSearchParams(location.search).get('debug') === '1' ? new DebugOverlay(root) : null;
+  const connection = online ? new ConnectionOverlay(root) : null;
+  let closeUpdateNotice: (() => void) | null = online && isOutdated(__BUILD_ID__, online.serverBuild) ? showUpdateNotice(root) : null;
+  const stopErrorReports = online ? reportErrors(__BUILD_ID__) : null;
+  /** the line dropped: the connection overlay is up */
+  let lineDown = false;
+  let reconnecting = false;
+  const idle: ControlInput = neutralInput(0.8);
   let closeEndScreen: (() => void) | null = null;
+  const attachOnline = (s: NetworkSession) => {
+    online = s;
+    session = s;
+    s.onClosed = (reason, clean) => {
+      if (running && !clean) void reconnect(reason);
+    };
+  };
+  /** Tries again after 1, 2 and 4 s, then offers Reconnect / Main menu (spec §17). The room keeps flying meanwhile. */
+  const reconnect = async (reason: string) => {
+    if (reconnecting) return;
+    reconnecting = true;
+    lineDown = true;
+    if (input.pointerLocked) document.exitPointerLock();
+    for (let i = 0; i < RECONNECT_DELAYS_MS.length; i++) {
+      connection?.show(`${reason}. Reconnecting (try ${i + 1} of ${RECONNECT_DELAYS_MS.length})…`);
+      await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAYS_MS[i]));
+      if (!running) return;
+      try {
+        const next = await connectOnline(options, map, terrain);
+        if (!running) {
+          next.dispose();
+          return;
+        }
+        session.dispose();
+        attachOnline(next);
+        // The server may have restarted with a new version.
+        if (!closeUpdateNotice && isOutdated(__BUILD_ID__, next.serverBuild)) closeUpdateNotice = showUpdateNotice(root);
+        closeEndScreen?.();
+        closeEndScreen = null;
+        matchOver = false;
+        spawnGen = -1;
+        deathMessage = null;
+        killFeed.clear();
+        connection?.hide();
+        reconnecting = false;
+        lineDown = false;
+        input.requestPointerLock();
+        return;
+      } catch (err) {
+        reason = err instanceof Error ? err.message.replace(/\.$/, '') : String(err);
+      }
+    }
+    reconnecting = false;
+    connection?.show(`${reason}.`, [
+      ['Reconnect', () => void reconnect(reason)],
+      [
+        'Main menu',
+        () => {
+          cleanup();
+          handlers.onQuit();
+        },
+      ],
+    ]);
+  };
+  if (online) attachOnline(online);
   const target: CameraTarget = {
     position: new Vector3(),
     quaternion: new Quaternion(),
@@ -243,7 +331,7 @@ export async function startGame(
       cleanup();
       handlers.onQuit();
     },
-  });
+  }, { note: online ? 'Online, the match keeps going: your jet flies straight on.' : undefined });
   const openPause = () => {
     if (paused) return;
     paused = true;
@@ -252,7 +340,7 @@ export async function startGame(
   };
   // Browsers swallow Esc while the pointer is locked and release the lock instead: treat that as "pause".
   const onPointerLockChange = () => {
-    if (running && !matchOver && !input.pointerLocked && !paused) openPause();
+    if (running && !matchOver && !lineDown && !input.pointerLocked && !paused) openPause();
   };
   document.addEventListener('pointerlockchange', onPointerLockChange);
   const onPointerDown = () => audio?.resume();
@@ -311,14 +399,16 @@ export async function startGame(
     } else if (e.type === 'targetHit') {
       if (e.attackerId === session.localId) hitMarkerUntil = nowS + HIT_MARKER_S;
       const me = session.localView();
-      if (me && strikeTeams && me.team === strikeTeams.defender) {
+      const teams = strikeTeams();
+      if (me && teams && me.team === teams.defender) {
         const alert = targetAlerts.underAttack(e.targetId, nowS);
         if (alert) showBanner(alert, nowS);
       }
     } else if (e.type === 'targetDestroyed') {
       const text = targetDestroyedText(e.targetId);
       showBanner(text, nowS);
-      if (strikeTeams) killFeed.add(text, strikeTeams.attacker, e.attackerId === session.localId);
+      const teams = strikeTeams();
+      if (teams) killFeed.add(text, teams.attacker, e.attackerId === session.localId);
     }
   };
 
@@ -336,9 +426,17 @@ export async function startGame(
       .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
     const training = options.mission === 'training';
     if (training) settings.update({ trainingDone: true });
-    closeEndScreen = showEndScreen(root, matchResult(session.modeStatus(), me ? me.team : 'usa', destroyed), rows, {
-      againLabel: training ? 'Fly a dogfight' : undefined,
+    const result = matchResult(session.modeStatus(), me ? me.team : 'usa', destroyed);
+    if (online) result.note = [result.note, 'The next match in this room starts in a few seconds.'].filter(Boolean).join(' ');
+    closeEndScreen = showEndScreen(root, result, rows, {
+      againLabel: online ? 'Stay for the next match' : training ? 'Fly a dogfight' : undefined,
       onAgain: () => {
+        if (online) {
+          // The room restarts on its own; just get the results out of the way.
+          closeEndScreen?.();
+          closeEndScreen = null;
+          return;
+        }
         cleanup();
         handlers.onRestart(training ? { ...options, mission: 'team-deathmatch' } : options);
       },
@@ -352,7 +450,8 @@ export async function startGame(
   const frame = (now: number) => {
     if (!running) return;
     const nowS = now / 1000;
-    const dt = Math.min((now - last) / 1000, 0.1);
+    const frameS = (now - last) / 1000;
+    const dt = Math.min(frameS, 0.1);
     last = now;
     const snap = input.snapshot();
     const padFrame = pad.read(pollGamepad(), settings.current.gamepad);
@@ -364,7 +463,7 @@ export async function startGame(
         settings.update({ autoGraphics: lower });
       }
     }
-    if (!matchOver && !settingsOpen && mapper.pauseRequested(snap, padFrame)) {
+    if (!matchOver && !settingsOpen && !lineDown && mapper.pauseRequested(snap, padFrame)) {
       if (paused) {
         pause.hide();
         paused = false;
@@ -374,7 +473,17 @@ export async function startGame(
     }
 
     const active = !paused && !matchOver;
-    if (active) {
+    if (online && online.consumeMatchStart()) {
+      // The room started its next match: new jets, fresh scores.
+      closeEndScreen?.();
+      closeEndScreen = null;
+      matchOver = false;
+      spawnGen = -1;
+      deathMessage = null;
+      killFeed.clear();
+      input.requestPointerLock();
+    }
+    if (active || online) {
       const me = session.localView();
       if (me && me.spawnGen !== spawnGen) {
         spawnGen = me.spawnGen;
@@ -383,11 +492,27 @@ export async function startGame(
         hud.resetMaxG();
         deathMessage = null;
       }
-      const controls = mapper.map(snap, me && me.alive ? me.flight : null, dt, padFrame);
-      session.update(dt, controls);
+      // Online the jet keeps flying while the menu is open: hold the throttle, centre the stick.
+      if (!active && me) idle.throttle = me.flight.throttle;
+      const controls = active ? mapper.map(snap, me && me.alive ? me.flight : null, dt, padFrame) : idle;
+      // Online a slow frame still has to send every input the server's clock asks for (down to 4 fps).
+      session.update(online ? Math.min(frameS, 0.25) : dt, controls);
       for (const e of session.drainEvents()) handleEvent(e, nowS);
+      if (online) {
+        if (active) CHAT_KEYS.forEach((code, i) => snap.pressed.has(code) && online?.sendChat(i));
+        for (const c of online.drainChat()) {
+          const from = session.view(c.from);
+          killFeed.add(`${from?.callsign ?? 'Someone'}: ${QUICK_CHAT[c.index] ?? ''}`, from?.team ?? 'usa', c.from === session.localId);
+        }
+      }
       killFeed.update(dt);
-      if (session.modeStatus().winner !== null) endMatch();
+      if (!matchOver && session.modeStatus().winner !== null) endMatch();
+    }
+    if (debug) {
+      const f = session.localView()?.flight;
+      const lines = f ? [`a ${(f.alpha / DEG).toFixed(1)}  n ${f.gLoad.toFixed(1)}  M ${f.mach.toFixed(2)}`] : [];
+      if (online) lines.push(`RTT ${online.rttMs.toFixed(0)} ms  queue ${online.queueDepth}`, `prediction error ${online.predictionErrorM.toFixed(2)} m`);
+      debug.frame(now, lines);
     }
 
     const local = session.localView();
@@ -444,7 +569,7 @@ export async function startGame(
         pullUp: local.alive && timeToImpact(f, terrain) !== null,
         message,
         banner: nowS < bannerUntil ? banner : null,
-        hint: local.bombLoad > 0 ? `${HINTS[mapper.settings.mode]} · G bomb` : HINTS[mapper.settings.mode],
+        hint: `${HINTS[mapper.settings.mode]}${local.bombLoad > 0 ? ' · G bomb' : ''}${online ? ' · 7-0 chat' : ''}`,
         killFeed: killFeed.lines,
         hitMarker: nowS < hitMarkerUntil,
         hitTaken: nowS < hitTakenUntil,
@@ -479,6 +604,11 @@ export async function startGame(
     running = false;
     cancelAnimationFrame(rafId);
     stopSettings();
+    connection?.dispose();
+    debug?.dispose();
+    closeUpdateNotice?.();
+    closeUpdateNotice = null;
+    stopErrorReports?.();
     document.removeEventListener('pointerlockchange', onPointerLockChange);
     root.removeEventListener('pointerdown', onPointerDown);
     input.detach();
