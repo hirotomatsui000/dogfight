@@ -8,6 +8,7 @@ import { createRadarLock, type RadarLockState, resetRadarLock } from '../targeti
 import type { Contact } from '../targeting/sensors.ts';
 import { TRIGGER_AT_REST } from '../weapons/cannon.ts';
 import { MotionHistory } from './history.ts';
+import type { SpawnStart } from './spawns.ts';
 
 export interface StoresState {
   cannonRounds: number;
@@ -64,6 +65,8 @@ export interface AircraftEntity extends CreditRecord {
   readonly history: MotionHistory;
   /** online: how many ticks behind this pilot sees the others; cannon hit tests rewind by it (spec §7) */
   viewDelayTicks: number;
+  /** where this aircraft starts after each death: in the air or on the runway (M4) */
+  start: SpawnStart;
 }
 
 export interface NewAircraft {
@@ -75,6 +78,7 @@ export interface NewAircraft {
   flight: FlightState;
   spawnSlot: number;
   bombLoad: number;
+  start?: SpawnStart;
 }
 
 export function createAircraftEntity(n: NewAircraft): AircraftEntity {
@@ -114,6 +118,7 @@ export function createAircraftEntity(n: NewAircraft): AircraftEntity {
     lastDamagedTick: -1,
     lastLockedBy: null,
     lastLockedTick: -1,
+    start: n.start ?? 'air',
   };
   resetForSpawn(entity);
   return entity;

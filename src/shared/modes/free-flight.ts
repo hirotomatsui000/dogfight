@@ -6,6 +6,7 @@ import type { GameMode, ModeStatus } from './mode.ts';
 export class FreeFlightMode implements GameMode {
   readonly id = 'free-flight' as const;
   readonly combatEnabled = false;
+  readonly runwayStarts: boolean = true;
   readonly respawnDelayS = 3;
 
   spawnPoint(map: MapDefinition, team: TeamId): SpawnSpec {

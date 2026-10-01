@@ -79,3 +79,9 @@ export function airfieldGroundAt(airfields: readonly Airfield[], x: number, z: n
   }
   return null;
 }
+
+/** Height of the airfield ground at (x, z) for wheel contact, or NaN away from every airfield. */
+export function airfieldGroundHeight(features: MapFeatures | undefined, x: number, z: number): number {
+  const a = features ? airfieldGroundAt(features.airfields, x, z) : null;
+  return a ? a.elevationM : NaN;
+}

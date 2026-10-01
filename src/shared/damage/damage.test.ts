@@ -13,10 +13,10 @@ describe('damage', () => {
   });
 
   it('weakens the engine and controls as damage grows', () => {
-    const env = { thrustScale: 1, rollScale: 1 };
-    expect(damageFlightEnv('healthy', env)).toEqual({ thrustScale: 1, rollScale: 1 });
-    expect(damageFlightEnv('damaged', env)).toEqual({ thrustScale: 0.9, rollScale: 1 });
-    expect(damageFlightEnv('critical', env)).toEqual({ thrustScale: 0.75, rollScale: 0.7 });
+    const env = { thrustScale: 1, rollScale: 1, groundM: NaN };
+    expect(damageFlightEnv('healthy', env)).toMatchObject({ thrustScale: 1, rollScale: 1 });
+    expect(damageFlightEnv('damaged', env)).toMatchObject({ thrustScale: 0.9, rollScale: 1 });
+    expect(damageFlightEnv('critical', env)).toMatchObject({ thrustScale: 0.75, rollScale: 0.7 });
   });
 
   it('applies full blast damage within 4 m, falling to 0 at 18 m', () => {

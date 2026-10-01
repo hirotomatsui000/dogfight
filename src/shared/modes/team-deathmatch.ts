@@ -19,6 +19,7 @@ export const TEAM_DEATHMATCH_DEFAULTS: TeamDeathmatchOptions = { scoreLimit: 15,
 export class TeamDeathmatchMode implements GameMode {
   readonly id = 'team-deathmatch' as const;
   readonly combatEnabled = true;
+  readonly runwayStarts: boolean = true;
   readonly respawnDelayS = 5;
   readonly options: TeamDeathmatchOptions;
   private readonly scores: Record<TeamId, number> = { usa: 0, russia: 0 };

@@ -84,6 +84,8 @@ export interface GameMode {
   readonly id: ModeId;
   readonly combatEnabled: boolean;
   readonly respawnDelayS: number;
+  /** Pilots who ask for it start on their team's runway (M4); others always start in the air. */
+  readonly runwayStarts?: boolean;
   /** Where a team spawns; most modes use the map's spawn lines. */
   spawnPoint(map: MapDefinition, team: TeamId): SpawnSpec;
   /** Ground targets the World places at the start (Strike); none elsewhere. */

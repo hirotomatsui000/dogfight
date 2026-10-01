@@ -4,6 +4,7 @@ import type { TeamId } from '../../shared/data/aircraft/types.ts';
 import type { MapDefinition } from '../../shared/data/maps/map-definition.ts';
 import { CANNONS, MRM_LANCE } from '../../shared/data/weapons.ts';
 import { damageFlightEnv, damageState } from '../../shared/damage/damage.ts';
+import { airfieldGroundHeight } from '../../shared/map/features.ts';
 import type { Terrain } from '../../shared/map/terrain.ts';
 import { Rng } from '../../shared/math/rng.ts';
 import type { GameMode, ModeStatus } from '../../shared/modes/mode.ts';
@@ -178,7 +179,7 @@ export class NetworkSession implements GameSession {
   private readonly predictedHistory = new Map<number, Vector3>();
   private readonly offsetPos = new Vector3();
   private readonly offsetQuat = new Quaternion();
-  private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1 };
+  private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1, groundM: NaN };
   private readonly stepInput = neutralInput();
   private readonly latched = { cycleTarget: false, countermeasures: false, fireMissile: false, dropBomb: false };
   private localSpawnGen = -1;
@@ -424,6 +425,7 @@ export class NetworkSession implements GameSession {
     if (this.pending.length > 300) this.pending.shift();
     if (me && me.alive && this.predictedValid) {
       damageFlightEnv(damageState(me.hp, me.config.damage.hitPoints), this.env);
+      this.env.groundM = airfieldGroundHeight(this.map.features, this.predicted.pos.x, this.predicted.pos.z);
       stepFlight(this.predicted, input, me.config.physics, DT, this.env);
       this.predictedHistory.set(this.seq, this.predicted.pos.clone());
       if (this.predictedHistory.size > 300) this.predictedHistory.delete(this.seq - 300);
@@ -625,6 +627,7 @@ export class NetworkSession implements GameSession {
     if (atAck) this.predictionErrorM = atAck.distanceTo(p.pos);
     damageFlightEnv(damageState(me.hp, me.config.damage.hitPoints), this.env);
     for (const { seq, input } of this.pending) {
+      this.env.groundM = airfieldGroundHeight(this.map.features, p.pos.x, p.pos.z);
       stepFlight(p, input, me.config.physics, DT, this.env);
       this.predictedHistory.set(seq, p.pos.clone());
     }

@@ -4,6 +4,7 @@ import { approach, clamp, DEG, G0, moveToward } from '../math/units.ts';
 import { dragCoefficient, liftCoefficient, SIDE_FORCE_PER_RAD, thrustNewtons } from './aero.ts';
 import { type AirData, atmosphere } from './atmosphere.ts';
 import type { ControlInput } from './controls.ts';
+import { GEAR_DRAG, gentleTouchdown, stepGround, updateGear } from './ground.ts';
 
 export interface FlightState {
   pos: Vector3;
@@ -23,15 +24,21 @@ export interface FlightState {
   mach: number;
   airspeed: number;
   thrust: number;
+  /** landing gear: 1 down … 0 up (spec §8, M4) */
+  gear: number;
+  /** rolling on the wheels: the ground model flies the jet */
+  onGround: boolean;
 }
 
 /** Multipliers applied by the damage model. */
 export interface FlightEnv {
   thrustScale: number;
   rollScale: number;
+  /** height of the airfield ground under the jet, NaN away from airfields (no wheel contact there) */
+  groundM: number;
 }
 
-export const DEFAULT_FLIGHT_ENV: Readonly<FlightEnv> = { thrustScale: 1, rollScale: 1 };
+export const DEFAULT_FLIGHT_ENV: Readonly<FlightEnv> = { thrustScale: 1, rollScale: 1, groundM: NaN };
 
 export interface FlightStateInit {
   position: Vector3;
@@ -43,6 +50,8 @@ export interface FlightStateInit {
   alphaRad?: number;
   speed: number;
   throttle?: number;
+  /** on the runway with the gear down */
+  onGround?: boolean;
 }
 
 const THROTTLE_TAU = 0.6;
@@ -77,6 +86,8 @@ export function createFlightState(init: FlightStateInit): FlightState {
     mach: 0,
     airspeed: init.speed,
     thrust: 0,
+    gear: init.onGround ? 1 : 0,
+    onGround: init.onGround ?? false,
   };
 }
 
@@ -93,6 +104,8 @@ export function copyFlightState(target: FlightState, source: FlightState): Fligh
   target.mach = source.mach;
   target.airspeed = source.airspeed;
   target.thrust = source.thrust;
+  target.gear = source.gear;
+  target.onGround = source.onGround;
   return target;
 }
 
@@ -129,6 +142,10 @@ export function stepFlight(
   dt: number,
   env: Readonly<FlightEnv> = DEFAULT_FLIGHT_ENV,
 ): void {
+  if (s.onGround) {
+    stepGround(s, input, p, dt, env);
+    return;
+  }
   atmosphere(s.pos.y, air);
   const speed = Math.max(s.vel.length(), MIN_SPEED);
   const qbar = 0.5 * air.density * speed * speed;
@@ -157,7 +174,7 @@ export function stepFlight(
 
   // Forces.
   const cl = liftCoefficient(alpha, p);
-  const cd = dragCoefficient(mach, cl, alpha, beta, s.airbrake, p);
+  const cd = dragCoefficient(mach, cl, alpha, beta, s.airbrake, p) + GEAR_DRAG * s.gear;
   const cy = -SIDE_FORCE_PER_RAD * beta;
   const thrust = thrustNewtons(s.throttle, p, air.sigma, mach, env.thrustScale);
   force
@@ -216,4 +233,8 @@ export function stepFlight(
   s.mach = mach;
   s.airspeed = speed;
   s.thrust = thrust;
+  if (s.gear > 0) {
+    updateGear(s, dt, env.groundM);
+    if (gentleTouchdown(s, env.groundM)) s.onGround = true;
+  }
 }

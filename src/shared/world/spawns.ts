@@ -1,10 +1,12 @@
 import { Vector3 } from 'three';
-import type { AircraftPhysics } from '../data/aircraft/types.ts';
-import type { SpawnSpec } from '../data/maps/map-definition.ts';
+import type { AircraftPhysics, TeamId } from '../data/aircraft/types.ts';
+import type { MapDefinition, SpawnSpec } from '../data/maps/map-definition.ts';
+import { type Airfield, airfieldWorld } from '../map/features.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { trimAlpha } from '../physics/aero.ts';
 import { atmosphere } from '../physics/atmosphere.ts';
 import { createFlightState, type FlightState } from '../physics/flight-model.ts';
+import { restingHeight } from '../physics/ground.ts';
 
 export const SPAWN_SPEED = 250;
 export const SPAWN_SLOT_SPACING = 600;
@@ -27,5 +29,36 @@ export function spawnFlightState(spec: SpawnSpec, terrain: Terrain, slot: number
     speed: SPAWN_SPEED,
     throttle: 0.8,
     alphaRad,
+  });
+}
+
+/** Where a pilot starts: on the spawn line in the air, or on the team's runway (spec §13, M4). */
+export type SpawnStart = 'air' | 'runway';
+export const SPAWN_STARTS: readonly SpawnStart[] = ['air', 'runway'];
+
+/** Runway starts line up in two lanes 12 m either side of the centre line, rows 300 m apart from the threshold. */
+export const RUNWAY_LANE_OFFSET_M = 12;
+export const RUNWAY_ROW_SPACING_M = 300;
+const RUNWAY_THRESHOLD_M = 150;
+const RUNWAY_ROWS = 6;
+/** Full military power: the jet rolls at once; the pilot adds afterburner or brakes. */
+const RUNWAY_THROTTLE = 0.9;
+
+/** The airfield a team starts from, if the map has one. */
+export function teamAirfield(map: MapDefinition, team: TeamId): Airfield | null {
+  return map.features?.airfields.find((a) => a.team === team) ?? null;
+}
+
+/** A jet standing on the runway at its slot, gear down, facing the take-off direction. */
+export function runwayFlightState(field: Airfield, slot: number): FlightState {
+  const lane = slot % 2 === 0 ? -RUNWAY_LANE_OFFSET_M : RUNWAY_LANE_OFFSET_M;
+  const row = Math.floor(slot / 2) % RUNWAY_ROWS;
+  const { x, z } = airfieldWorld(field, -field.lengthM / 2 + RUNWAY_THRESHOLD_M + row * RUNWAY_ROW_SPACING_M, lane);
+  return createFlightState({
+    position: new Vector3(x, restingHeight(field.elevationM), z),
+    headingRad: field.headingRad,
+    speed: 0,
+    throttle: RUNWAY_THROTTLE,
+    onGround: true,
   });
 }

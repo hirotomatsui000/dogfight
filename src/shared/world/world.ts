@@ -4,8 +4,9 @@ import { DronePilot } from '../ai/drone-pilot.ts';
 import type { DifficultyProfile } from '../ai/difficulty.ts';
 import { damageFlightEnv, damageState, maneuverKillCredit } from '../damage/damage.ts';
 import { getAircraft } from '../data/aircraft/registry.ts';
-import type { TeamId } from '../data/aircraft/types.ts';
+import type { AircraftPhysics, TeamId } from '../data/aircraft/types.ts';
 import type { MapDefinition } from '../data/maps/map-definition.ts';
+import { airfieldGroundHeight } from '../map/features.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { type Approach, closestApproach } from '../math/closest-approach.ts';
 import { Rng } from '../math/rng.ts';
@@ -13,7 +14,7 @@ import type { DroneSpec, GameMode, ModeDirector } from '../modes/mode.ts';
 import { trimAlpha } from '../physics/aero.ts';
 import { atmosphere } from '../physics/atmosphere.ts';
 import { type ControlInput, neutralInput, sanitizeInput } from '../physics/controls.ts';
-import { createFlightState, type FlightEnv, stepFlight } from '../physics/flight-model.ts';
+import { createFlightState, type FlightEnv, type FlightState, stepFlight } from '../physics/flight-model.ts';
 import type { Projectile } from '../weapons/cannon.ts';
 import type { Bomb } from '../weapons/bomb.ts';
 import type { Missile } from '../weapons/missile.ts';
@@ -21,7 +22,7 @@ import { Combat, type CombatHost } from './combat.ts';
 import { type AircraftEntity, createAircraftEntity, resetForSpawn } from './entities.ts';
 import type { DeathCause, GameEvent, WeaponKind } from './events.ts';
 import { createGroundTarget, damageGroundTarget, type GroundTarget } from './ground-targets.ts';
-import { spawnFlightState } from './spawns.ts';
+import { runwayFlightState, type SpawnStart, spawnFlightState, teamAirfield } from './spawns.ts';
 
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
@@ -42,6 +43,8 @@ export interface AddAircraftOptions {
   aircraftId: string;
   /** makes the aircraft an AI bot with this skill */
   bot?: DifficultyProfile;
+  /** where the aircraft starts (and restarts): in the air, or on its team's runway where the mode allows it */
+  start?: SpawnStart;
 }
 
 /** Anything that flies an aircraft from the World's state: bots and training drones. */
@@ -64,7 +67,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
   private readonly bots = new Map<number, { pilot: Pilot; input: ControlInput }>();
   private events: GameEvent[] = [];
   private nextId = 1;
-  private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1 };
+  private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1, groundM: NaN };
   private readonly approach: Approach = { distance: 0, fraction: 0 };
   private readonly living: AircraftEntity[] = [];
 
@@ -133,9 +136,10 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       team: opts.team,
       config,
       isBot: opts.bot !== undefined,
-      flight: spawnFlightState(this.mode.spawnPoint(this.map, opts.team), this.terrain, slot, config.physics),
+      flight: this.spawnState(opts.team, slot, config.physics, opts.start ?? 'air'),
       spawnSlot: slot,
       bombLoad: this.mode.bombLoad(opts.team),
+      start: opts.start ?? 'air',
     });
     this.aircraft.set(entity.id, entity);
     if (opts.bot) this.bots.set(entity.id, { pilot: new BotPilot(opts.bot, botSeed(this.seed, entity.id)), input: neutralInput(0.8) });
@@ -205,6 +209,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       if (!a.alive) continue;
       a.prevPos.copy(a.flight.pos);
       damageFlightEnv(damageState(a.hp, a.config.damage.hitPoints), this.env);
+      this.env.groundM = airfieldGroundHeight(this.map.features, a.flight.pos.x, a.flight.pos.z);
       stepFlight(a.flight, a.input, a.config.physics, DT, this.env);
       a.history.record(a.flight.pos, a.flight.vel);
     }
@@ -213,7 +218,9 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     for (const a of this.aircraft.values()) {
       if (!a.alive) continue;
       const p = a.flight.pos;
-      if (p.y < this.terrain.surfaceAt(p.x, p.z) + GROUND_CLEARANCE_M) {
+      // On the wheels the gear carries the jet, but only on an airfield: rolling off it is a crash.
+      const crashed = a.flight.onGround ? Number.isNaN(airfieldGroundHeight(this.map.features, p.x, p.z)) : p.y < this.terrain.surfaceAt(p.x, p.z) + GROUND_CLEARANCE_M;
+      if (crashed) {
         const credited = maneuverKillCredit(a, this.tick, TICK_RATE);
         this.destroy(a, 'crash', credited === null ? null : (this.aircraft.get(credited) ?? null));
         continue;
@@ -303,8 +310,14 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     this.mode.onAircraftDestroyed(this, a, killer, cause);
   }
 
+  /** A runway start on the team's airfield when the mode and map have one, else the mode's airborne spawn line. */
+  private spawnState(team: TeamId, slot: number, physics: AircraftPhysics, start: SpawnStart): FlightState {
+    const field = start === 'runway' && this.mode.runwayStarts ? teamAirfield(this.map, team) : null;
+    return field ? runwayFlightState(field, slot) : spawnFlightState(this.mode.spawnPoint(this.map, team), this.terrain, slot, physics);
+  }
+
   private respawn(a: AircraftEntity): void {
-    a.flight = spawnFlightState(this.mode.spawnPoint(this.map, a.team), this.terrain, a.spawnSlot, a.config.physics);
+    a.flight = this.spawnState(a.team, a.spawnSlot, a.config.physics, a.start);
     a.alive = true;
     a.spawnGen++;
     a.respawnAtTick = -1;
