@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 8)
+# Contested Skies — Design Spec (revision 9)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -17,6 +17,10 @@
   - Revision 8 (2026-10-01): milestone M1c "Website basics" is specified in detail as built: the Training mode
     (§13.2), the gamepad layout (§15.3), graphics presets with Auto (§15.4) and the settings screen (§15.5). Plan:
     `docs/superpowers/plans/2026-10-01-m1c-website-basics.md`.
+  - Revision 9 (2026-10-01): milestone M2 "Multiplayer" as built (§7, §16, §17, §19, §20, §24). The dev server
+    passes `/ws` and `/api` on to the game server instead of running inside it; the room travels in the hello message;
+    a pilot's jet sets their team; Strike online gives each team 4 aircraft per pilot; the deploy smoke test drives two
+    headless pilots over real WebSockets instead of a browser. Plan: `docs/superpowers/plans/2026-10-01-m2-multiplayer.md`.
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -194,9 +198,10 @@ Tests are colocated as `*.test.ts`.
 
 ## 7. Multiplayer architecture (M2)
 
-- **Topology:** one Node process serves the client (Vite middleware in dev, static `dist/client` in prod) and a
-  WebSocket at `/ws?room=<name>` on one port (default 8080). LAN players open `http://<host-ip>:8080`; the server prints
-  its LAN URLs.
+- **Topology:** one Node process serves the built site (`dist/`) and a WebSocket at `/ws` on one port (default 8080);
+  the room name travels in the `hello` message. LAN players open `http://<host-ip>:8080`; the server prints its LAN
+  URLs. (Revision 9: in development the Vite dev server passes `/ws`, `/api` and `/healthz` on to `npm run server`
+  instead of the server hosting Vite.)
 - **Authority:** the server runs the `World` at a fixed 60 Hz. It is the only authority for:
   - hits and damage;
   - locks and missile guidance;
@@ -213,7 +218,8 @@ Tests are colocated as `*.test.ts`.
   - JSON events for kills, hits, launches, detonations, countermeasures, mode status, roster and scores.
 - **Prediction and reconciliation:**
   - The client simulates its own jet with the shared flight model.
-  - On each snapshot it resets to the authoritative state and replays unacknowledged inputs.
+  - Once per frame, with the newest snapshot, it resets to the authoritative state and replays unacknowledged inputs.
+  - A slow frame still sends every input the server clock asks for (up to 15 per frame, so down to 4 fps).
   - Visual corrections decay smoothly (τ = 0.1 s); a respawn is a hard reset.
 - **Interpolation:** other entities render 100 ms in the past, Hermite for position and slerp for orientation;
   extrapolation is capped at 200 ms.
@@ -226,6 +232,9 @@ Tests are colocated as `*.test.ts`.
   - The first join creates a room and fixes its mode, map and bot settings.
   - 16 humans per room and 20 rooms per process (configurable).
   - Bots fill each team to a configurable size (default 4). Callsigns are sanitized and bots are prefixed `[BOT]`.
+  - A pilot's jet sets their team (Kestrel: USA, Kobchik: Russia). A new room plays the Mission chosen on the title
+    screen (Dogfight, or Strike with 4 aircraft per pilot per team); a finished match restarts by itself after a short
+    results screen.
 - **Validation:** clamp all input values; cap message sizes (binary 64 B, JSON 2 KB) and rates (120 inputs/s).
   Three protocol violations within 10 s → disconnect. A disconnect affects only that player.
 - **Bandwidth:** ≤ 50 KB/s down and ≤ 1 KB/s up per client with 32 jets.
@@ -755,8 +764,11 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 
 ## 16. Server (M2)
 
-- **`main.ts`:** config from env/CLI (`PORT` 8080, `HOST` 0.0.0.0, `MAX_ROOMS` 20, `MAX_HUMANS_PER_ROOM` 16, bot and
-  mode defaults); HTTP static or Vite middleware; `ws` at `/ws`; LAN URL printout.
+- **`main.ts`:** config from env/CLI (`PORT` 8080, `HOST` 0.0.0.0, `MAX_ROOMS` 20, `MAX_HUMANS_PER_ROOM` 16,
+  `BOTS_PER_TEAM` 4, `BOT_SKILL` veteran, `DIST_DIR` dist); static files from `dist/` (hashed assets cached for good,
+  the page revalidated); `ws` at `/ws`; `GET /healthz`, `GET /api/rooms`, `POST /api/error` (rate limited); LAN URL
+  printout. Runs straight from TypeScript (Node ≥ 23.6 strips the types).
+- **Docker:** a two-stage image builds the site and runs the server as the `node` user with a health check.
 - **`RoomManager`:** creates and closes rooms (a room closes 30 s after the last human leaves).
 - **`Room`:** owns a `World`, player↔aircraft mapping, input queues, snapshot encoding, event fan-out and history.
 - **Tick loop:** a process-wide fixed-step accumulator.
@@ -769,7 +781,8 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 |---|---|
 | WebGL unavailable | Friendly message with browser guidance |
 | WebSocket drops (M2) | "Connection lost" overlay; 3 automatic reconnects (1/2/4 s), then a Reconnect button |
-| Join rejected | The menu shows the server's message and keeps the form values |
+| Join rejected | A panel shows the server's message with "Back to menu"; the title screen keeps its choices |
+| Server runs another build | A banner asks the player to reload (checked on join and on every reconnect) |
 | Malformed or abusive client | Violations counted → disconnect; server unaffected |
 | Exception inside a simulation step | Logged; the offending entity is removed if identifiable; the room/session continues; 3 consecutive failures stop it with a visible error |
 | Invalid aircraft data file | `validateAircraftConfig` fails the test suite and throws at registration with the aircraft id and field |
@@ -833,6 +846,9 @@ pane at each stage.
   - Prediction converges under simulated latency; interpolation limits.
   - Server integration tests with real `ws` clients: join, snapshots, inputs, hit/kill/respawn, room full,
     protocol-violation disconnect.
+  - Deploy smoke test (`npm run smoke [url] [--lag=ms]`): health check, the page, and two headless pilots over real
+    WebSockets who fly, see each other and swap a quick-chat line; it checks round trip, prediction error and queue
+    depth.
 - **Client logic:** input mapping, camera blend math, HUD math and unit formatting, fixed-step accumulator.
 - **Gate:** `npm test` and `npm run build` (type-check + client build) pass before every commit.
   `src/shared/` line coverage ≥ 80%.

@@ -56,9 +56,14 @@ export function onlineSheet(initialRoom: string, missionLabel: () => string, onJ
   const buttons = el('div', 'online-buttons');
   buttons.append(join, quick);
   const note = el('p', 'sheet-note');
+  const privacy = el(
+    'p',
+    'sheet-note',
+    'No accounts and no tracking. The game server sees your callsign, your jet and your network address while you play. If this page hits an error, the error and your address go to the server log.',
+  );
   const close = el('button', 'link', 'Close');
   close.value = 'close';
-  form.append(title, status, roomLabel, list, buttons, invite, note, close);
+  form.append(title, status, roomLabel, list, buttons, invite, note, privacy, close);
   dialog.appendChild(form);
 
   let rooms: RoomInfo[] = [];
