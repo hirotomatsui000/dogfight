@@ -4,7 +4,11 @@ A browser-based flight-combat prototype. Two teams, **USA** and **Russia**, fly 
 real aircraft over a fictional landscape inspired by Poland. This repository is being built in milestones (see
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
-**Current milestone: M1d "Strike"** (after M1a "Fly" and M1b "Fight")
+**Current milestone: M1c "Website basics"** (after M1a "Fly", M1b "Fight" and M1d "Strike")
+- A **training flight** (about 3 minutes): fly through rings, gun a drone, lock and fire a missile, beat a missile.
+- **Settings**: volume, mouse sensitivity and invert, rebindable keys, gamepad and flight-stick setup, HUD color and
+  size, graphics (Auto, Low, Medium, High) and camera shake.
+- **Gamepads and flight sticks** through the browser's Gamepad API.
 - Two aircraft: the Kestrel (USA) and the Kobchik (Russia), drawn with the owner's 3D models (inspired by the F-35A
   and the Su-57).
 - Dogfight an AI pilot (Rookie, Veteran or Ace) in Team Deathmatch: first to 15 kills, or the most after 10 minutes.
@@ -28,8 +32,9 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173, pick a mission (Dogfight or Strike), an aircraft and an opponent, and press **FLY** (or
-**Free flight** to fly without enemies). **Controls** on the title screen lists the keys and switches between mouse aim and keyboard steering.
+Open http://localhost:5173. New pilots start with **Training**. Otherwise pick a mission (Dogfight or Strike), an
+aircraft and an opponent, and press **FLY** (or **Free flight** to fly without enemies). **Controls** lists the keys;
+**Settings** changes them, the mouse, the gamepad, the HUD, the graphics and the sound (also from the pause menu).
 Click the view to capture the mouse, then fly with the mouse.
 
 Other devices on the same network can open the "Network" URL that Vite prints.
@@ -50,6 +55,25 @@ Other devices on the same network can open the "Network" URL that Vite prints.
 | Look around (swings the camera round your jet) | C or right mouse (hold) |
 | Scoreboard | Tab (hold) |
 | Pause / settings | P or Esc |
+
+Every key except Esc can be changed in **Settings → Keys**.
+
+### Gamepad
+
+A pad with the standard layout (Xbox, PlayStation and most others) works straight away:
+
+| Control | Action |
+|---|---|
+| Left stick | Pitch and roll |
+| Right stick | Look around |
+| LB / RB | Rudder |
+| LT / RT | Throttle down / up |
+| X · A · B · Y | Cannon (hold) · missile · flares · next target |
+| D-pad ↓ / ↑ | Bomb · airbrake (hold) |
+| Start · Back | Pause · scores (hold) |
+
+Flight sticks and other devices: open **Settings → Gamepad**, assign the roll, pitch, rudder and throttle axes and the
+buttons (move or press each one), then **Calibrate**.
 
 In a fight:
 - The nearest enemy ahead is targeted automatically; R picks the next one.
@@ -89,8 +113,10 @@ top speed, turn rate, stall speed and G-limits.
 npm run build:single
 ```
 
-This writes `dist-single/index.html`: the whole game, including the scenery photos, in one self-contained file
-(about 5 MB, no other assets).
+This writes `dist-single/index.html`: the whole game, including the scenery photos and the jet models, in one
+self-contained file (about 6 MB), plus the social-preview image `og-image.jpg` and the icon `icon-180.png` that
+other sites and phones fetch. For link previews on social sites, build with the site's address:
+`SITE_URL=https://your-site.netlify.app npm run build:single`.
 
 To publish it on Netlify:
 1. Open https://app.netlify.com/drop.

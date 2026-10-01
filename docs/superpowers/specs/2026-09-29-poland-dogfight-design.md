@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 7)
+# Contested Skies — Design Spec (revision 8)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -14,6 +14,9 @@
     strike AI (§14), strike HUD and title-screen mission choice (§15), and milestone M1d (§20).
   - Revision 7 (2026-10-01): the Kestrel and the Kobchik use the owner's own 3D models instead of the generated ones
     (§9.1, §15.4, §22).
+  - Revision 8 (2026-10-01): milestone M1c "Website basics" is specified in detail as built: the Training mode
+    (§13.2), the gamepad layout (§15.3), graphics presets with Auto (§15.4) and the settings screen (§15.5). Plan:
+    `docs/superpowers/plans/2026-10-01-m1c-website-basics.md`.
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -58,6 +61,9 @@ A browser-based, online multiplayer flight-combat simulator prototype.
 | Visibility | Distant aircraft and missiles keep a minimum apparent size; missiles get HUD markers, a motor flame and a thicker smoke trail | Owner feedback, 2026-09-30 |
 | Strike mode | A fifth mode: Russia must destroy two of three fictional ground targets; the USA must hold them for 8 minutes. Each team has 4 aircraft; losing the 4th loses the match. No draws | Owner request, 2026-09-30 |
 | Air-to-ground | Allowed only as the Strike mode's abstract free-fall bomb, which damages ground targets and never aircraft. The out-of-scope rule (§23) is narrowed accordingly | Owner request, 2026-09-30 |
+| Training | A sixth mode, Training: four lessons (rings, gun, missile, defend) against drones that never fire back except one scripted missile; the player cannot lose, a shot-down lesson restarts | M1c, 2026-10-01 |
+| Graphics presets | Low/Medium/High set the pixel ratio, antialiasing, particle share and ground-photo anisotropy. Auto starts on High (Medium above 6 M device pixels), steps down one level after 3 s under 45 fps in a match, never steps up within a session, and remembers the level | M1c, 2026-10-01 |
+| Key remapping | Every keyboard action except Esc is rebindable; taking another action's primary key swaps the two, so no action is left unbound | M1c, 2026-10-01 |
 | Aircraft models | The owner's 3D models (generated with Tripo, inspired by the F-35A and the Su-57) replace the generated models of the Kestrel and the Kobchik. Names and specifications stay fictional; an aircraft without a model file keeps the generated model | Owner request, 2026-10-01 |
 
 ## 3. Goals and non-goals
@@ -527,6 +533,7 @@ All modes implement `GameMode`: setup, per-tick update, scoring on events, spawn
 | **Air Superiority** | Three capture zones (cylinders, 4 km radius, 1–7 km altitude) along the front. A zone's capture progress moves toward the team with more aircraft inside (rate ∝ numeric advantage, 10 s to capture with +1). Each owned zone gives +1 point every 2 s. First to 300 or most after 12 min | M5 |
 | **Team Objective** | Each team protects two AI-flown high-value "Sentinel" radar aircraft (slow, 400 HP) orbiting behind its lines. Destroying one gives +20 and cuts the enemy team's datalink for 60 s; kills give +1; destroyed Sentinels return after 120 s. First to 60 or most after 15 min | M5 |
 | **Strike** | Russia must destroy two of three ground targets; the USA must hold them for 8 min. 4 aircraft per team. Details in §13.1 | M1d (vs AI) |
+| **Training** | A guided first flight in four lessons; no score, cannot be lost. Details in §13.2 | M1c |
 
 **Spawning:** airborne at the team's spawn line (5,000 m, 250 m/s, facing the front) or, from M4, at the team's airfield
 on the runway, as the player chooses. Strike uses its own spawn points (§12.2).
@@ -552,6 +559,22 @@ and the player's jet decides the side: the Kestrel defends for the USA, the Kobc
 - **Ordnance:** bombs released before the attacker died still count; impacts after the match ends do not.
 - **Mode status** (for the HUD and the end screen): time left, each target's HP, aircraft left per team, the winner,
   and the reason (targets destroyed, targets held, or a team out of aircraft).
+
+### 13.2 Training (M1c)
+
+- **Lessons:**
+  1. **Fly:** three rings (250 m pass radius) 3.5, 7 and 10.5 km ahead of the jet in a gentle climbing S-turn.
+  2. **Gun:** a drone 1.5 km ahead flying a 6 km orbit at 170 m/s; destroy it.
+  3. **Missile:** a drone 4 km ahead (7 km orbit, 180 m/s); destroy it.
+  4. **Defend:** a drone 3 km behind fires one short-range missile 1.5 s into the lesson; the lesson passes once the
+     missile is gone and the player has stayed alive for 1 s more.
+- **Drones** are enemy-team aircraft flown by a drone pilot: a level right-hand orbit, constant speed (idle and
+  airbrake when fast), no weapons, no evasion.
+- **Restarts:** being shot down restarts the current lesson after the 3 s respawn; a drone more than 15 km from the
+  player also restarts it. Each lesson refills the player's hit points and stores.
+- **End:** after the fourth lesson the player's team is the winner; the end screen offers a dogfight next.
+- **HUD:** a lesson panel under the heading tape names the player's own keys (or pad buttons); the next ring is a
+  glowing hoop with a HUD marker or edge arrow.
 
 ## 14. AI
 
@@ -655,7 +678,14 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 - **Mouse-aim (default):** the mouse sets an aim direction and `steerToward` flies the jet there; the keyboard adds on top.
 - **Keyboard direct:** W/S pitch (W = nose down), A/D roll, Q/E yaw, with input ramping over 0.15 s. Arrow keys also
   pitch and roll.
-- **Gamepad and flight stick:** the browser Gamepad API with the standard mapping and axis calibration (M1c).
+- **Gamepad and flight stick (M1c):** the browser Gamepad API.
+  - Standard layout: left stick pitch/roll (push = nose down), right stick look, LB/RB rudder, LT/RT throttle
+    down/up, X cannon (hold), A missile, B flares, Y next target, D-pad down bomb, D-pad up airbrake (hold), Start
+    pause, Back scores (hold).
+  - Other devices (flight sticks): assignable roll, pitch, rudder and throttle axes with invert flags and assignable
+    buttons; calibration records each axis's travel and rest position (levers use mid-travel); 0.08 dead zone.
+  - Stick input overrides the mouse aim like the keyboard; in mouse-aim mode the aim follows the nose while the pad
+    stick is deflected, so letting go holds the heading.
 - No `Ctrl` bindings: browsers reserve shortcuts such as `Ctrl+W`, which would close the tab mid-flight.
 
 | Key | Action |
@@ -713,7 +743,10 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 - **Other screens:** loading, pause/settings, death/respawn (killer, weapon, countdown, aircraft change), match end.
   - In Strike the match-end screen leads with the reason (`TARGETS HELD`, `TARGETS DESTROYED`, `RUSSIA OUT OF
     AIRCRAFT` or `USA OUT OF AIRCRAFT`) and lists the targets destroyed above the per-pilot table.
-- **Settings** persist in `localStorage` (try/catch, defaults if unavailable).
+- **Settings** persist in `localStorage` (try/catch, defaults if unavailable). The settings screen (M1c), from the
+  title screen and the pause menu, has five tabs: Controls (steering, mouse sensitivity 25–300%, invert), Keys
+  (rebinding), Gamepad (status, assignments, calibration), Display (graphics, HUD color green/amber/white, HUD size
+  80–140%, reduce camera shake) and Sound (on/off, master volume).
 - **Audio:** WebAudio-synthesized, no asset files.
   - Engine and afterburner, wind, cannons.
   - SRM growl and lock tone, radar lock warning, missile warning, explosions and hits.
