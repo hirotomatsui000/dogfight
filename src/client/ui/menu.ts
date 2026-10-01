@@ -51,10 +51,6 @@ const MISSIONS: readonly { value: FlyMission; label: string }[] = [
   { value: 'team-objective', label: 'Team Objective' },
   { value: 'strike', label: 'Strike' },
 ];
-/** The mission names the online sheet uses for a new room. */
-export function missionLabel(m: MissionId): string {
-  return MISSIONS.find((x) => x.value === m)?.label ?? (m === 'free-flight' ? 'Free Flight' : 'Dogfight');
-}
 /** Pilots per side offline (M5). */
 export const TEAM_SIZES = ['1', '2', '4'] as const;
 type TeamSizeChoice = (typeof TEAM_SIZES)[number];
@@ -438,7 +434,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
 
   const sheet = controlsSheet(settings);
   const invitedRoom = new URLSearchParams(location.search).get('room');
-  const online = onlineSheet(invitedRoom ?? 'public', () => missionLabel(mission), (room) => start(mission, { room }));
+  const online = onlineSheet(invitedRoom ?? 'public', () => mission, (room, mode) => start(mode, { room }));
   screen.append(form, sheet, online);
 
   const start = (mission: MissionId, onlineRoom?: { room: string }) => {

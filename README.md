@@ -4,8 +4,32 @@ A browser-based flight-combat prototype. Two teams, **USA** and **Russia**, fly 
 real aircraft over a fictional landscape inspired by Poland. This repository is being built in milestones (see
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
-**Current milestone: M4 "World"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
-"Multiplayer" and M3 "Roster & weapons")
+**Current milestone: M5 "Modes & polish"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
+"Multiplayer", M3 "Roster & weapons" and M4 "World")
+- **Four modes, offline and online**:
+  - **Dogfight** (Team Deathmatch): first to 15, or the most after 10 minutes.
+  - **Air Superiority**: three zones (A, B, C) on the front, each a cylinder 4 km across from 1,000 to 7,000 m. The
+    side with more jets inside takes a zone; each zone you own scores a point every 2 s. First to 300.
+  - **Team Objective**: each side guards two slow **Sentinel** radar planes flown by the game. Shooting one down is
+    worth 20 points and takes the other side's datalink down for 60 s; it comes back after 2 minutes. Every fighter
+    shot down is worth a point. First to 60.
+  - **Free Flight**: no enemies. From the pause menu set the time of day, the clock and the weather, and (offline)
+    call up target drones; on the map (M) click anywhere to fly from there, or on an airfield to start on its runway.
+  - Strike and the Training flight are still there.
+- **Pilots per side** (1, 2 or 4): your AI wingmen against as many AI pilots.
+- **Team datalink**: you also see the enemies your teammates have on radar, drawn hollow on the radar display and the
+  map (they cannot be locked).
+- **While you wait to respawn**: a kill cam on whoever shot you down, then spectating (A / D to switch pilots), and
+  Q / E to pick a different jet for the next life.
+- **Contrails** above 8 km, **wingtip vapour** above 5 G, jets that burn when badly hit, and wrecks that fall in flames.
+- **Fuller sound**: explosions and nearby jets heard from where they are (with a Doppler shift as they pass), missiles
+  going by, a stall horn, a pull-up tone, runway rumble, rain, and chimes for kills, zones and Sentinels.
+- **End-of-match summary**: damage per pilot, how the zones or Sentinels ended up, and your own flight (kills,
+  missiles fired and hit, gun hits, damage, top speed, max G, time in the air).
+- **Accessibility**: reduce motion (also softens the G blackout and holds the kill cam still), reduce flashing (steady
+  warnings, no strobes) and a colour-blind safe team colour pair, besides the HUD colour and size.
+
+Earlier milestones:
 - **Lechovia**, a fictional 200 × 200 km country inspired by Poland: a Baltic-style coast with a lagoon and a sand
   spit, a lake district, two rivers falling from the southern mountains (peaks of about 2,400 m) to the sea, eastern
   forests and marshes, five cities and some sixty villages with invented names, roads, and four air bases. The map is
@@ -22,22 +46,23 @@ real aircraft over a fictional landscape inspired by Poland. This repository is 
 - The medium-range radar missile **Lance** (key 2) with radar locks, chaff, and a RADAR LOCK warning when an enemy
   radar locks on to you. AI pilots fly a mix of jets and use Lances beyond Dart range.
 - Balanced by a bot tournament: every USA jet against every Russian jet, Ace against Ace, within 35–65% wins.
-- **Online play** through a small Node.js game server: rooms of up to 16 pilots, bots in the empty seats, Dogfight
-  or Strike, invite links, quick chat, and automatic reconnects. The server is the referee; your own jet is predicted
-  so it answers the stick at once, and everyone else is drawn smoothly about 0.1 s in the past.
+- **Online play** through a small Node.js game server: rooms of up to 16 pilots, bots in the empty seats, any mode,
+  invite links, quick chat, and automatic reconnects. The server is the referee; your own jet is predicted so it
+  answers the stick at once, and everyone else is drawn smoothly about 0.1 s in the past.
 - A **training flight** (about 3 minutes): fly through rings, gun a drone, lock and fire a missile, beat a missile.
 - **Settings**: volume, mouse sensitivity and invert, rebindable keys, gamepad and flight-stick setup, HUD color and
-  size, graphics (Auto, Low, Medium, High) and camera shake.
+  size, graphics (Auto, Low, Medium, High) and the accessibility options.
 - **Gamepads and flight sticks** through the browser's Gamepad API.
-- Dogfight an AI pilot (Rookie, Veteran or Ace) in Team Deathmatch: first to 15 kills, or the most after 10 minutes.
-- **Strike** mode: Russia bombs three fictional targets while the USA holds them for 9 minutes; 4 aircraft per team.
+- AI pilots at three skills (Rookie, Veteran, Ace).
+- **Strike** mode: Russia bombs three fictional targets while the USA holds them for 9 minutes; 4 aircraft per pilot
+  per team.
 - Weapons: a cannon with a lead marker, heat-seeking (Dart) and radar (Lance) missiles that need a lock, and flares
   with chaff.
 - Damage, kill credit and respawns; tracers, missile trails, flares, explosions and smoke; synthesized sound.
 - A combat HUD with target box, missile lock, missile warning, radar display, kill feed and scoreboard.
 - A third-person camera that follows your jet, and a title screen over a live 3D view of the jet you pick.
 - Sim-lite flight physics over Lechovia, or the original 60 × 60 km test range (Strike and Training fly there);
-  satellite-photo scenery; Free Flight is still available.
+  satellite-photo scenery.
 - Offline play runs entirely in the browser; online play needs the game server (below).
 
 ## Requirements
@@ -52,9 +77,10 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. New pilots start with **Training**. Otherwise pick a mission (Dogfight or Strike), an
-aircraft and an opponent, the **World** (map, air or runway start, time of day, whether the clock runs, weather), and
-press **FLY** (or **Free flight** to fly without enemies). **Controls** lists the keys;
+Open http://localhost:5173. New pilots start with **Training**. Otherwise pick a mission (Dogfight, Air Superiority,
+Team Objective or Strike), an aircraft, the opponents' skill and how many pilots fly on each side, the **World** (map,
+air or runway start, time of day, whether the clock runs, weather), and press **FLY** (or **Free flight** to fly without
+enemies). **Controls** lists the keys;
 **Settings** changes them, the mouse, the gamepad, the HUD, the graphics and the sound (also from the pause menu).
 Click the view to capture the mouse, then fly with the mouse.
 
@@ -70,9 +96,11 @@ npm start
 `npm start` runs the game server: it serves the built site from `dist/`, the game connection at `/ws`, and prints the
 addresses to open, one for this machine and one for each network (for friends on the same Wi-Fi). Open one, press
 **ONLINE** next to FLY, and **Join room** (or **Quick play**). Everyone in a room shares one sky; bots fly the empty
-seats. Your jet picks your team, and a new room plays the Mission and the World chosen on the title screen by the
-pilot who opens it (map, time of day, clock and weather; Strike rooms fly on the test range). Each pilot still picks
-an air or runway start. **Copy invite link** gives
+seats. Your jet picks your team. The pilot who opens a room fixes its mode (**New room plays** on the ONLINE sheet:
+Dogfight, Air Superiority, Team Objective, Free Flight or Strike; the title screen's Mission by default) and the World
+chosen on the title screen (map, time of day, clock and weather; Strike rooms fly on the test range). Each pilot still
+picks an air or runway start. Free Flight rooms have no bots and no weapons; anyone in one can change its time of day
+and weather from the pause menu, and fly from anywhere by clicking the map. **Copy invite link** gives
 a link like `http://192.168.1.20:8080/?room=friday` that drops a friend into the same room. Keys **7**, **8**, **9**
 and **0** send quick-chat lines. The match never pauses online: the pause menu only covers the screen.
 
@@ -128,6 +156,8 @@ test pilots who join a room, fly for 15 seconds, see each other and swap a chat 
 | Map | M |
 | Wheel brakes on the runway | B (hold) |
 | Pause / settings | P or Esc |
+| While waiting to respawn: watch another pilot · pick the next jet | A / D · Q / E |
+| Free Flight: fly from a point of the map | M, then click the map |
 
 Every key except Esc can be changed in **Settings → Keys**.
 
@@ -145,6 +175,7 @@ A pad with the standard layout (Xbox, PlayStation and most others) works straigh
 | D-pad ↓ / ↑ | Bomb · airbrake (hold) |
 | D-pad ← / → | Select Dart / Lance |
 | Start · Back | Pause · scores (hold) |
+| While waiting to respawn | Left stick ← / → watch another pilot · LB / RB pick the next jet |
 
 Flight sticks and other devices: open **Settings → Gamepad**, assign the roll, pitch, rudder and throttle axes and the
 buttons (move or press each one), then **Calibrate**.
@@ -172,6 +203,24 @@ In Strike (choose **Strike** under Mission on the title screen):
   crosses the target (RELEASE flashes). Three good hits destroy a target.
 - Each side has 4 aircraft. Losing the fourth loses the match.
 
+In Air Superiority:
+- Zones A, B and C sit on the front between the two sides, each a cylinder 4 km across from 1,000 to 7,000 m; the HUD
+  marks them with a hexagon and shows them under the score.
+- Fly into a zone with more of your side than theirs to take it: 10 s from neutral with one jet more, faster with
+  more. An enemy zone must first be neutralized. A tie, or nobody inside, holds it as it is.
+- Each zone you own scores a point every 2 s. Kills score nothing, but they empty the zone.
+
+In Team Objective:
+- Your two Sentinels (ringed markers) orbit far behind your side; theirs orbit behind theirs. Sentinels carry a radar
+  that sees the whole front, so while yours fly your datalink shows enemies far away (hollow marks).
+- Shoot down an enemy Sentinel (400 hit points, it runs from fighters and drops flares): +20, and their datalink fails
+  for 60 s. It comes back after 2 minutes. Every fighter shot down is worth 1.
+
+In Free Flight:
+- Pause (P) to change the time of day, the clock and the weather, or to call up four target drones that circle round
+  you and never shoot back (offline).
+- Press M and click the map to fly from that point, 1.5 km above the ground; click an airfield to start on its runway.
+
 On the runway (*Runway start*):
 - The jet rolls at full military power. Hold Shift for afterburner if you like.
 - At about 170 kt (310 km/h) pull up: move the mouse up, or hold S. The nose lifts and the jet flies off.
@@ -197,7 +246,8 @@ jet, Ace bots, 100 seeded duels each, and fails if a pairing wins outside 35–6
 `TOURNAMENT=1 npm test` runs the same check inside the test suite (a minute or two).
 
 `npm run smoke` checks a running game server (default http://localhost:8080) with two test pilots; see
-[Run the server with Docker](#run-the-server-with-docker).
+[Run the server with Docker](#run-the-server-with-docker). Add `-- --mode=air-superiority` (or `team-objective`,
+`free-flight`, `strike`) to check a room of another mode.
 
 ## Publish as a website
 
@@ -206,7 +256,7 @@ npm run build:single
 ```
 
 This writes `dist-single/index.html`: the whole game, including the scenery photos and the jet models, in one
-self-contained file (about 5.5 MB), plus the social-preview image `og-image.jpg` and the icon `icon-180.png` that
+self-contained file (about 5.4 MB), plus the social-preview image `og-image.jpg` and the icon `icon-180.png` that
 other sites and phones fetch. For link previews on social sites, build with the site's address:
 `SITE_URL=https://your-site.netlify.app npm run build:single`.
 

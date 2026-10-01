@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 11)
+# Contested Skies — Design Spec (revision 12)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -30,6 +30,11 @@
     computed sky that follows the time of day and the weather. Runway starts are the player's choice; bots start in
     the air; there is still no landing. Protocol 3 carries the room's map, weather and clock. Plan:
     `docs/superpowers/plans/2026-10-01-m4-world.md`.
+  - Revision 12 (2026-10-01): milestone M5 "Modes & polish" as built (§2, §7, §10.3, §13, §14, §15, §19, §20, §24). Air
+    Superiority, Team Objective (with AI-flown Sentinels and a team datalink) and Free Flight extras, offline and
+    online (protocol 4); pilots per side offline; kill cam, spectating and a jet change while waiting to respawn;
+    contrails, wingtip vapour, burning damage and falling wrecks; positional sound; an end-of-match summary; reduce
+    flashing and colour-blind team colours. Plan: `docs/superpowers/plans/2026-10-01-m5-modes-polish.md`.
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -81,6 +86,11 @@ A browser-based, online multiplayer flight-combat simulator prototype.
 | Maps per mode | Dogfight and Free Flight fly over Lechovia by default (the Test Range stays selectable); Strike and Training keep the Test Range they were laid out and balanced on | M4, 2026-10-01 |
 | Sky | A computed (Preetham) sky, sun, moon and stars replace the sky photo, which could show only one hour in one weather; the satellite-photo ground stays | M4, 2026-10-01 |
 | Runway starts | A per-pilot choice (title screen: Air or Runway start); bots always start in the air; the gear retracts by itself and touching the ground with it up is a crash (no landing, §23) | M4, 2026-10-01 |
+| Zone capture | A zone's progress runs −1 (Russia) … +1 (USA) and moves toward the side with more aircraft inside at advantage / 10 s; a side owns it at its end of the scale and loses it when pushed back past 0. Only zones score in Air Superiority | M5, 2026-10-01 |
+| Team Objective scoring | Every death of a fighter gives the other team +1 (as in Team Deathmatch); a Sentinel +20 | M5, 2026-10-01 |
+| Datalink | Built in M5: each pilot sees the enemies on teammates' radar, drawn hollow, never lockable. Sentinels carry a 150 km all-round radar, so they feed it | M5, 2026-10-01 |
+| Offline team size | "Pilots per side" 1, 2 or 4 on the title screen: AI wingmen against as many AI pilots; Strike scales to 4 aircraft per pilot per team | M5, 2026-10-01 |
+| Free Flight online | No bots, no weapons, no drones; anyone in the room changes its weather and clock; "fly from here" on the map. Target drones are offline only | M5, 2026-10-01 |
 
 ## 3. Goals and non-goals
 
@@ -244,9 +254,13 @@ Tests are colocated as `*.test.ts`.
   - The first join creates a room and fixes its mode, map and bot settings.
   - 16 humans per room and 20 rooms per process (configurable).
   - Bots fill each team to a configurable size (default 4). Callsigns are sanitized and bots are prefixed `[BOT]`.
-  - A pilot's jet sets their team (Kestrel: USA, Kobchik: Russia). A new room plays the Mission chosen on the title
-    screen (Dogfight, or Strike with 4 aircraft per pilot per team); a finished match restarts by itself after a short
-    results screen.
+  - A pilot's jet sets their team (Kestrel: USA, Kobchik: Russia). A new room plays the mode its first pilot picks on
+    the ONLINE sheet (M5: Dogfight, Air Superiority, Team Objective, Free Flight, or Strike with 4 aircraft per pilot
+    per team); a finished match restarts by itself after a short results screen.
+  - Protocol 4 (M5): the client may send `jet` (the next aircraft), and in Free Flight `world` (weather, the hour now,
+    clock) and `flyFrom` (a map point), together at most 8 a second; the server answers a sky change with
+    `environment` to the whole room. The own snapshot section lists the datalink contacts. Sentinels are not
+    seat-filling bots; Free Flight rooms have no bots.
 - **Validation:** clamp all input values; cap message sizes (binary 64 B, JSON 2 KB) and rates (120 inputs/s).
   Three protocol violations within 10 s → disconnect. A disconnect affects only that player.
 - **Bandwidth:** ≤ 50 KB/s down and ≤ 1 KB/s up per client with 32 jets.
@@ -450,7 +464,9 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
 - **Radar** (scans at 5 Hz):
   - Detects aircraft inside the radar cone within `radarRange × (1 − 0.7·targetStealth)`.
   - Contacts appear on the radar display. Teammates' radar contacts are shared via team datalink (shown distinctly,
-    and not lockable).
+    and not lockable). As built (M5): every scan, each team's radar contacts are pooled; a pilot's datalink list holds
+    those it does not detect itself. They show as hollow diamonds on the radar display and the HUD and as hollow
+    markers on the map. Team Objective can take a team's datalink down.
 - **Designation:** the target-cycle key cycles through spotted and radar contacts ahead, sorted by angle and range.
   The designated target gets the target box and the target-info readout (type, range, closure, aspect).
   - When nothing is designated, the contact closest to the nose (within 60°) is designated automatically at each
@@ -609,8 +625,8 @@ All modes implement `GameMode`: setup, per-tick update, scoring on events, spawn
 |---|---|---|
 | **Free Flight** | No scoring or enemies (optional passive AI targets); spawn anywhere; time-of-day and weather controls | M1 |
 | **Team Deathmatch** | +1 per enemy kill; each death of a team's aircraft gives the other team +1; first to 15 or most after 10 min | M1 (vs AI), M2 (online) |
-| **Air Superiority** | Three capture zones (cylinders, 4 km radius, 1–7 km altitude) along the front. A zone's capture progress moves toward the team with more aircraft inside (rate ∝ numeric advantage, 10 s to capture with +1). Each owned zone gives +1 point every 2 s. First to 300 or most after 12 min | M5 |
-| **Team Objective** | Each team protects two AI-flown high-value "Sentinel" radar aircraft (slow, 400 HP) orbiting behind its lines. Destroying one gives +20 and cuts the enemy team's datalink for 60 s; kills give +1; destroyed Sentinels return after 120 s. First to 60 or most after 15 min | M5 |
+| **Air Superiority** | Three capture zones (cylinders, 4 km radius, 1–7 km altitude) along the front. A zone's capture progress moves toward the team with more aircraft inside (rate ∝ numeric advantage, 10 s to capture with +1). Each owned zone gives +1 point every 2 s. First to 300 or most after 12 min. Details in §13.3 | M5 |
+| **Team Objective** | Each team protects two AI-flown high-value "Sentinel" radar aircraft (slow, 400 HP) orbiting behind its lines. Destroying one gives +20 and cuts the enemy team's datalink for 60 s; kills give +1; destroyed Sentinels return after 120 s. First to 60 or most after 15 min. Details in §13.4 | M5 |
 | **Strike** | Russia must destroy two of three ground targets; the USA must hold them for 9 min. 4 aircraft per team. Details in §13.1 | M1d (vs AI) |
 | **Training** | A guided first flight in four lessons; no score, cannot be lost. Details in §13.2 | M1c |
 
@@ -659,6 +675,45 @@ and the player's jet decides the side: the Kestrel defends for the USA, the Kobc
 - **HUD:** a lesson panel under the heading tape names the player's own keys (or pad buttons); the next ring is a
   glowing hoop with a HUD marker or edge arrow.
 
+### 13.3 Air Superiority (M5, as built)
+
+- **Zones:** A, B and C on the front, the perpendicular bisector of the two spawn points: B midway between the spawns,
+  A and C 0.4 × the combat radius (at most 20 km) either side. On Lechovia: 20 km north and south of the capital.
+- **Capture:** progress −1 (Russia) … +1 (USA) moves at (aircraft of the USA inside − Russia's inside) / 10 s. A side
+  owns a zone when progress reaches its end, and loses it when the other side pushes progress back past 0 (taking an
+  enemy zone with +1 takes 20 s). A tie or an empty zone holds. Sentinels and dead aircraft do not count.
+- **Scoring:** every 2 s from the first tick, +1 per owned zone. Kills score nothing. First to 300, or the higher score
+  after 12 minutes (equal: a draw).
+- **Events:** `zone` (captured or neutralized) for banners, the kill feed and sound.
+- **HUD:** a zone strip under the score (boxes filled by owner, a bar of progress toward your side); hexagonal markers
+  with the zone letter, range and a progress arc, edge arrows for zones you do not own; inside a zone, CAPTURING /
+  NEUTRALIZING n%, HOLDING, CONTESTED or OUTNUMBERED.
+
+### 13.4 Team Objective (M5, as built)
+
+- **Sentinels:** two per team, 0.6 × the combat radius behind the front on the team's side and a quarter radius either
+  side of its axis, orbiting (radius 0.15 × the combat radius, at most 8 km) at 7,000 m and 150 m/s. A fictional
+  four-engine radar aircraft: 60 t, 400 HP, a 16 m hit radius, a 150 km all-round radar, 60 countermeasure salvos, no
+  weapons; never offered to pilots or bots and outside the balance tournament.
+- **Sentinel pilot:** flies its orbit; turns away from the nearest enemy fighter within 18 km at full power and its
+  orbit height (keeping inside 0.8 × the combat radius); releases countermeasures when a missile is under 3 s away.
+- **Scoring:** a Sentinel shot down gives the other team +20 and takes its own team's datalink down for 60 s; it
+  returns at its orbit after 120 s. Every death of a fighter gives the other team +1. First to 60, or the higher
+  score after 15 minutes.
+- **HUD:** SENTINELS n : n and the datalink state under the score; ringed Sentinel markers with an HP bar (yours
+  always, the enemy's while known), banners and sounds when one goes down.
+
+### 13.5 Free Flight extras (M5, as built)
+
+- **Sky:** the pause menu sets the time of day (Dawn, Day, Dusk, Night), the clock and the weather; the World winds its
+  start hour back so the chosen hour holds now, rebuilds its clouds, and the client rebuilds its sky. Online, the
+  change applies to the whole room.
+- **Fly from here:** on the map screen a click flies the jet from that point (inside 0.9 × the combat area, at least
+  2,000 m and 1,500 m above the ground, heading for the middle), or from the runway when the click is within 2.5 km
+  of an airfield.
+- **Target drones (offline):** four unarmed enemy jets on orbits 6 km round the player; a drone shot down is cleared
+  after 2 s and replaced after 10 s; they follow the player to a new spawn. Weapons work only while they fly.
+
 ## 14. AI
 
 - **`BotPilot`** (shared, pure) maps a perception to a `ControlInput`, the same interface humans use, so bots obey the
@@ -695,7 +750,12 @@ and the player's jet decides the side: the Kestrel defends for the USA, the Kobc
 | Bomb impact error, RMS miss distance (Strike) | 35 m | 18 m | 6 m |
 
 - **Mode-specific AI:** Sentinel aircraft (Team Objective) fly orbits and flee threats; bots contest zones in Air
-  Superiority.
+  Superiority. As built (M5): a mode gives each bot a goal. In Air Superiority it is a zone its side does not own (or
+  one the enemy is in), spread over the candidates by bot id, circled at 4,000 m inside the zone; in Team Objective
+  two bots in three hunt the nearest enemy Sentinel and one escorts its own. With a goal, a bot fights enemy fighters
+  only within 12 km of itself and near the goal (within its radius + 4 km) or on its tail within 2.5 km; an enemy
+  Sentinel within 25 km comes first, and the bot steps its designation onto it. Otherwise it flies to the goal and
+  circles there. Over 4v4 bot matches on Lechovia both modes run to a close finish.
 - **Strike attacker (Russia, M1d):** priorities 1–3 above stay first. Then:
   4. **Self-defense:** fight the defender (as in Engage) when it is within 600 m and within 60° of the bot's tail.
      Farther out the bot presses the run: bot-vs-bot turning fights rarely end in a kill, so fighting from 3 km (the
@@ -729,6 +789,10 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   The look direction also aims the helmet sight.
 - **Shake:** trauma-based noise from G > 6, the transonic buffet band, afterburner, cannon fire, hits and nearby
   explosions. It decays over time, and a "reduce motion" setting scales it.
+- **While waiting to respawn (M5):** a kill cam for 2.5 s: from behind the wreck, looking at the killer with a field of
+  view that frames it (or at the wreck after a crash); it eases onto its shot, or cuts with reduce motion. Then
+  spectating: the chase camera follows a pilot still flying (the killer first, then your team, the enemy, the
+  Sentinels), level with the horizon along its flight path; A / D (or the stick) switch.
 
 ### 15.2 HUD (Canvas 2D, clean green; amber/white option)
 
@@ -754,7 +818,10 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
     joined to the flight-path marker by a fall line. `RELEASE` flashes while it lies within a target's 30 m radius.
   - **Defender:** banners `TARGET B UNDER ATTACK` (when a target is hit, at most once per 3 s per target) and
     `TARGET B DESTROYED`; the kill feed also records destroyed targets.
-- **G effects:** blackout vignette when > 7 G is sustained for more than 2 s; red tint below −2.5 G.
+- **G effects:** blackout vignette when > 7 G is sustained for more than 2 s; red tint below −2.5 G (a third as strong
+  with reduce motion, M5).
+- **M5:** the zone strip and markers (§13.3), Sentinel markers and the datalink state (§13.4), hollow datalink
+  contacts; the respawn screen names the killer (jet and hit points left), who you watch, and the next jet.
 
 ### 15.3 Controls
 
@@ -814,6 +881,12 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   - Atmosphere: haze and height fog with aerial perspective; cloud layers.
   - Effects: contrails above 8 km, wingtip vapor above 5 G, refined explosions and missile smoke.
   - Night lighting.
+- **M5, as built:** one ribbon-trail system (camera-facing quads, one draw call per kind) for contrails from every
+  engine above 8 km (fading in from 7.6 km, 40 s life, spreading to 28 m) and wingtip vapour above 5 G (from 4.5 G,
+  0.8 s); online jets' load factor is estimated from how their velocity turns. Critically damaged jets burn at the
+  engines and a wing root with thick black smoke. A jet shot down, collided or lost in the air falls as a tumbling,
+  burning copy of its model and bursts where it meets the ground. The Sentinel has its own model with a turning radar
+  dish.
 - **Budget:** < 400 draw calls and < 2 M triangles per frame.
 
 ### 15.5 UI and audio
@@ -832,8 +905,13 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 - **World row (M4):** map (Lechovia or the Test Range), Air or Runway start, time of day (Dawn, Day, Dusk, Night), a
   "Clock runs" switch and the weather. The scene behind the menu shows the chosen time and weather. Strike and Training
   fix the Test Range and an air start. Online, the pilot who opens a room fixes its map, time, clock and weather.
-- **Later menus:** bot counts and the remaining modes arrive with the features that need them (M5).
+- **Later menus (M5, as built):** Mission offers Dogfight, Air Superiority, Team Objective and Strike, with a line on
+  the chosen mission's rules; "Pilots per side" (1, 2, 4) sits beside the opponent skill. The ONLINE sheet chooses the
+  mode of a new room (Free Flight included).
 - **Other screens:** loading, pause/settings, death/respawn (killer, weapon, countdown, aircraft change), match end.
+  - M5: the match end adds a damage column, a line on the zones or Sentinels, and "Your flight" (kills, deaths,
+    missiles fired and hit, gun hits, damage, top speed, max G, time in the air), all from the events every client
+    receives. In Free Flight the pause menu holds the sky and drone controls.
   - In Strike the match-end screen leads with the reason (`TARGETS HELD`, `TARGETS DESTROYED`, `RUSSIA OUT OF
     AIRCRAFT` or `USA OUT OF AIRCRAFT`) and lists the targets destroyed above the per-pilot table.
 - **Settings** persist in `localStorage` (try/catch, defaults if unavailable). The settings screen (M1c), from the
@@ -845,6 +923,11 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   - SRM growl and lock tone, radar lock warning, missile warning, explosions and hits.
   - Bomb release (a short thump); bomb impacts use the explosion sound, scaled by distance.
   - Master volume.
+  - M5: explosions panned to where they happen; the two nearest jets within 2.5 km and the nearest missile within
+    700 m as positional voices with a Doppler shift; a stall horn, a pull-up tone, runway rumble, rain, the gear
+    motor, a respawn whoosh, a kill chime, zone and Sentinel cues, and a chord at the end of a match.
+  - Settings (M5): Reduce motion (shake, G effects, kill cam), Reduce flashing (steady warnings, no strobes) and Team
+    colours (blue/red or a colour-blind safe blue/orange).
 
 ## 16. Server (M2)
 
@@ -877,9 +960,9 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 |---|---|
 | Client frame | 60 fps at 1080p on a 2020+ laptop; < 400 draw calls; < 2 M triangles |
 | Terrain chunk build (worker, M4) | < 4 ms per chunk (measured 1.9 ms) |
-| World step | < 2 ms with 32 aircraft (server and local) |
+| World step | < 2 ms with 32 aircraft (server and local); M5 measured 0.34–0.50 ms on average with 32 bots (36 aircraft with the Sentinels) on Lechovia |
 | Network per client | ≤ 50 KB/s down, ≤ 1 KB/s up |
-| Initial download | < 5 MB (maps are generated from seeds, not downloaded) |
+| Initial download | < 5 MB (maps are generated from seeds, not downloaded); the single-file build is 5.4 MB in M5, the multi-file build splits it and the browser caches the pieces |
 
 ## 19. Testing strategy
 
@@ -914,7 +997,11 @@ pane at each stage.
   rolling off the airfield crashes; runway starts only where the mode offers them.
 - **Weather and time (M4):** cloud cover per preset within ±8%; clouds block sight lines only inside the layer and hide
   a jet from the eye and the infrared seeker but not radar; the sun's path at 52° N; the clock.
-- **Modes:** scoring, win conditions, zone capture math, Sentinel rules, spawn placement.
+- **Modes:** scoring, win conditions, zone capture math, Sentinel rules, spawn placement. As built (M5): zone layout,
+  capture and neutralizing times, scoring; Sentinels hold their orbit, run from a fighter, score 20, cut the datalink
+  for 60 s and return after 120 s; the datalink and its loss; jet changes at respawn; Free Flight sky changes,
+  fly-from-here and drones; a lone bot takes all three zones; bots on both sides contest zones; bots hunt down a
+  Sentinel; rooms, messages and sessions for every online mode; `npm run smoke -- --mode=…` for each.
 - **Strike (M1d):**
   - Rules: time-out → USA; two targets destroyed → Russia; a team's 4th loss → the other team; the same-tick order of
     §13.1; no respawn without aircraft left; impacts after the match ends are ignored.
@@ -957,7 +1044,7 @@ brief (§11 of the brief: steps 1–11).
 | M2 | **Multiplayer** | 10 | Node server, rooms, protocol and codecs, authoritative World, NetworkSession (prediction, reconciliation, interpolation, clock sync, lag compensation), lobby (team + aircraft), bots fill, LAN URLs, lag simulator; invite links and Quick play; preset quick-chat; callsign filter; page/server version check; error reporting and a health check; one browser smoke test; multi-file site build; Dockerfile for the owner's host | Two tabs plus a second LAN machine fight each other smoothly at `?lag=150`; integration tests green; `docker build`/`run` serves the game |
 | M3 | **Roster & weapons** | 11 | The remaining 6 aircraft (data + parametric models); upgraded model generator (smooth fuselage, canopy glass, panel lines, sky-reflecting paint, team paint schemes); radar/stealth model; MRM "Lance" + chaff; RWR `LOCK` warning; balance tournament | All 8 aircraft selectable; tournament win rates within 35–65% |
 | M4 | **World** | 11 | Lechovia map (terrain LOD in worker, geography, settlements, roads, airfields), runway spawns with ground handling, clouds and weather, day/night cycle; map screen (revision 11) | Take off from a fictional airfield and fight over recognizable Poland-inspired terrain at 60 fps, day and night |
-| M5 | **Modes & polish** | 11 | Air Superiority, Team Objective, Free Flight extras; end-of-match summary; graphics upgrades (contrails, wingtip vapor, damage fire); kill cam, spectating while respawning, changing jets on respawn; full audio; remaining accessibility options; README | All four modes playable online |
+| M5 | **Modes & polish** | 11 | Air Superiority, Team Objective, Free Flight extras; end-of-match summary; graphics upgrades (contrails, wingtip vapor, damage fire); kill cam, spectating while respawning, changing jets on respawn; full audio; remaining accessibility options; README; as built also the team datalink, pilots per side offline and protocol 4 (revision 12) | All four modes playable online |
 
 ## 21. Risks and mitigations
 
@@ -1016,5 +1103,5 @@ its milestone.
 | Joining | An invite link per room, and "Quick play" that joins the busiest room. Bots fill empty seats so one human plus bots is a full match | M2 |
 | Safety | Server authority for all hits (§7); callsign filter; preset quick-chat messages only; rate limits; a short privacy note (no accounts, no tracking) | M2 |
 | Updates | A page/server version check that asks players to reload; browser error reporting; a server health check; one automated browser smoke test (load the site, fly 10 s) before each deploy | M2 |
-| Feedback | Hit markers, kill confirmation and kill feed (M1b); kill cam, spectating while respawning, changing jets on respawn (M5) | M1b, M5 |
-| Accessibility | Team markers that differ in shape as well as color; HUD color and size options; every sound warning also shown as text; reduce-motion also covers G-force effects | M1c, M5 |
+| Feedback | Hit markers, kill confirmation and kill feed (M1b); kill cam, spectating while respawning, changing jets on respawn (M5, built) | M1b, M5 |
+| Accessibility | Team markers that differ in shape as well as color; HUD color and size options; every sound warning also shown as text; reduce-motion also covers G-force effects; reduce flashing and colour-blind team colours (M5, built) | M1c, M5 |

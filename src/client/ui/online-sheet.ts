@@ -1,4 +1,4 @@
-import { DEFAULT_ROOM, sanitizeRoomName } from '../../shared/net/protocol.ts';
+import { DEFAULT_ROOM, ONLINE_MODES, type OnlineModeId, sanitizeRoomName } from '../../shared/net/protocol.ts';
 
 interface RoomInfo {
   name: string;
@@ -36,9 +36,10 @@ export function inviteLink(location: { origin: string; pathname: string }, room:
 
 /**
  * "Play online": choose or type a room, Quick play into the busiest one, or copy an invite link. The room's mode is
- * set by whoever opens it; your jet decides your team.
+ * set by whoever opens it (the mode chosen here, the title screen's Mission by default; M5); your jet decides your
+ * team.
  */
-export function onlineSheet(initialRoom: string, missionLabel: () => string, onJoin: (room: string) => void): HTMLDialogElement {
+export function onlineSheet(initialRoom: string, mission: () => string, onJoin: (room: string, mode: OnlineModeId) => void): HTMLDialogElement {
   const dialog = el('dialog', 'sheet online');
   dialog.setAttribute('aria-labelledby', 'online-title');
   const form = el('form');
@@ -54,6 +55,15 @@ export function onlineSheet(initialRoom: string, missionLabel: () => string, onJ
   roomInput.autocomplete = 'off';
   roomInput.spellcheck = false;
   roomLabel.append(el('span', 'setting-name', 'Room'), roomInput);
+  // The mode a new room plays (M5): every online mode, Free Flight included.
+  const modeLabel = el('label', 'setting-row online-room');
+  const modeSelect = el('select', 'world-select');
+  for (const m of ONLINE_MODES) {
+    const o = el('option', undefined, MODE_LABELS[m]);
+    o.value = m;
+    modeSelect.appendChild(o);
+  }
+  modeLabel.append(el('span', 'setting-name', 'New room plays'), modeSelect);
   const list = el('div', 'room-list');
   const join = el('button', 'button', 'Join room');
   join.type = 'button';
@@ -71,7 +81,7 @@ export function onlineSheet(initialRoom: string, missionLabel: () => string, onJ
   );
   const close = el('button', 'link', 'Close');
   close.value = 'close';
-  form.append(title, status, roomLabel, list, buttons, invite, note, privacy, close);
+  form.append(title, status, roomLabel, modeLabel, list, buttons, invite, note, privacy, close);
   dialog.appendChild(form);
 
   let rooms: RoomInfo[] = [];
@@ -80,7 +90,7 @@ export function onlineSheet(initialRoom: string, missionLabel: () => string, onJ
     quick.disabled = !on;
   };
   const refresh = async () => {
-    note.textContent = `Everyone in a room shares one sky; bots fly the empty seats. A new room plays ${missionLabel()} (your Mission choice); your jet sets your team.`;
+    note.textContent = 'Everyone in a room shares one sky; bots fly the empty seats (none in Free Flight). Joining a room plays its own mode; your jet sets your team.';
     setEnabled(false);
     status.textContent = 'Looking for the game server…';
     list.replaceChildren();
@@ -104,15 +114,18 @@ export function onlineSheet(initialRoom: string, missionLabel: () => string, onJ
     }
   };
   dialog.addEventListener('toggle', () => {
-    if (dialog.open) void refresh();
+    if (!dialog.open) return;
+    modeSelect.value = ONLINE_MODES.find((m) => m === mission()) ?? 'team-deathmatch';
+    void refresh();
   });
+  const chosen = () => ONLINE_MODES.find((m) => m === modeSelect.value) ?? 'team-deathmatch';
   join.addEventListener('click', () => {
     dialog.close();
-    onJoin(sanitizeRoomName(roomInput.value));
+    onJoin(sanitizeRoomName(roomInput.value), chosen());
   });
   quick.addEventListener('click', () => {
     dialog.close();
-    onJoin(quickPlayRoom(rooms));
+    onJoin(quickPlayRoom(rooms), chosen());
   });
   invite.addEventListener('click', () => {
     const link = inviteLink(location, roomInput.value);
