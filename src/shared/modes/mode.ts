@@ -1,7 +1,7 @@
 import type { TeamId } from '../data/aircraft/types.ts';
 import type { GroundTargetSpec, MapDefinition, SpawnSpec } from '../data/maps/map-definition.ts';
 import type { AircraftEntity } from '../world/entities.ts';
-import type { DeathCause } from '../world/events.ts';
+import type { DeathCause, GameEvent } from '../world/events.ts';
 import type { GroundTarget } from '../world/ground-targets.ts';
 import type { Missile } from '../weapons/missile.ts';
 
@@ -37,6 +37,41 @@ export interface TrainingStatus {
 
 export type TrainingStepId = 'fly' | 'gun' | 'missile' | 'defend' | 'done';
 
+/** An Air Superiority capture zone (spec §13, M5): a vertical cylinder. */
+export interface ZoneSpec {
+  id: string;
+  x: number;
+  z: number;
+  radiusM: number;
+  floorM: number;
+  ceilingM: number;
+}
+
+export interface ZoneStatus extends ZoneSpec {
+  /** −1 Russia … +1 USA; a side owns the zone once it reaches its end */
+  progress: number;
+  owner: TeamId | null;
+  /** living aircraft of each side inside the zone */
+  inside: Record<TeamId, number>;
+}
+
+/** A Team Objective Sentinel for the HUD (spec §13, M5). */
+export interface SentinelStatus {
+  id: number;
+  team: TeamId;
+  alive: boolean;
+  /** seconds until it returns, while destroyed */
+  returnInS: number | null;
+}
+
+export interface ObjectiveStatus {
+  sentinels: SentinelStatus[];
+  /** seconds each team's datalink stays down (0 = up) */
+  datalinkDownS: Record<TeamId, number>;
+  /** enemy Sentinels each team has destroyed */
+  sentinelsDestroyed: Record<TeamId, number>;
+}
+
 export interface ModeStatus {
   modeId: ModeId;
   label: string;
@@ -45,6 +80,12 @@ export interface ModeStatus {
   winner: TeamId | 'draw' | null;
   strike?: StrikeStatus;
   training?: TrainingStatus;
+  /** Air Superiority (M5) */
+  zones?: ZoneStatus[];
+  /** Team Objective (M5) */
+  objective?: ObjectiveStatus;
+  /** Free Flight (M5): target drones are flying */
+  drones?: boolean;
 }
 
 /** The part of the World a mode may read. Keeps modes independent of World internals. */
@@ -53,6 +94,26 @@ export interface ModeContext {
   readonly tickRate: number;
   aircraftList(): Iterable<AircraftEntity>;
   groundTargetList(): readonly GroundTarget[];
+  /** game events for the clients (zone captures); the World provides it, unit tests may leave it out */
+  emit?(event: GameEvent): void;
+}
+
+/** A mode-flown support aircraft (Team Objective's Sentinels, M5): it orbits, never fights and returns after a delay. */
+export interface SupportSpec {
+  team: TeamId;
+  aircraftId: string;
+  callsign: string;
+  orbit: { x: number; z: number; radiusM: number; altitudeM: number; speedMs: number };
+  respawnDelayS: number;
+}
+
+/** Where a bot should be when it has nothing to fight (M5): a point to fly to and circle at. */
+export interface BotGoal {
+  x: number;
+  z: number;
+  altitudeM: number;
+  /** circle within this radius once there */
+  radiusM: number;
 }
 
 /** A target drone flying a level right-hand orbit that starts at (x, z) along `headingRad`. */
@@ -82,8 +143,17 @@ export interface ModeDirector extends ModeContext {
 
 export interface GameMode {
   readonly id: ModeId;
+  /** weapons and sensors run (Free Flight turns them on only while target drones fly) */
   readonly combatEnabled: boolean;
   readonly respawnDelayS: number;
+  /** Called once by the World before anything else, with the map the match flies on. */
+  prepare?(map: MapDefinition): void;
+  /** Aircraft the mode itself flies, added when the World starts (Team Objective's Sentinels). */
+  supportAircraft?(map: MapDefinition): readonly SupportSpec[];
+  /** Where a bot goes when it has nothing within reach to fight (Air Superiority zones, Sentinels); null = patrol. */
+  botGoal?(ctx: ModeContext, bot: AircraftEntity): BotGoal | null;
+  /** False while a team's datalink is down (Team Objective); up when left out. */
+  datalinkUp?(team: TeamId): boolean;
   /** Pilots who ask for it start on their team's runway (M4); others always start in the air. */
   readonly runwayStarts?: boolean;
   /** Where a team spawns; most modes use the map's spawn lines. */

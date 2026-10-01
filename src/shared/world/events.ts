@@ -1,3 +1,4 @@
+import type { TeamId } from '../data/aircraft/types.ts';
 import type { MissileKind } from '../data/weapons.ts';
 
 export type DeathCause = 'crash' | 'collision' | 'boundary' | 'cannon' | 'missile';
@@ -14,4 +15,6 @@ export type GameEvent =
   | { type: 'bombReleased'; bombId: number; aircraftId: number }
   | { type: 'bombImpact'; bombId: number; x: number; y: number; z: number }
   | { type: 'targetHit'; targetId: string; attackerId: number | null; damage: number }
-  | { type: 'targetDestroyed'; targetId: string; attackerId: number | null };
+  | { type: 'targetDestroyed'; targetId: string; attackerId: number | null }
+  /** an Air Superiority zone changed hands (M5): captured by `owner`, or neutralized (owner null) from `previous` */
+  | { type: 'zone'; zoneId: string; owner: TeamId | null; previous: TeamId | null };

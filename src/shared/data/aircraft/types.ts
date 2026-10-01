@@ -107,4 +107,6 @@ export interface AircraftConfig {
   visual: AircraftVisual;
   hudUnits: UnitSystem;
   performance: PerformanceTargets;
+  /** a support aircraft the mode flies (Team Objective's Sentinel, M5): never offered to pilots or bots */
+  support?: boolean;
 }

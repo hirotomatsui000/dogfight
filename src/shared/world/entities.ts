@@ -7,6 +7,7 @@ import { createSeeker, resetSeeker, type SeekerState } from '../targeting/ir-see
 import { createRadarLock, type RadarLockState, resetRadarLock } from '../targeting/radar-lock.ts';
 import type { Contact } from '../targeting/sensors.ts';
 import { TRIGGER_AT_REST } from '../weapons/cannon.ts';
+import type { SupportSpec } from '../modes/mode.ts';
 import { MotionHistory } from './history.ts';
 import type { SpawnStart } from './spawns.ts';
 
@@ -67,6 +68,12 @@ export interface AircraftEntity extends CreditRecord {
   viewDelayTicks: number;
   /** where this aircraft starts after each death: in the air or on the runway (M4) */
   start: SpawnStart;
+  /** a mode-flown support aircraft (a Sentinel, M5); null for fighters */
+  readonly support: SupportSpec | null;
+  /** enemies a teammate has on radar that this aircraft does not see itself (datalink, M5) */
+  readonly datalink: number[];
+  /** the jet this pilot flies after the next respawn, when they chose another (M5) */
+  nextAircraftId: string | null;
 }
 
 export interface NewAircraft {
@@ -79,6 +86,7 @@ export interface NewAircraft {
   spawnSlot: number;
   bombLoad: number;
   start?: SpawnStart;
+  support?: SupportSpec;
 }
 
 export function createAircraftEntity(n: NewAircraft): AircraftEntity {
@@ -119,6 +127,9 @@ export function createAircraftEntity(n: NewAircraft): AircraftEntity {
     lastLockedBy: null,
     lastLockedTick: -1,
     start: n.start ?? 'air',
+    support: n.support ?? null,
+    datalink: [],
+    nextAircraftId: null,
   };
   resetForSpawn(entity);
   return entity;
@@ -140,6 +151,7 @@ export function resetForSpawn(a: AircraftEntity): void {
   a.lastCountermeasureTick = NEVER;
   a.lastBombTick = NEVER;
   a.contacts.length = 0;
+  a.datalink.length = 0;
   a.targetId = null;
   resetSeeker(a.seeker, 'off');
   resetRadarLock(a.radarLock, 'off');

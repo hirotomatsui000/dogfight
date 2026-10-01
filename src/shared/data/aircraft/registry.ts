@@ -3,6 +3,7 @@ import { kestrel } from './kestrel.ts';
 import { kobchik } from './kobchik.ts';
 import { prizrak } from './prizrak.ts';
 import { sapsan } from './sapsan.ts';
+import { sentinelRussia, sentinelUsa } from './sentinel.ts';
 import { shade } from './shade.ts';
 import { tempest } from './tempest.ts';
 import type { AircraftConfig, TeamId } from './types.ts';
@@ -11,6 +12,8 @@ import { yastreb } from './yastreb.ts';
 
 /** Add new aircraft here — no other code changes are needed. The order is the title screen's (spec §9.2). */
 const ALL: readonly AircraftConfig[] = [shade, tempest, kestrel, condor, prizrak, yastreb, sapsan, kobchik];
+/** Aircraft the modes fly themselves (M5): never in the roster pilots and bots choose from. */
+const SUPPORT: readonly AircraftConfig[] = [sentinelUsa, sentinelRussia];
 
 export const TEAM_NAMES: Record<TeamId, string> = { usa: 'USA', russia: 'Russia' };
 
@@ -19,7 +22,7 @@ export function opposingTeam(team: TeamId): TeamId {
 }
 
 const byId = new Map<string, AircraftConfig>();
-for (const config of ALL) {
+for (const config of [...ALL, ...SUPPORT]) {
   assertValidAircraftConfig(config);
   if (byId.has(config.id)) throw new Error(`Duplicate aircraft id: ${config.id}`);
   byId.set(config.id, config);
@@ -31,6 +34,12 @@ export function getAircraft(id: string): AircraftConfig {
   return config;
 }
 
+/** The Sentinel radar aircraft of a team (Team Objective, M5). */
+export function sentinelFor(team: TeamId): AircraftConfig {
+  return team === 'usa' ? sentinelUsa : sentinelRussia;
+}
+
+/** The fighters pilots and bots can fly, optionally of one team. */
 export function listAircraft(team?: TeamId): AircraftConfig[] {
   return ALL.filter((c) => team === undefined || c.team === team);
 }

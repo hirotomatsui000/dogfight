@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import { BotPilot, type BotWorld, botSeed } from '../ai/bot-pilot.ts';
 import { DronePilot } from '../ai/drone-pilot.ts';
+import { SentinelPilot } from '../ai/sentinel-pilot.ts';
 import type { DifficultyProfile } from '../ai/difficulty.ts';
 import { damageFlightEnv, damageState, maneuverKillCredit } from '../damage/damage.ts';
 import { getAircraft } from '../data/aircraft/registry.ts';
@@ -10,7 +11,7 @@ import { airfieldGroundHeight } from '../map/features.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { type Approach, closestApproach } from '../math/closest-approach.ts';
 import { Rng } from '../math/rng.ts';
-import type { DroneSpec, GameMode, ModeDirector } from '../modes/mode.ts';
+import type { DroneSpec, GameMode, ModeDirector, SupportSpec } from '../modes/mode.ts';
 import { trimAlpha } from '../physics/aero.ts';
 import { atmosphere } from '../physics/atmosphere.ts';
 import { type ControlInput, neutralInput, sanitizeInput } from '../physics/controls.ts';
@@ -51,7 +52,19 @@ export interface AddAircraftOptions {
   start?: SpawnStart;
 }
 
-/** Anything that flies an aircraft from the World's state: bots and training drones. */
+/** A support aircraft starts west of its orbit's centre heading north, so the right-hand orbit carries it round. */
+function supportFlightState(spec: SupportSpec, physics: AircraftPhysics): FlightState {
+  const o = spec.orbit;
+  return createFlightState({
+    position: new Vector3(o.x - o.radiusM, o.altitudeM, o.z),
+    headingRad: 0,
+    speed: o.speedMs,
+    throttle: 0.6,
+    alphaRad: trimAlpha(physics, o.speedMs, atmosphere(o.altitudeM).density),
+  });
+}
+
+/** Anything that flies an aircraft from the World's state: bots, training drones and Sentinels. */
 interface Pilot {
   think(world: BotWorld, self: AircraftEntity, out: ControlInput): ControlInput;
 }
@@ -86,8 +99,15 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     this.environment = { ...(opts.environment ?? CALM_NOON) };
     // The clouds belong to the map and the weather, so every client draws the same ones.
     this.clouds = new CloudField(WEATHER[this.environment.weather], opts.map.seed);
+    opts.mode.prepare?.(opts.map);
     this.groundTargets = opts.mode.groundTargets(opts.map).map((spec) => createGroundTarget(spec, opts.terrain));
     this.combat = new Combat(this);
+    for (const spec of opts.mode.supportAircraft?.(opts.map) ?? []) this.addSupport(spec);
+  }
+
+  /** False while the mode has cut a team's datalink (Team Objective, M5). */
+  datalinkUp(team: TeamId): boolean {
+    return this.mode.datalinkUp?.(team) ?? true;
   }
 
   /** The local hour now (spec §12.3). */
@@ -192,6 +212,45 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     return entity;
   }
 
+  /** A mode-flown support aircraft (a Sentinel): it orbits, runs from fighters and returns after its own delay. */
+  addSupport(spec: SupportSpec): AircraftEntity {
+    const config = getAircraft(spec.aircraftId);
+    if (config.team !== spec.team) throw new Error(`${config.name} does not fly for team ${spec.team}`);
+    const entity = createAircraftEntity({
+      id: this.nextId++,
+      callsign: spec.callsign,
+      team: spec.team,
+      config,
+      isBot: true,
+      flight: supportFlightState(spec, config.physics),
+      spawnSlot: -1,
+      bombLoad: 0,
+      support: spec,
+    });
+    this.aircraft.set(entity.id, entity);
+    this.bots.set(entity.id, { pilot: new SentinelPilot(spec.orbit), input: neutralInput(0.6) });
+    this.emit({ type: 'spawned', aircraftId: entity.id, spawnGen: entity.spawnGen });
+    return entity;
+  }
+
+  /**
+   * The jet a pilot flies from the next respawn on (M5): one of the fighters of their team. Returns false for an
+   * unknown jet, another team's or a support aircraft.
+   */
+  setNextAircraft(id: number, aircraftId: string): boolean {
+    const a = this.aircraft.get(id);
+    if (!a || a.support) return false;
+    let config;
+    try {
+      config = getAircraft(aircraftId);
+    } catch {
+      return false;
+    }
+    if (config.team !== a.team || config.support) return false;
+    a.nextAircraftId = config.id === a.config.id ? null : config.id;
+    return true;
+  }
+
   launchMissileAt(shooterId: number, targetId: number): number | null {
     const shooter = this.aircraft.get(shooterId);
     const target = this.aircraft.get(targetId);
@@ -252,7 +311,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       a.input.countermeasures = false;
       a.input.fireMissile = false;
       a.input.dropBomb = false;
-      if (!a.alive && a.respawnAtTick >= 0 && this.tick >= a.respawnAtTick && this.mode.canRespawn(a.team)) this.respawn(a);
+      if (!a.alive && a.respawnAtTick >= 0 && this.tick >= a.respawnAtTick && (a.support !== null || this.mode.canRespawn(a.team))) this.respawn(a);
     }
     this.mode.update(this);
     this.mode.direct?.(this);
@@ -317,7 +376,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     a.deaths++;
     a.outOfBoundsTicks = 0;
     a.firingCannon = false;
-    a.respawnAtTick = this.tick + Math.round(this.mode.respawnDelayS * TICK_RATE);
+    a.respawnAtTick = this.tick + Math.round((a.support ? a.support.respawnDelayS : this.mode.respawnDelayS) * TICK_RATE);
     if (killer && killer.team !== a.team) killer.kills++;
     this.emit({ type: 'destroyed', aircraftId: a.id, cause, killerId: killer ? killer.id : null });
     this.combat.forget(a.id);
@@ -331,7 +390,11 @@ export class World implements ModeDirector, CombatHost, BotWorld {
   }
 
   private respawn(a: AircraftEntity): void {
-    a.flight = this.spawnState(a.team, a.spawnSlot, a.config.physics, a.start);
+    if (a.nextAircraftId) {
+      a.config = getAircraft(a.nextAircraftId);
+      a.nextAircraftId = null;
+    }
+    a.flight = a.support ? supportFlightState(a.support, a.config.physics) : this.spawnState(a.team, a.spawnSlot, a.config.physics, a.start);
     a.alive = true;
     a.spawnGen++;
     a.respawnAtTick = -1;

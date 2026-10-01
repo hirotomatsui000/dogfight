@@ -1,5 +1,6 @@
 import { Vector3 } from 'three';
 import { blastDamage } from '../damage/damage.ts';
+import type { TeamId } from '../data/aircraft/types.ts';
 import { AFTERBURNER_THROTTLE, BOMB_ANVIL, CANNONS, COUNTERMEASURES, MRM_LANCE, SRM_DART } from '../data/weapons.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { type Approach, closestApproach } from '../math/closest-approach.ts';
@@ -37,6 +38,8 @@ export interface CombatHost {
   applyTargetDamage(target: GroundTarget, amount: number, attacker: AircraftEntity | null): void;
   /** true once the mode has a winner: later bomb impacts do nothing (spec §10.4) */
   matchOver(): boolean;
+  /** false while a team's datalink is down (Team Objective, M5) */
+  datalinkUp(team: TeamId): boolean;
 }
 
 /**
@@ -60,6 +63,8 @@ export class Combat {
   private readonly impact = new Vector3();
   private readonly rewoundPrev = new Vector3();
   private readonly rewoundPos = new Vector3();
+  private readonly sharedUsa = new Set<number>();
+  private readonly sharedRussia = new Set<number>();
 
   constructor(host: CombatHost) {
     this.host = host;
@@ -99,6 +104,8 @@ export class Combat {
       if (a.targetId === id) a.targetId = null;
       const i = a.contacts.findIndex((c) => c.id === id);
       if (i >= 0) a.contacts.splice(i, 1);
+      const k = a.datalink.indexOf(id);
+      if (k >= 0) a.datalink.splice(k, 1);
       if (a.seeker.targetId === id) resetSeeker(a.seeker, 'search');
       if (a.radarLock.targetId === id) resetRadarLock(a.radarLock, 'search');
     }
@@ -107,11 +114,22 @@ export class Combat {
 
   private scanSensors(): void {
     const host = this.host;
+    const shared: Record<TeamId, Set<number>> = { usa: this.sharedUsa, russia: this.sharedRussia };
+    shared.usa.clear();
+    shared.russia.clear();
     for (const a of host.aircraftList()) {
       if (!a.alive) continue;
       detectContacts(a, host.aircraftList(), host.terrain, a.contacts, host.clouds);
       if (!isContact(a.targetId, a.contacts)) a.targetId = null;
       if (a.targetId === null) a.targetId = autoDesignate(a.contacts);
+      for (const c of a.contacts) if (c.radar) shared[a.team].add(c.id);
+    }
+    // Datalink (spec §10.3): every radar contact of a team, for the members who do not see it themselves.
+    const up: Record<TeamId, boolean> = { usa: host.datalinkUp('usa'), russia: host.datalinkUp('russia') };
+    for (const a of host.aircraftList()) {
+      a.datalink.length = 0;
+      if (!a.alive || !up[a.team]) continue;
+      for (const id of shared[a.team]) if (!a.contacts.some((c) => c.id === id)) a.datalink.push(id);
     }
   }
 

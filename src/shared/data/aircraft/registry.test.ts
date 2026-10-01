@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '../../math/rng.ts';
-import { getAircraft, listAircraft, opposingTeam, randomAircraft } from './registry.ts';
+import { getAircraft, listAircraft, opposingTeam, randomAircraft, sentinelFor } from './registry.ts';
 import { validateAircraftConfig } from './validate.ts';
 
 describe('aircraft registry', () => {
@@ -48,6 +48,18 @@ describe('aircraft registry', () => {
     expect(getAircraft('shade').sensors.sensorFusion).toBe(true);
     expect(getAircraft('sapsan').sensors.twoSeat).toBe(true);
     expect(getAircraft('kobchik').sensors.helmetSight).toBe(true);
+  });
+
+  it('knows the Sentinels (M5) by id but never offers them to pilots or bots', () => {
+    for (const team of ['usa', 'russia'] as const) {
+      const s = sentinelFor(team);
+      expect(s.team).toBe(team);
+      expect(s.support).toBe(true);
+      expect(getAircraft(s.id)).toBe(s);
+      expect(validateAircraftConfig(s)).toEqual([]);
+      expect(listAircraft().some((a) => a.support)).toBe(false);
+    }
+    expect(sentinelFor('usa').damage.hitPoints).toBe(400);
   });
 
   it('picks random jets of one team from a seeded generator', () => {
