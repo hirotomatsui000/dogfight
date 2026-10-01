@@ -39,6 +39,10 @@ export class Hud {
   private maxG = 1;
   private gOverTime = 0;
   private clock = 0;
+  /** steady warnings instead of blinking ones (M5) */
+  reduceFlashing = false;
+  /** softer G blackout and red-out (M5) */
+  reduceMotion = false;
   private readonly dir = new Vector3();
   private readonly onResize = () => this.resize();
 
@@ -79,6 +83,8 @@ export class Hud {
     ctx.clearRect(0, 0, this.width, this.height);
     if (!f) return;
     this.clock += f.dt;
+    // With reduced flashing every blink holds its "on" phase.
+    const blink = this.reduceFlashing ? 0.05 : this.clock;
     const flight = f.view.flight;
     if (f.view.alive) {
       this.maxG = Math.max(this.maxG, flight.gLoad);
@@ -101,12 +107,12 @@ export class Hud {
       this.drawAltitude(f);
       this.drawThrottle(f);
       this.drawStatus(f);
-      this.drawWarnings(f);
+      this.drawWarnings(f, blink);
       if (f.status.modeId !== 'free-flight' || f.status.drones) {
         drawDatalink(ctx, this.projector, f);
-        drawCombatLayer(ctx, this.projector, f, this.clock);
+        drawCombatLayer(ctx, this.projector, f, blink);
         drawRadarScope(ctx, 100 + SCOPE_RADIUS_PX, this.height - 40 - SCOPE_RADIUS_PX, SCOPE_RADIUS_PX, f);
-        if (f.status.strike) drawStrikeMarkers(ctx, this.projector, f, f.status.strike, this.clock);
+        if (f.status.strike) drawStrikeMarkers(ctx, this.projector, f, f.status.strike, blink);
       }
     }
     drawGameLayer(ctx, this.width, this.height, f);
@@ -286,8 +292,8 @@ export class Hud {
     if (v.flight.airbrake > 0.1) ctx.fillText('AIRBRAKE', x + 100, y);
   }
 
-  private drawWarnings(f: HudFrame): void {
-    const blinkOn = this.clock % 0.6 < 0.4;
+  private drawWarnings(f: HudFrame, clock: number): void {
+    const blinkOn = clock % 0.6 < 0.4;
     const stalled = f.view.flight.alpha > f.view.config.physics.alphaMaxDeg * DEG;
     if (f.hitTaken) this.drawCenterText(WARNING_CAPTIONS['hit-taken'], this.height / 2 + 150, RED, FONT_BIG);
     if (f.pullUp && blinkOn) this.drawCenterText('PULL UP', this.height / 2 + 110, RED, FONT_BIG);
@@ -317,7 +323,8 @@ export class Hud {
 
   private drawGEffects(g: number): void {
     const ctx = this.ctx;
-    const black = clamp((this.gOverTime - 2) / 2, 0, 0.85);
+    const soften = this.reduceMotion ? 0.35 : 1;
+    const black = clamp((this.gOverTime - 2) / 2, 0, 0.85) * soften;
     if (black > 0) {
       const r = Math.min(this.width, this.height);
       const grad = ctx.createRadialGradient(this.width / 2, this.height / 2, r * 0.15, this.width / 2, this.height / 2, r * 0.75);
@@ -327,7 +334,7 @@ export class Hud {
       ctx.fillRect(0, 0, this.width, this.height);
     }
     if (g < -2.5) {
-      ctx.fillStyle = `rgba(160, 0, 0, ${clamp((-2.5 - g) / 1.5, 0, 0.5)})`;
+      ctx.fillStyle = `rgba(160, 0, 0, ${clamp((-2.5 - g) / 1.5, 0, 0.5) * soften})`;
       ctx.fillRect(0, 0, this.width, this.height);
     }
   }

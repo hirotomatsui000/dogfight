@@ -9,6 +9,7 @@ import {
   type PadSettings,
 } from '../input/gamepad.ts';
 import { QUALITY_LEVELS, type QualityLevel } from '../render/quality.ts';
+import type { TeamColorScheme } from '../hud/palette.ts';
 import { loadSetting, saveSetting } from './storage.ts';
 
 export type HudColor = 'green' | 'amber' | 'white';
@@ -34,7 +35,12 @@ export interface Settings {
   graphics: GraphicsSetting;
   /** the level Auto settled on, remembered for the next visit */
   autoGraphics: QualityLevel | null;
+  /** camera shake, the G blackout and red-out, and the kill cam's camera move (M5) */
   reduceMotion: boolean;
+  /** steady HUD warnings and no strobe lights (M5) */
+  reduceFlashing: boolean;
+  /** friend and foe colours: blue/red, or a colour-blind safe blue/orange (M5) */
+  teamColors: TeamColorScheme;
   gamepad: PadSettings;
   /** finished the training flight at least once (the title screen stops pointing at it) */
   trainingDone: boolean;
@@ -52,6 +58,8 @@ export const DEFAULT_SETTINGS: Settings = {
   graphics: 'auto',
   autoGraphics: null,
   reduceMotion: false,
+  reduceFlashing: false,
+  teamColors: 'standard',
   gamepad: DEFAULT_PAD_SETTINGS,
   trainingDone: false,
 };
@@ -110,6 +118,8 @@ export function sanitizeSettings(stored: unknown): Settings {
     graphics: oneOf(raw.graphics, GRAPHICS_SETTINGS, d.graphics),
     autoGraphics: QUALITY_LEVELS.find((l) => l === raw.autoGraphics) ?? null,
     reduceMotion: bool(raw.reduceMotion, d.reduceMotion),
+    reduceFlashing: bool(raw.reduceFlashing, d.reduceFlashing),
+    teamColors: oneOf(raw.teamColors, ['standard', 'colorblind'] as const, d.teamColors),
     gamepad: sanitizePad(raw.gamepad),
     trainingDone: bool(raw.trainingDone, d.trainingDone),
   };

@@ -211,6 +211,10 @@ input:checked + .option { color: var(--canopy); }
 input:checked + .option::before { opacity: 1; transform: none; }
 input:focus-visible + .option { color: var(--hud); }
 
+/* Free Flight's sky and drones in the pause menu (M5). */
+.ff-panel { display: grid; gap: 10px; margin-top: 8px; padding-top: 12px; border-top: 1px solid rgb(255 255 255 / 0.14); }
+.ff-panel .eyebrow { margin: 0; }
+
 /* The world row (M4): compact dropdowns in the HUD style. */
 .world-row { display: flex; flex-wrap: wrap; gap: 8px 8px; align-items: center; }
 .world-select {

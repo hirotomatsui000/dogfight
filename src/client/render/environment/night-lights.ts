@@ -73,11 +73,17 @@ export function navLights(v: AircraftVisual): Group {
   return g;
 }
 
+/** Strobes off for players who asked for less flashing (M5). */
+let strobesEnabled = true;
+export function setStrobes(on: boolean): void {
+  strobesEnabled = on;
+}
+
 /** Sets every jet's light brightness for the time of day; the strobe flashes on the clock. */
 export function updateNavLights(night: number, timeS: number, pixelRatio: number): void {
   const on = Math.max(0, Math.min(1, (night - 0.05) / 0.4));
   navMaterial.opacity = on;
   navMaterial.size = 5 * pixelRatio;
   strobeMaterial.size = 6 * pixelRatio;
-  strobeMaterial.opacity = on > 0 && timeS % STROBE_PERIOD_S < STROBE_ON_S ? on : 0;
+  strobeMaterial.opacity = strobesEnabled && on > 0 && timeS % STROBE_PERIOD_S < STROBE_ON_S ? on : 0;
 }

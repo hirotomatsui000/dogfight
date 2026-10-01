@@ -16,3 +16,15 @@ describe('map screen (M4)', () => {
     expect(Math.max(...shadedColor('snow', 2))).toBeLessThanOrEqual(255);
   });
 });
+
+describe('map screen picking (M5)', () => {
+  it('turns a click into a map point and snaps it onto a nearby airfield', async () => {
+    const { pickPoint, AIRFIELD_PICK_M } = await import('./map-screen.ts');
+    const field = { id: 'x', name: 'Test Field', team: null, x: 20000, z: -10000, headingRad: 0, lengthM: 2500, widthM: 45, elevationM: 100 };
+    const def = { sizeM: 100000, features: { settlements: [], roads: [], rivers: [], airfields: [field] } } as never;
+    expect(pickPoint(def, 0.5, 0.5)).toEqual({ x: 0, z: 0, airfield: null });
+    expect(pickPoint(def, 0.75, 0.25)).toEqual({ x: 25000, z: -25000, airfield: null });
+    const near = pickPoint(def, 0.5 + (20000 + AIRFIELD_PICK_M / 2) / 100000, 0.5 - 0.1);
+    expect(near).toEqual({ x: 20000, z: -10000, airfield: 'Test Field' });
+  });
+});

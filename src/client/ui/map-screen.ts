@@ -38,6 +38,18 @@ export function shadedColor(cover: LandCover, shade: number): [number, number, n
 }
 
 const IMAGE_PX = 1024;
+/** A click this close to an airfield picks its runway (Free Flight, M5). */
+export const AIRFIELD_PICK_M = 2500;
+
+/** The map point under a click at (u, v) in 0..1 across the map image, snapped onto a nearby airfield (M5). */
+export function pickPoint(def: MapDefinition, u: number, v: number): { x: number; z: number; airfield: string | null } {
+  const x = (u - 0.5) * def.sizeM;
+  const z = (v - 0.5) * def.sizeM;
+  for (const a of def.features?.airfields ?? []) {
+    if (Math.hypot(a.x - x, a.z - z) <= AIRFIELD_PICK_M) return { x: a.x, z: a.z, airfield: a.name };
+  }
+  return { x, z, airfield: null };
+}
 /** Team colours follow the HUD's friend/foe choice (M5: colour-blind safe option). */
 const teamColor = (team: TeamId, mine: TeamId) => (team === mine ? FRIEND : FOE);
 const AIRFIELD_TEAM_COLORS: Record<TeamId, string> = { usa: '#5aa7ff', russia: '#ff5a4f' };
@@ -110,6 +122,8 @@ export class MapScreen {
   private readonly terrain: Terrain;
   private base: HTMLCanvasElement | null = null;
   open = false;
+  /** Free Flight (M5): a click on the map flies the jet from there. */
+  onPick: ((x: number, z: number) => void) | null = null;
 
   constructor(root: HTMLElement, def: MapDefinition, terrain: Terrain) {
     this.def = def;
@@ -121,6 +135,12 @@ export class MapScreen {
     this.overlay.setAttribute('aria-label', `Map of ${def.name}`);
     this.canvas = document.createElement('canvas');
     this.overlay.appendChild(this.canvas);
+    this.canvas.addEventListener('click', (e) => {
+      if (!this.onPick) return;
+      const r = this.canvas.getBoundingClientRect();
+      const p = pickPoint(this.def, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+      this.onPick(p.x, p.z);
+    });
     root.appendChild(this.overlay);
   }
 
@@ -229,6 +249,10 @@ export class MapScreen {
       this.marker(ctx, p, headingRad(v.flight), color, 6 * s, false, enemy && !known.has(v.id));
     }
     if (me && me.alive) this.marker(ctx, at(me.position.x, me.position.z), headingRad(me.flight), '#63ff95', 9 * s, true);
+    if (this.onPick) {
+      label('CLICK TO FLY FROM THERE · AN AIRFIELD STARTS ON ITS RUNWAY', px / 2, px - 40 * s, `700 ${Math.round(13 * s)}px system-ui, sans-serif`, '#63ff95');
+      this.canvas.style.cursor = 'crosshair';
+    }
     // North and the scale.
     label('N ↑', 24 * s, 28 * s, `700 ${Math.round(14 * s)}px system-ui, sans-serif`);
     const km = def.sizeM > 100000 ? 20 : 5;

@@ -32,6 +32,8 @@ export class FreeFlightMode implements GameMode {
   private drones = false;
   private readonly slots: DroneSlot[] = [];
   private placed = 0;
+  /** the player's spawn the drones were placed round: a new spawn (or "fly from here") brings them along */
+  private playerGen = -1;
 
   get combatEnabled(): boolean {
     return this.drones;
@@ -73,6 +75,11 @@ export class FreeFlightMode implements GameMode {
     }
     const player = this.player(d);
     if (!player) return;
+    if (player.spawnGen !== this.playerGen) {
+      this.playerGen = player.spawnGen;
+      for (const s of this.slots) if (s.id !== null) d.removeAircraft(s.id);
+      this.slots.length = 0;
+    }
     while (this.slots.length < FREE_FLIGHT_DRONES) this.slots.push({ id: null, diedTick: -1 });
     for (const s of this.slots) {
       const since = s.diedTick < 0 ? 0 : (d.tick - s.diedTick) / d.tickRate;

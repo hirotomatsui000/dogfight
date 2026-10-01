@@ -21,7 +21,8 @@ import { CameraRig, type CameraTarget } from './camera/camera-rig.ts';
 import { DeathCam, killcamFov, killcamPosition } from './camera/death-cam.ts';
 import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
-import { setHudColor } from './hud/palette.ts';
+import { setHudColor, setTeamColors } from './hud/palette.ts';
+import { setStrobes } from './render/environment/night-lights.ts';
 import { releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
 import { formatTimeOfDay } from './hud/format.ts';
 import { sentinelDownText, zoneEventText, zoneFeedText } from './hud/objective-hud.ts';
@@ -56,6 +57,7 @@ import { MapScreen } from './ui/map-screen.ts';
 import { loadingText } from './ui/load-bar.ts';
 import type { StartOptions } from './ui/menu.ts';
 import { PauseMenu } from './ui/pause.ts';
+import { freeFlightPanel } from './ui/free-flight-panel.ts';
 import { openSettings } from './ui/settings-screen.ts';
 import type { Settings, SettingsStore } from './ui/settings.ts';
 
@@ -198,11 +200,15 @@ export async function startGame(
   renderer.scene.add(ground.group);
   const worldFeatures = new WorldFeatures(map, terrain);
   renderer.scene.add(worldFeatures.group);
-  const environment = new Environment(renderer.scene, renderer.webgl, session.environment, map.seed, {
-    cloudRangeM: QUALITY_PRESETS[quality].cloudRangeM,
-    pixelRatio: renderer.webgl.getPixelRatio(),
-    lights: { city: worldFeatures.cityLights, runway: worldFeatures.runwayLights },
-  });
+  const makeEnvironment = () =>
+    new Environment(renderer.scene, renderer.webgl, session.environment, map.seed, {
+      cloudRangeM: QUALITY_PRESETS[quality].cloudRangeM,
+      pixelRatio: renderer.webgl.getPixelRatio(),
+      lights: { city: worldFeatures.cityLights, runway: worldFeatures.runwayLights },
+    });
+  // Free Flight can change the weather mid-flight (M5): the sky and clouds are then built again.
+  let environment = makeEnvironment();
+  let environmentSettings = session.environment;
   const sea = new Sea(textures.waterNormals);
   renderer.scene.add(sea.mesh);
   // Build the ground around the start before the first frame.
@@ -249,7 +255,11 @@ export async function startGame(
     mapper.settings.bindings = s.keys;
     input.captured = capturedKeys(s.keys);
     cameraRig.reduceMotion = s.reduceMotion;
+    hud.reduceMotion = s.reduceMotion;
+    hud.reduceFlashing = s.reduceFlashing;
+    setStrobes(!s.reduceFlashing);
     setHudColor(s.hudColor);
+    setTeamColors(s.teamColors);
     hud.setScale(s.hudScale);
     if (s.graphics !== 'auto' && s.graphics !== quality) applyQuality(s.graphics);
   };
@@ -258,6 +268,15 @@ export async function startGame(
   const stopSettings = settings.subscribe(applySettings);
   const killFeed = new KillFeed();
   const mapScreen = new MapScreen(root, map, terrain);
+  // Free Flight (M5): the map flies you from wherever you click; the mouse is set free while it is open.
+  const freeFlight = (online ? online.modeId : options.mission) === 'free-flight';
+  if (freeFlight) {
+    mapScreen.onPick = (x, z) => {
+      session.flyFrom(x, z);
+      mapScreen.toggle();
+      input.requestPointerLock();
+    };
+  }
   const particleFrame: ParticleFrame = { pixelScale: 1000, fogColor: new Color(), fogDensity: 0 };
   const bufferSize = new Vector2();
   const lead = new Vector3();
@@ -388,7 +407,10 @@ export async function startGame(
       cleanup();
       handlers.onQuit();
     },
-  }, { note: online ? 'Online, the match keeps going: your jet flies straight on.' : undefined });
+  }, {
+    note: online ? 'Online, the match keeps going: your jet flies straight on.' : undefined,
+    extra: freeFlight ? freeFlightPanel(() => session, online !== null) : undefined,
+  });
   const openPause = () => {
     if (paused) return;
     paused = true;
@@ -397,7 +419,7 @@ export async function startGame(
   };
   // Browsers swallow Esc while the pointer is locked and release the lock instead: treat that as "pause".
   const onPointerLockChange = () => {
-    if (running && !matchOver && !lineDown && !input.pointerLocked && !paused) openPause();
+    if (running && !matchOver && !lineDown && !input.pointerLocked && !paused && !(freeFlight && mapScreen.open)) openPause();
   };
   document.addEventListener('pointerlockchange', onPointerLockChange);
   const onPointerDown = () => audio?.resume();
@@ -539,7 +561,10 @@ export async function startGame(
         settings.update({ autoGraphics: lower });
       }
     }
-    if (!paused && !matchOver && !settingsOpen && mapper.mapToggled(snap)) mapScreen.toggle();
+    if (!paused && !matchOver && !settingsOpen && mapper.mapToggled(snap)) {
+      mapScreen.toggle();
+      if (freeFlight && mapScreen.open && input.pointerLocked) document.exitPointerLock();
+    }
     if (!matchOver && !settingsOpen && !lineDown && mapper.pauseRequested(snap, padFrame)) {
       if (paused) {
         pause.hide();
@@ -659,6 +684,14 @@ export async function startGame(
     }
     ground.update(renderer.camera.position);
     worldFeatures.update(renderer.camera.position);
+    if (session.environment !== environmentSettings) {
+      const weatherChanged = session.environment.weather !== environmentSettings.weather;
+      environmentSettings = session.environment;
+      if (weatherChanged) {
+        environment.dispose();
+        environment = makeEnvironment();
+      }
+    }
     environment.update(session.hour(), renderer.camera, active ? dt : 0);
     particleFrame.fogColor.copy(environment.fog.color);
     particleFrame.fogDensity = environment.fog.density;

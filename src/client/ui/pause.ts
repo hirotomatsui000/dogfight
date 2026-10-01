@@ -7,13 +7,17 @@ export interface PauseHandlers {
 export interface PauseOptions {
   /** a line under the title, e.g. that an online match keeps going */
   note?: string;
+  /** an extra section under the buttons (Free Flight's sky and drones, M5) */
+  extra?: { element: HTMLElement; refresh(): void };
 }
 
 /** Resume, Settings (the same dialog as the title screen's) and Quit. */
 export class PauseMenu {
   private readonly overlay = document.createElement('div');
+  private readonly extra: PauseOptions['extra'];
 
   constructor(root: HTMLElement, handlers: PauseHandlers, options: PauseOptions = {}) {
+    this.extra = options.extra;
     this.overlay.className = 'overlay translucent';
     this.overlay.hidden = true;
     const panel = document.createElement('div');
@@ -33,6 +37,7 @@ export class PauseMenu {
       this.button('Settings', 'button secondary', () => handlers.onSettings()),
       this.button('Quit to menu', 'button secondary', () => handlers.onQuit()),
     );
+    if (options.extra) panel.appendChild(options.extra.element);
     this.overlay.appendChild(panel);
     root.appendChild(this.overlay);
   }
@@ -42,6 +47,7 @@ export class PauseMenu {
   }
 
   show(): void {
+    this.extra?.refresh();
     this.overlay.hidden = false;
   }
 

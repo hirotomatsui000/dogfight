@@ -95,6 +95,11 @@ describe('Free Flight target drones (M5)', () => {
     expect(drones()).toHaveLength(FREE_FLIGHT_DRONES - 1);
     run(w, 8 * TICK_RATE);
     expect(drones()).toHaveLength(FREE_FLIGHT_DRONES);
+    // Flying from somewhere else brings the drones along.
+    w.flyFrom(me.id, -15000, 10000);
+    run(w, 1);
+    expect(drones()).toHaveLength(FREE_FLIGHT_DRONES);
+    for (const d of drones()) expect(d.flight.pos.distanceTo(me.flight.pos)).toBeLessThan(8000);
     mode.setDrones(false);
     run(w, 1);
     expect(drones()).toHaveLength(0);
