@@ -3,12 +3,12 @@ import type { AddressInfo } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import { WebSocketServer } from 'ws';
 import { buildTerrain } from '../shared/data/maps/map-definition.ts';
-import { createTestRange } from '../shared/data/maps/test-range.ts';
+import { createMap, MAP_IDS, type MapId } from '../shared/data/maps/registry.ts';
 import { DT } from '../shared/world/world.ts';
 import type { ServerConfig } from './config.ts';
 import { ClientConnection } from './connection.ts';
 import { createHttpHandler } from './http.ts';
-import { RoomManager } from './room-manager.ts';
+import { RoomManager, type RoomMap } from './room-manager.ts';
 
 export interface RunningServer {
   readonly port: number;
@@ -24,9 +24,13 @@ const MAX_STEPS_PER_WAKE = 5;
 
 /** One process: the site, the game WebSocket at /ws and a fixed 60 Hz loop for every room (spec §7, §16). */
 export async function startServer(config: ServerConfig): Promise<RunningServer> {
-  const map = createTestRange(1);
-  const terrain = buildTerrain(map);
-  const manager = new RoomManager(config, map, terrain);
+  // Every map is generated once at start (Lechovia takes a few seconds) and shared by all rooms on it.
+  const maps = new Map<MapId, RoomMap>();
+  for (const id of MAP_IDS) {
+    const map = createMap(id);
+    maps.set(id, { map, terrain: buildTerrain(map) });
+  }
+  const manager = new RoomManager(config, (id) => maps.get(id) ?? (maps.get('test-range') as RoomMap));
   const http = createServer(createHttpHandler({ manager, distDir: config.distDir, build: config.build, startedAtMs: Date.now() }));
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES });
   let nextId = 1;

@@ -8,6 +8,7 @@
  */
 import { buildTerrain } from '../src/shared/data/maps/map-definition.ts';
 import { createTestRange } from '../src/shared/data/maps/test-range.ts';
+import { CALM_NOON } from '../src/shared/world/time-of-day.ts';
 import { type ControlInput, neutralInput } from '../src/shared/physics/controls.ts';
 import { NetworkSession } from '../src/client/session/network-session.ts';
 import { gameServerUrl, LaggedTransport, type Transport, WebSocketTransport } from '../src/client/session/net-transport.ts';
@@ -39,8 +40,10 @@ const line = (): Transport => {
   const ws = new WebSocketTransport(gameServerUrl({ protocol: base.protocol, host: base.host }));
   return lagMs > 0 ? new LaggedTransport(ws, lagMs) : ws;
 };
-const a = await NetworkSession.connect(line(), { room, callsign: 'Smoke A', aircraftId: 'kestrel', mode: 'team-deathmatch' }, map, terrain);
-const b = await NetworkSession.connect(line(), { room, callsign: 'Smoke B', aircraftId: 'kobchik', mode: 'team-deathmatch' }, map, terrain);
+const pilot = { room, mode: 'team-deathmatch', map: 'test-range', environment: CALM_NOON, start: 'air' } as const;
+const loadMap = async () => ({ map, terrain });
+const a = await NetworkSession.connect(line(), { ...pilot, callsign: 'Smoke A', aircraftId: 'kestrel' }, loadMap);
+const b = await NetworkSession.connect(line(), { ...pilot, callsign: 'Smoke B', aircraftId: 'kobchik' }, loadMap);
 check(true, `two pilots joined room ${room}`);
 
 const weave = (t: number): ControlInput => ({ ...neutralInput(0.85), roll: 0.5 * Math.sin(t * 1.3), pitch: 0.25 + 0.25 * Math.sin(t * 0.7) });

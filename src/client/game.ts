@@ -38,7 +38,7 @@ import type { ParticleFrame } from './render/effects/particles.ts';
 import { Renderer } from './render/renderer.ts';
 import { SceneSync } from './render/scene-sync.ts';
 import { Sea } from './render/sea.ts';
-import { loadMap } from './render/terrain/map-loader.ts';
+import { type LoadedMap, loadMap } from './render/terrain/map-loader.ts';
 import { TerrainLod } from './render/terrain/terrain-lod.ts';
 import { WorldFeatures } from './render/world/world-features.ts';
 import { Environment } from './render/environment/environment.ts';
@@ -137,35 +137,40 @@ export async function startGame(
   }
   // Never rejects: a jet whose model fails to load uses its generated model.
   const meshes = await aircraftMeshes;
-  // Strike and Training were laid out on the Test Range; online rooms fly there too until rooms choose maps.
-  const mapId: MapId = options.mission === 'strike' || options.mission === 'training' || options.online ? 'test-range' : (options.map ?? 'lechovia');
-  let loadedMap;
-  try {
-    loadedMap = await loadMap(mapId, progress);
-  } catch (err) {
+  // Offline the map is the player's choice (Strike and Training keep the Test Range); online the room decides it and
+  // the page builds whichever map the welcome names.
+  const mapId: MapId = options.mission === 'strike' || options.mission === 'training' ? 'test-range' : (options.map ?? 'lechovia');
+  const fail = (err: unknown, prefix = '') => {
     renderer.dispose();
     audio?.dispose();
     stopLoadingText();
     loading.remove();
-    throw new Error(`Could not build the map: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  const map = loadedMap.def;
-  const terrain = loadedMap.terrain;
-  const mode = createMode(options);
+    return new Error(`${prefix}${err instanceof Error ? err.message : String(err)}`);
+  };
   /** the server connection in online play (M2), otherwise null */
   let online: NetworkSession | null = null;
-  let session: GameSession;
+  let loadedMap: LoadedMap;
   if (options.online) {
     stopLoadingText();
     loading.firstElementChild!.textContent = 'Connecting to the game server…';
     try {
-      online = await connectOnline(options, map, terrain);
+      online = await connectOnline(options, (id) => loadMap(id, progress));
+      loadedMap = await loadMap(online.map.id as MapId);
     } catch (err) {
-      renderer.dispose();
-      audio?.dispose();
-      loading.remove();
-      throw new Error(err instanceof Error ? err.message : String(err));
+      throw fail(err);
     }
+  } else {
+    try {
+      loadedMap = await loadMap(mapId, progress);
+    } catch (err) {
+      throw fail(err, 'Could not build the map: ');
+    }
+  }
+  const map = loadedMap.def;
+  const terrain = loadedMap.terrain;
+  const mode = createMode(options);
+  let session: GameSession;
+  if (online) {
     session = online;
   } else {
     session = new LocalSession({
@@ -294,10 +299,15 @@ export async function startGame(
       await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAYS_MS[i]));
       if (!running) return;
       try {
-        const next = await connectOnline(options, map, terrain);
+        const next = await connectOnline(options, (id) => loadMap(id, progress));
         if (!running) {
           next.dispose();
           return;
+        }
+        // A room made again after a server restart could fly elsewhere: this page's scenery is for the old map.
+        if (next.map.id !== map.id) {
+          next.dispose();
+          throw new Error(`The room now flies on ${next.map.name}`);
         }
         session.dispose();
         attachOnline(next);

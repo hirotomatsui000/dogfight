@@ -1,5 +1,6 @@
-import type { MapDefinition } from '../shared/data/maps/map-definition.ts';
-import type { Terrain } from '../shared/map/terrain.ts';
+import type { MapId } from '../shared/data/maps/registry.ts';
+import { CALM_NOON } from '../shared/world/time-of-day.ts';
+import type { LoadedMap } from './render/terrain/map-loader.ts';
 import { NetworkSession } from './session/network-session.ts';
 import { gameServerUrl, LaggedTransport, lagFromQuery, type Transport, WebSocketTransport } from './session/net-transport.ts';
 import type { StartOptions } from './ui/menu.ts';
@@ -9,17 +10,30 @@ export const RECONNECT_DELAYS_MS: readonly number[] = [1000, 2000, 4000];
 /** Quick-chat keys: 7, 8, 9 and 0 send the four preset lines (spec §24). */
 export const CHAT_KEYS: readonly string[] = ['Digit7', 'Digit8', 'Digit9', 'Digit0'];
 
-/** Opens a session to the game server that served this page, through the lag simulator when `?lag=` is set. */
-export function connectOnline(options: StartOptions, map: MapDefinition, terrain: Terrain): Promise<NetworkSession> {
+/**
+ * Opens a session to the game server that served this page, through the lag simulator when `?lag=` is set. A new room
+ * takes this player's map, weather and clock (M4); `load` builds the map the room really flies on.
+ */
+export function connectOnline(options: StartOptions, load: (id: MapId) => Promise<LoadedMap>): Promise<NetworkSession> {
   if (!options.online) return Promise.reject(new Error('Not an online game'));
   let transport: Transport = new WebSocketTransport(gameServerUrl(location));
   const { lagMs, jitterMs } = lagFromQuery(location.search);
   if (lagMs > 0 || jitterMs > 0) transport = new LaggedTransport(transport, lagMs, jitterMs);
   return NetworkSession.connect(
     transport,
-    { room: options.online.room, callsign: options.callsign, aircraftId: options.aircraftId, mode: options.mission === 'strike' ? 'strike' : 'team-deathmatch' },
-    map,
-    terrain,
+    {
+      room: options.online.room,
+      callsign: options.callsign,
+      aircraftId: options.aircraftId,
+      mode: options.mission === 'strike' ? 'strike' : 'team-deathmatch',
+      map: options.map ?? 'lechovia',
+      environment: options.environment ?? CALM_NOON,
+      start: options.start ?? 'air',
+    },
+    async (id) => {
+      const m = await load(id);
+      return { map: m.def, terrain: m.terrain };
+    },
   );
 }
 

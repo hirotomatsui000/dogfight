@@ -3,6 +3,7 @@ import { DIFFICULTIES, type DifficultyId } from '../shared/ai/difficulty.ts';
 import { getAircraft, randomAircraft } from '../shared/data/aircraft/registry.ts';
 import type { AircraftConfig, TeamId } from '../shared/data/aircraft/types.ts';
 import type { MapDefinition } from '../shared/data/maps/map-definition.ts';
+import type { MapId } from '../shared/data/maps/registry.ts';
 import type { Terrain } from '../shared/map/terrain.ts';
 import { Rng } from '../shared/math/rng.ts';
 import type { GameMode, ModeStatus } from '../shared/modes/mode.ts';
@@ -13,6 +14,8 @@ import { type HelloMessage, type OnlineModeId, PROTOCOL_VERSION, type RosterEntr
 import { type ControlInput, neutralInput } from '../shared/physics/controls.ts';
 import type { AircraftEntity } from '../shared/world/entities.ts';
 import type { GameEvent } from '../shared/world/events.ts';
+import type { SpawnStart } from '../shared/world/spawns.ts';
+import { CALM_NOON, type EnvironmentSettings } from '../shared/world/time-of-day.ts';
 import { TICK_RATE, World } from '../shared/world/world.ts';
 import { ownState, sharedSnapshot } from './snapshot.ts';
 
@@ -38,6 +41,9 @@ export interface RoomOptions {
   restartDelayS?: number;
   /** Team Deathmatch score limit (tests use small ones) */
   tdmScoreLimit?: number;
+  /** the room's map id, weather and clock (M4; fixed by the pilot who creates the room) */
+  mapId?: MapId;
+  environment?: EnvironmentSettings;
 }
 
 /** Inputs waiting per player; older ones are dropped beyond this (about half a second). */
@@ -52,6 +58,8 @@ interface Player {
   readonly callsign: string;
   readonly aircraftId: string;
   readonly team: TeamId;
+  /** in the air or on the runway (M4) */
+  readonly start: SpawnStart;
   /** the player's aircraft in the current World */
   entityId: number;
   readonly queue: DecodedInput[];
@@ -95,6 +103,16 @@ export class Room {
     this.world = this.createWorld();
   }
 
+  /** The room's map (M4). */
+  get mapId(): MapId {
+    return this.options.mapId ?? (this.map.id === 'lechovia' ? 'lechovia' : 'test-range');
+  }
+
+  /** The room's weather and clock (M4). */
+  get environment(): EnvironmentSettings {
+    return this.options.environment ?? CALM_NOON;
+  }
+
   get humanCount(): number {
     return this.players.size;
   }
@@ -116,6 +134,7 @@ export class Room {
       callsign: hello.callsign,
       aircraftId: config.id,
       team: config.team,
+      start: hello.start,
       entityId: -1,
       queue: [],
       lastInput: neutralInput(0.8),
@@ -124,7 +143,7 @@ export class Room {
     this.players.set(peer.id, player);
     this.emptySinceMs = null;
     this.removeBot(player.team);
-    player.entityId = this.world.addAircraft({ callsign: player.callsign, team: player.team, aircraftId: player.aircraftId }).id;
+    player.entityId = this.world.addAircraft({ callsign: player.callsign, team: player.team, aircraftId: player.aircraftId, start: player.start }).id;
     peer.sendJson({
       type: 'welcome',
       version: PROTOCOL_VERSION,
@@ -133,6 +152,8 @@ export class Room {
       you: player.entityId,
       modeId: this.mode,
       mapSeed: this.map.seed,
+      map: this.mapId,
+      environment: this.environment,
       tick: this.world.tick,
       tickRate: TICK_RATE,
       snapshotEvery: SNAPSHOT_EVERY_TICKS,
@@ -227,9 +248,9 @@ export class Room {
         ? new StrikeMode({ aircraftPerTeam: STRIKE_AIRCRAFT_PER_PILOT * Math.max(1, this.options.teamSize) })
         : new TeamDeathmatchMode(this.options.tdmScoreLimit ? { scoreLimit: this.options.tdmScoreLimit } : {});
     const seed = (this.options.seed ?? Math.floor(Math.random() * 0x7fffffff)) + this.matchNumber;
-    const world = new World({ map: this.map, terrain: this.terrain, mode, seed });
+    const world = new World({ map: this.map, terrain: this.terrain, mode, seed, environment: this.environment });
     this.world = world;
-    for (const p of this.players.values()) p.entityId = world.addAircraft({ callsign: p.callsign, team: p.team, aircraftId: p.aircraftId }).id;
+    for (const p of this.players.values()) p.entityId = world.addAircraft({ callsign: p.callsign, team: p.team, aircraftId: p.aircraftId, start: p.start }).id;
     this.fillBots();
     return world;
   }

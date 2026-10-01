@@ -5,6 +5,8 @@ import type { MapDefinition } from '../../shared/data/maps/map-definition.ts';
 import { CANNONS, MRM_LANCE } from '../../shared/data/weapons.ts';
 import { damageFlightEnv, damageState } from '../../shared/damage/damage.ts';
 import { airfieldGroundHeight } from '../../shared/map/features.ts';
+import type { MapId } from '../../shared/data/maps/registry.ts';
+import type { SpawnStart } from '../../shared/world/spawns.ts';
 import { CALM_NOON, type EnvironmentSettings, hourAt } from '../../shared/world/time-of-day.ts';
 import type { Terrain } from '../../shared/map/terrain.ts';
 import { Rng } from '../../shared/math/rng.ts';
@@ -56,6 +58,10 @@ export interface HelloOptions {
   callsign: string;
   aircraftId: string;
   mode: OnlineModeId;
+  /** a new room's map, weather and clock (M4) */
+  map: MapId;
+  environment: EnvironmentSettings;
+  start: SpawnStart;
 }
 
 export interface Welcome {
@@ -64,7 +70,12 @@ export interface Welcome {
   modeId: OnlineModeId;
   build: string;
   tick: number;
+  /** the room's weather and clock (M4) */
+  environment?: EnvironmentSettings;
 }
+
+/** The map a room flies on, made ready by the page (generated, or already loaded for the title screen). */
+export type MapLoader = (id: MapId) => Promise<{ map: MapDefinition; terrain: Terrain }>;
 
 interface Sample {
   tick: number;
@@ -212,19 +223,24 @@ export class NetworkSession implements GameSession {
   private readonly prevQuat = new Quaternion();
   private readonly invQuat = new Quaternion();
 
-  /** Opens the session: sends hello and resolves on the server's welcome (rejects on refusal or a closed line). */
-  static connect(transport: Transport, hello: HelloOptions, map: MapDefinition, terrain: Terrain, now: () => number = () => performance.now()): Promise<NetworkSession> {
+  /**
+   * Opens the session: sends hello, and on the server's welcome loads the room's map (M4), then resolves; messages
+   * that arrive meanwhile wait. Rejects on refusal or a closed line.
+   */
+  static connect(transport: Transport, hello: HelloOptions, loadMap: MapLoader, now: () => number = () => performance.now()): Promise<NetworkSession> {
     return new Promise((resolve, reject) => {
       const early: ServerJsonMessage[] = [];
       const binaries: ArrayBuffer[] = [];
       let settled = false;
-      transport.onOpen = () => transport.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, ...hello }));
-      transport.onClose = () => {
-        if (!settled) {
-          settled = true;
-          reject(new Error('Could not reach the game server.'));
-        }
+      const fail = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        transport.close();
+        reject(err);
       };
+      transport.onOpen = () => transport.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, ...hello }));
+      transport.onClose = () => fail(new Error('Could not reach the game server.'));
+      let welcomed = false;
       transport.onMessage = (data) => {
         if (settled) return;
         if (typeof data !== 'string') {
@@ -233,15 +249,21 @@ export class NetworkSession implements GameSession {
         }
         const msg = JSON.parse(data) as ServerJsonMessage;
         if (msg.type === 'reject') {
-          settled = true;
-          transport.close();
-          reject(new Error(msg.reason));
-        } else if (msg.type === 'welcome') {
-          settled = true;
-          const session = new NetworkSession(transport, { room: msg.room, you: msg.you, modeId: msg.modeId, build: msg.build, tick: msg.tick }, map, terrain, now);
-          for (const m of early) session.handleJson(m);
-          for (const b of binaries) session.handleSnapshot(b);
-          resolve(session);
+          fail(new Error(msg.reason));
+        } else if (msg.type === 'welcome' && !welcomed) {
+          welcomed = true;
+          loadMap(msg.map ?? 'test-range').then(
+            ({ map, terrain }) => {
+              if (settled) return;
+              settled = true;
+              const welcome: Welcome = { room: msg.room, you: msg.you, modeId: msg.modeId, build: msg.build, tick: msg.tick, environment: msg.environment };
+              const session = new NetworkSession(transport, welcome, map, terrain, now);
+              for (const m of early) session.handleJson(m);
+              for (const b of binaries) session.handleSnapshot(b);
+              resolve(session);
+            },
+            (err: unknown) => fail(err instanceof Error ? err : new Error(String(err))),
+          );
         } else {
           early.push(msg);
         }
@@ -256,6 +278,7 @@ export class NetworkSession implements GameSession {
     this.now = now;
     this.localId = welcome.you;
     this.room = welcome.room;
+    this.environment = welcome.environment ?? CALM_NOON;
     this.serverBuild = welcome.build;
     this.modeId = welcome.modeId;
     this.mode = welcome.modeId === 'strike' ? new StrikeMode() : new TeamDeathmatchMode();
@@ -275,7 +298,7 @@ export class NetworkSession implements GameSession {
   }
 
   /** Weather and clock of the room (M4). */
-  readonly environment: EnvironmentSettings = CALM_NOON;
+  readonly environment: EnvironmentSettings;
 
   hour(): number {
     return hourAt(this.environment.startHour, this.environment.clockRunning, this.serverTickNow() / TICK_RATE);
@@ -582,6 +605,10 @@ export class NetworkSession implements GameSession {
       a.firingCannon = s.firingCannon;
       a.flight.throttle = s.throttle;
       if (!a.isLocal) {
+        a.flight.gear = s.gearDown ? 1 : 0;
+        a.flight.onGround = s.onGround;
+      }
+      if (!a.isLocal) {
         a.alive = s.alive;
         a.spawnGen = s.spawnGen;
       }
@@ -632,6 +659,8 @@ export class NetworkSession implements GameSession {
     p.quat.set(own.quat[0], own.quat[1], own.quat[2], own.quat[3]).normalize();
     p.throttle = own.throttle;
     p.airbrake = own.airbrake;
+    p.gear = own.gear;
+    p.onGround = own.onGround;
     if (atAck) this.predictionErrorM = atAck.distanceTo(p.pos);
     damageFlightEnv(damageState(me.hp, me.config.damage.hitPoints), this.env);
     for (const { seq, input } of this.pending) {

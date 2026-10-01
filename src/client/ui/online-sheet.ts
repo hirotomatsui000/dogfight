@@ -3,6 +3,8 @@ import { DEFAULT_ROOM, sanitizeRoomName } from '../../shared/net/protocol.ts';
 interface RoomInfo {
   name: string;
   mode: string;
+  /** the room's map (M4; older servers leave it out) */
+  map?: string;
   humans: number;
   maxHumans: number;
 }
@@ -82,7 +84,8 @@ export function onlineSheet(initialRoom: string, missionLabel: () => string, onJ
       rooms = ((await res.json()) as { rooms: RoomInfo[] }).rooms;
       status.textContent = rooms.length === 0 ? 'Server online. No rooms yet: yours will be the first.' : 'Server online. Rooms now:';
       for (const r of rooms.slice(0, 6)) {
-        const b = el('button', 'room-chip', `${r.name} · ${MODE_LABELS[r.mode] ?? r.mode} · ${r.humans}/${r.maxHumans}`);
+        const where = r.map === 'lechovia' ? ' · Lechovia' : r.map === 'test-range' ? ' · Test range' : '';
+        const b = el('button', 'room-chip', `${r.name} · ${MODE_LABELS[r.mode] ?? r.mode}${where} · ${r.humans}/${r.maxHumans}`);
         b.type = 'button';
         b.addEventListener('click', () => {
           roomInput.value = r.name;

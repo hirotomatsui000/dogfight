@@ -30,7 +30,8 @@ class FakeSocket implements SocketLike {
 }
 
 const settings = (over: Partial<RoomSettings> = {}): RoomSettings => ({ maxRooms: 2, maxHumansPerRoom: 4, teamSize: 2, botSkill: 'rookie', build: 'test', idleCloseMs: 30_000, ...over });
-const hello = (room = 'alpha', over: object = {}) => JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, room, callsign: 'Ace', aircraftId: 'kestrel', mode: 'team-deathmatch', ...over });
+const hello = (room = 'alpha', over: object = {}) =>
+  JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, room, callsign: 'Ace', aircraftId: 'kestrel', mode: 'team-deathmatch', map: 'test-range', ...over });
 
 function connect(manager: RoomManager, id: number, clock = { t: 0 }) {
   const socket = new FakeSocket();
@@ -40,16 +41,33 @@ function connect(manager: RoomManager, id: number, clock = { t: 0 }) {
 
 describe('ClientConnection and RoomManager', () => {
   it('joins a room on hello, creating it with the requested mode', () => {
-    const manager = new RoomManager(settings(), map, terrain);
+    const manager = new RoomManager(settings(), () => ({ map, terrain }));
     const { socket, conn } = connect(manager, 1);
     conn.onMessage(hello('alpha', { mode: 'strike' }));
     expect(socket.json()[0].type).toBe('welcome');
     expect(manager.room('alpha')?.mode).toBe('strike');
-    expect(manager.list()).toEqual([{ name: 'alpha', mode: 'strike', humans: 1, maxHumans: 4 }]);
+    expect(manager.list()).toEqual([{ name: 'alpha', mode: 'strike', map: 'test-range', humans: 1, maxHumans: 4 }]);
+  });
+
+  it("fixes a new room's map, weather and clock from its first pilot; Strike stays on the Test Range (M4)", () => {
+    const asked: string[] = [];
+    const manager = new RoomManager(settings(), (id) => {
+      asked.push(id);
+      return { map, terrain };
+    });
+    const first = connect(manager, 1);
+    first.conn.onMessage(hello('alpha', { map: 'lechovia', environment: { weather: 'rain', startHour: 23, clockRunning: true } }));
+    expect(first.socket.json()[0]).toMatchObject({ type: 'welcome', map: 'lechovia', environment: { weather: 'rain', startHour: 23, clockRunning: true } });
+    const second = connect(manager, 2);
+    second.conn.onMessage(hello('alpha', { map: 'test-range', environment: { weather: 'clear', startHour: 6 } }));
+    expect(second.socket.json()[0]).toMatchObject({ type: 'welcome', map: 'lechovia', environment: { weather: 'rain' } });
+    connect(manager, 3).conn.onMessage(hello('beta', { mode: 'strike', map: 'lechovia' }));
+    expect(manager.room('beta')?.mapId).toBe('test-range');
+    expect(asked).toEqual(['lechovia', 'test-range']);
   });
 
   it('rejects an out-of-date page and a full server', () => {
-    const manager = new RoomManager(settings({ maxRooms: 1 }), map, terrain);
+    const manager = new RoomManager(settings({ maxRooms: 1 }), () => ({ map, terrain }));
     const old = connect(manager, 1);
     old.conn.onMessage(hello('alpha', { version: PROTOCOL_VERSION + 1 }));
     expect(old.socket.json()[0]).toMatchObject({ type: 'reject' });
@@ -61,7 +79,7 @@ describe('ClientConnection and RoomManager', () => {
   });
 
   it('passes inputs to the room and answers pings', () => {
-    const manager = new RoomManager(settings(), map, terrain);
+    const manager = new RoomManager(settings(), () => ({ map, terrain }));
     const { socket, conn } = connect(manager, 1);
     conn.onMessage(hello());
     conn.onMessage(encodeInput(5, neutralInput(1), 0));
@@ -73,7 +91,7 @@ describe('ClientConnection and RoomManager', () => {
   });
 
   it('disconnects a client after three violations within 10 s, and only that client', () => {
-    const manager = new RoomManager(settings(), map, terrain);
+    const manager = new RoomManager(settings(), () => ({ map, terrain }));
     const good = connect(manager, 1);
     good.conn.onMessage(hello());
     const bad = connect(manager, 2);
@@ -88,7 +106,7 @@ describe('ClientConnection and RoomManager', () => {
   });
 
   it('forgives violations older than 10 s', () => {
-    const manager = new RoomManager(settings(), map, terrain);
+    const manager = new RoomManager(settings(), () => ({ map, terrain }));
     const { socket, conn, clock } = connect(manager, 1);
     conn.onMessage(hello());
     conn.onMessage('x');
@@ -99,7 +117,7 @@ describe('ClientConnection and RoomManager', () => {
   });
 
   it('caps inputs at 120 per second and chat at one per second', () => {
-    const manager = new RoomManager(settings(), map, terrain);
+    const manager = new RoomManager(settings(), () => ({ map, terrain }));
     const { socket, conn, clock } = connect(manager, 1);
     conn.onMessage(hello());
     for (let i = 0; i < 123; i++) conn.onMessage(encodeInput(i + 1, neutralInput(), 0));
@@ -114,7 +132,7 @@ describe('ClientConnection and RoomManager', () => {
   });
 
   it('closes a room 30 s after its last pilot leaves', () => {
-    const manager = new RoomManager(settings(), map, terrain);
+    const manager = new RoomManager(settings(), () => ({ map, terrain }));
     const { conn } = connect(manager, 1);
     conn.onMessage(hello());
     conn.onClose();

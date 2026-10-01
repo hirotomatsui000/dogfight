@@ -8,8 +8,8 @@ const snapshot = (): Snapshot => ({
   ackSeq: 9876,
   queueDepth: 3,
   aircraft: [
-    { id: 1, alive: true, firingCannon: true, spawnGen: 300, hp: 62.5, throttle: 0.95, pos: [-7512.25, 3012.5, 40.75], quat: [0.1, 0.7, -0.1, 0.7], vel: [251.3, -4.2, 0.05] },
-    { id: 9, alive: false, firingCannon: false, spawnGen: 2, hp: 0, throttle: 0, pos: [0, 0, 0], quat: [0, 0, 0, 1], vel: [0, 0, 0] },
+    { id: 1, alive: true, firingCannon: true, gearDown: true, onGround: false, spawnGen: 300, hp: 62.5, throttle: 0.95, pos: [-7512.25, 3012.5, 40.75], quat: [0.1, 0.7, -0.1, 0.7], vel: [251.3, -4.2, 0.05] },
+    { id: 9, alive: false, firingCannon: false, gearDown: false, onGround: true, spawnGen: 2, hp: 0, throttle: 0, pos: [0, 0, 0], quat: [0, 0, 0, 1], vel: [0, 0, 0] },
   ],
   missiles: [
     { id: 4, kind: 'dart', ownerId: 1, targetId: 9, motorBurning: true, team: 'usa', pos: [10, 20, 30], vel: [800, 0, -12.3] },
@@ -38,6 +38,8 @@ const snapshot = (): Snapshot => ({
     seekerAxis: [0, 0, -1],
     radarLockMode: 'tracking',
     radarLockTargetId: 9,
+    gear: 0.5,
+    onGround: true,
     radarLockProgress: 0.4,
     lockedByRadar: true,
     targetId: 9,

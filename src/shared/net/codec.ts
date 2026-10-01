@@ -80,6 +80,10 @@ export interface SnapshotAircraft {
   id: number;
   alive: boolean;
   firingCannon: boolean;
+  /** landing gear out (M4) */
+  gearDown: boolean;
+  /** rolling on the runway (M4) */
+  onGround: boolean;
   /** modulo 256 on the wire */
   spawnGen: number;
   hp: number;
@@ -144,6 +148,9 @@ export interface OwnState {
   radarLockProgress: number;
   /** RWR: an enemy radar lock or a supported Lance is on this jet */
   lockedByRadar: boolean;
+  /** landing gear 1 down … 0 up, and whether the wheels are rolling (M4) */
+  gear: number;
+  onGround: boolean;
   targetId: number | null;
   outOfBoundsTicks: number;
   contacts: SnapshotContact[];
@@ -169,7 +176,7 @@ const AIRCRAFT_BYTES = 2 + 1 + 1 + 2 + 1 + 12 + 8 + 6;
 const MISSILE_BYTES = 2 + 2 + 2 + 1 + 12 + 6;
 const BOMB_BYTES = 2 + 1 + 12 + 6;
 const TARGET_BYTES = 2;
-const OWN_FIXED = 12 * 3 + 16 + 4 + 4 + 2 + 2 + 1 + 1 + 1 + 1 + 1 + 2 + 12 + 1 + 2 + 1 + 1 + 2 + 2 + 1;
+const OWN_FIXED = 12 * 3 + 16 + 4 + 4 + 2 + 2 + 1 + 1 + 1 + 1 + 1 + 2 + 12 + 1 + 2 + 1 + 1 + 4 + 2 + 2 + 1;
 const CONTACT_BYTES = 2 + 1 + 4 + 4;
 const MAX_LIST = 255;
 
@@ -227,7 +234,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
   u8(aircraft.length);
   for (const a of aircraft) {
     u16(a.id);
-    u8((a.alive ? 1 : 0) | (a.firingCannon ? 2 : 0));
+    u8((a.alive ? 1 : 0) | (a.firingCannon ? 2 : 0) | (a.gearDown ? 4 : 0) | (a.onGround ? 8 : 0));
     u8(a.spawnGen % 256);
     u16(a.hp * 10);
     u8(a.throttle * 255);
@@ -280,7 +287,8 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     u8(Math.max(0, RADAR_LOCK_MODES.indexOf(w.radarLockMode)));
     id(w.radarLockTargetId);
     u8(w.radarLockProgress * 255);
-    u8(w.lockedByRadar ? 1 : 0);
+    u8((w.lockedByRadar ? 1 : 0) | (w.onGround ? 2 : 0));
+    f32(w.gear);
     id(w.targetId);
     u16(w.outOfBoundsTicks);
     const contacts = w.contacts.slice(0, MAX_LIST);
@@ -349,7 +357,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot {
   for (let n = u8(); n > 0; n--) {
     const idv = u16();
     const flags = u8();
-    aircraft.push({ id: idv, alive: (flags & 1) !== 0, firingCannon: (flags & 2) !== 0, spawnGen: u8(), hp: u16() / 10, throttle: u8() / 255, pos: vec(), quat: quat(), vel: vel() });
+    aircraft.push({ id: idv, alive: (flags & 1) !== 0, firingCannon: (flags & 2) !== 0, gearDown: (flags & 4) !== 0, onGround: (flags & 8) !== 0, spawnGen: u8(), hp: u16() / 10, throttle: u8() / 255, pos: vec(), quat: quat(), vel: vel() });
   }
   const missiles: SnapshotMissile[] = [];
   for (let n = u8(); n > 0; n--) {
@@ -383,7 +391,10 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot {
     const radarLockMode = RADAR_LOCK_MODES[u8()] ?? 'off';
     const radarLockTargetId = id();
     const radarLockProgress = u8() / 255;
-    const lockedByRadar = (u8() & 1) !== 0;
+    const rwr = u8();
+    const lockedByRadar = (rwr & 1) !== 0;
+    const onGround = (rwr & 2) !== 0;
+    const gear = f32();
     const targetId = id();
     const outOfBoundsTicks = u16();
     const contacts: SnapshotContact[] = [];
@@ -392,7 +403,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot {
       const flags = u8();
       contacts.push({ id: cid, visual: (flags & 1) !== 0, radar: (flags & 2) !== 0, rangeM: f32(), offNoseRad: f32() });
     }
-    own = { pos, vel: velocity, angVel, quat: q, throttle, airbrake, hp, cannonRounds, srm, mrm, countermeasures, bombs: bombsLeft, seekerMode, seekerTargetId, seekerAxis, radarLockMode, radarLockTargetId, radarLockProgress, lockedByRadar, targetId, outOfBoundsTicks, contacts };
+    own = { pos, vel: velocity, angVel, quat: q, throttle, airbrake, hp, cannonRounds, srm, mrm, countermeasures, bombs: bombsLeft, seekerMode, seekerTargetId, seekerAxis, radarLockMode, radarLockTargetId, radarLockProgress, lockedByRadar, gear, onGround, targetId, outOfBoundsTicks, contacts };
   }
   return { tick, ackSeq, queueDepth, aircraft, missiles, bombs, targets, own };
 }

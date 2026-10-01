@@ -4,6 +4,7 @@ import { buildTerrain, type MapDefinition } from '../../shared/data/maps/map-def
 import { createTestRange } from '../../shared/data/maps/test-range.ts';
 import type { GridTerrain } from '../../shared/map/terrain.ts';
 import { type ControlInput, neutralInput } from '../../shared/physics/controls.ts';
+import { CALM_NOON } from '../../shared/world/time-of-day.ts';
 import { ClientConnection } from '../../server/connection.ts';
 import { RoomManager } from '../../server/room-manager.ts';
 import { INTERP_DELAY_TICKS, NetworkSession } from './network-session.ts';
@@ -21,7 +22,7 @@ const FRAME_MS = 1000 / 60;
 /** Virtual time, a server, and an in-memory line with a one-way delay in each direction. */
 class Harness {
   t = 0;
-  readonly manager = new RoomManager({ maxRooms: 4, maxHumansPerRoom: 4, teamSize: 1, botSkill: 'rookie', build: 'test', idleCloseMs: 30_000 }, map, terrain);
+  readonly manager = new RoomManager({ maxRooms: 4, maxHumansPerRoom: 4, teamSize: 1, botSkill: 'rookie', build: 'test', idleCloseMs: 30_000 }, () => ({ map, terrain }));
   private timers: { at: number; seq: number; fn: () => void }[] = [];
   private seq = 0;
   /** server positions per tick, by aircraft id, for checking interpolation */
@@ -87,7 +88,12 @@ class Harness {
 }
 
 async function join(h: Harness, id: number, aircraftId = 'kestrel') {
-  const promise = NetworkSession.connect(h.line(id), { room: 'net', callsign: `P${id}`, aircraftId, mode: 'team-deathmatch' }, map, terrain, () => h.t);
+  const promise = NetworkSession.connect(
+    h.line(id),
+    { room: 'net', callsign: `P${id}`, aircraftId, mode: 'team-deathmatch', map: 'test-range', environment: CALM_NOON, start: 'air' },
+    async () => ({ map, terrain }),
+    () => h.t,
+  );
   for (let i = 0; i < 60 && !(await Promise.race([promise.then(() => true), Promise.resolve(false)])); i++) h.advance(FRAME_MS);
   return promise;
 }

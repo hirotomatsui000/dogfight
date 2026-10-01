@@ -4,7 +4,16 @@ import { parseClientJson, ProtocolError, sanitizeCallsign, sanitizeRoomName } fr
 describe('protocol', () => {
   it('reads a hello and cleans its room and callsign', () => {
     const m = parseClientJson(JSON.stringify({ type: 'hello', version: 1, room: ' Friday Night!! ', callsign: '<b>Ace</b>', aircraftId: 'kestrel', mode: 'strike' }));
-    expect(m).toEqual({ type: 'hello', version: 1, room: 'friday-night', callsign: 'bAceb', aircraftId: 'kestrel', mode: 'strike' });
+    expect(m).toMatchObject({ type: 'hello', version: 1, room: 'friday-night', callsign: 'bAceb', aircraftId: 'kestrel', mode: 'strike' });
+  });
+
+  it('reads the map, weather, clock and start of a hello, with safe defaults (M4)', () => {
+    const m = parseClientJson(
+      JSON.stringify({ type: 'hello', version: 3, aircraftId: 'kestrel', map: 'test-range', environment: { weather: 'rain', startHour: 23, clockRunning: true }, start: 'runway' }),
+    );
+    expect(m).toMatchObject({ map: 'test-range', environment: { weather: 'rain', startHour: 23, clockRunning: true }, start: 'runway' });
+    const odd = parseClientJson(JSON.stringify({ type: 'hello', version: 3, aircraftId: 'kestrel', map: 'mars', environment: { weather: 'hail', startHour: 30 }, start: 'moon' }));
+    expect(odd).toMatchObject({ map: 'lechovia', environment: { weather: 'clear', startHour: 6, clockRunning: false }, start: 'air' });
   });
 
   it('defaults an unknown mode to Dogfight and an empty room to the public room', () => {

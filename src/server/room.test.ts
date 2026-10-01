@@ -5,6 +5,7 @@ import type { GridTerrain } from '../shared/map/terrain.ts';
 import { decodeSnapshot, encodeInput, decodeInput, type Snapshot } from '../shared/net/codec.ts';
 import { type HelloMessage, PROTOCOL_VERSION, type ServerJsonMessage } from '../shared/net/protocol.ts';
 import { neutralInput } from '../shared/physics/controls.ts';
+import { CALM_NOON } from '../shared/world/time-of-day.ts';
 import { type Peer, Room, type RoomOptions } from './room.ts';
 
 let map: MapDefinition;
@@ -36,7 +37,17 @@ class FakePeer implements Peer {
   }
 }
 
-const hello = (aircraftId = 'kestrel', callsign = 'Ace'): HelloMessage => ({ type: 'hello', version: PROTOCOL_VERSION, room: 'test', callsign, aircraftId, mode: 'team-deathmatch' });
+const hello = (aircraftId = 'kestrel', callsign = 'Ace'): HelloMessage => ({
+  type: 'hello',
+  version: PROTOCOL_VERSION,
+  room: 'test',
+  callsign,
+  aircraftId,
+  mode: 'team-deathmatch',
+  map: 'test-range',
+  environment: CALM_NOON,
+  start: 'air',
+});
 const options = (over: Partial<RoomOptions> = {}): RoomOptions => ({ name: 'test', mode: 'team-deathmatch', teamSize: 4, botSkill: 'veteran', maxHumans: 2, build: 'test', seed: 5, restartDelayS: 2, ...over });
 const input = (seq: number, over: Partial<ReturnType<typeof neutralInput>> = {}) => decodeInput(encodeInput(seq, { ...neutralInput(0.8), ...over }, 3));
 

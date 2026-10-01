@@ -1,5 +1,6 @@
 import type { DifficultyId } from '../shared/ai/difficulty.ts';
 import type { MapDefinition } from '../shared/data/maps/map-definition.ts';
+import type { MapId } from '../shared/data/maps/registry.ts';
 import type { Terrain } from '../shared/map/terrain.ts';
 import { type HelloMessage, type OnlineModeId, PROTOCOL_VERSION } from '../shared/net/protocol.ts';
 import { type Peer, Room } from './room.ts';
@@ -17,8 +18,20 @@ export interface RoomSettings {
 export interface RoomInfo {
   name: string;
   mode: OnlineModeId;
+  map: MapId;
   humans: number;
   maxHumans: number;
+}
+
+/** A map ready for rooms: the definition and the terrain built from it, shared by every room on it. */
+export interface RoomMap {
+  map: MapDefinition;
+  terrain: Terrain;
+}
+
+/** Strike was laid out on the Test Range, so a Strike room flies there whatever the creator chose (M4). */
+export function roomMapId(mode: OnlineModeId, requested: MapId): MapId {
+  return mode === 'strike' ? 'test-range' : requested;
 }
 
 /** Creates rooms on first join and closes idle or broken ones (spec §16). */
@@ -26,13 +39,12 @@ export class RoomManager {
   private readonly rooms = new Map<string, Room>();
   private readonly roomOfPeer = new Map<number, Room>();
   private readonly settings: RoomSettings;
-  private readonly map: MapDefinition;
-  private readonly terrain: Terrain;
+  private readonly maps: (id: MapId) => RoomMap;
 
-  constructor(settings: RoomSettings, map: MapDefinition, terrain: Terrain) {
+  /** `maps` returns each map's definition and terrain (built once at start). */
+  constructor(settings: RoomSettings, maps: (id: MapId) => RoomMap) {
     this.settings = settings;
-    this.map = map;
-    this.terrain = terrain;
+    this.maps = maps;
   }
 
   get playerCount(): number {
@@ -57,10 +69,21 @@ export class RoomManager {
     let room = this.rooms.get(hello.room);
     if (!room) {
       if (this.rooms.size >= this.settings.maxRooms) return { ok: false, reason: 'The server is full. Try again later.' };
+      const mapId = roomMapId(hello.mode, hello.map);
+      const { map, terrain } = this.maps(mapId);
       room = new Room(
-        { name: hello.room, mode: hello.mode, teamSize: this.settings.teamSize, botSkill: this.settings.botSkill, maxHumans: this.settings.maxHumansPerRoom, build: this.settings.build },
-        this.map,
-        this.terrain,
+        {
+          name: hello.room,
+          mode: hello.mode,
+          teamSize: this.settings.teamSize,
+          botSkill: this.settings.botSkill,
+          maxHumans: this.settings.maxHumansPerRoom,
+          build: this.settings.build,
+          mapId,
+          environment: hello.environment,
+        },
+        map,
+        terrain,
       );
       this.rooms.set(hello.room, room);
     }
@@ -97,7 +120,7 @@ export class RoomManager {
   /** Rooms for Quick play and the health check, busiest first. */
   list(): RoomInfo[] {
     return [...this.rooms.values()]
-      .map((r) => ({ name: r.name, mode: r.mode, humans: r.humanCount, maxHumans: this.settings.maxHumansPerRoom }))
+      .map((r) => ({ name: r.name, mode: r.mode, map: r.mapId, humans: r.humanCount, maxHumans: this.settings.maxHumansPerRoom }))
       .sort((a, b) => b.humans - a.humans || a.name.localeCompare(b.name));
   }
 
