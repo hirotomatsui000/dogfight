@@ -20,8 +20,8 @@ describe('start menu helpers', () => {
   });
 
   it('sums an aircraft up in the first sentence of its description', () => {
-    expect(aircraftSummary({ ...kestrel, description: 'Rolls faster than anything. Lightly built.' })).toBe('Rolls faster than anything.');
-    expect(aircraftSummary({ ...kestrel, description: 'A test jet' })).toBe('A test jet');
+    expect(aircraftSummary({ ...kestrel, description: 'Rolls faster than anything. Lightly built.' })).toBe('Light multirole fighter · Rolls faster than anything.');
+    expect(aircraftSummary({ ...kestrel, description: 'A test jet' })).toBe('Light multirole fighter · A test jet');
   });
 });
 

@@ -54,7 +54,7 @@ export function strikeRole(c: AircraftConfig): string {
 
 export function aircraftSummary(c: AircraftConfig): string {
   const end = c.description.indexOf('. ');
-  return end < 0 ? c.description : c.description.slice(0, end + 1);
+  return `${c.role} · ${end < 0 ? c.description : c.description.slice(0, end + 1)}`;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -70,12 +70,34 @@ interface Choice<T extends string> {
   kicker?: string;
 }
 
-/** A radio group drawn as HUD designation boxes: the chosen option is boxed like a designated target. */
-function choiceGroup<T extends string>(name: string, legend: string, choices: readonly Choice<T>[], value: T, onChange: (v: T) => void): HTMLFieldSetElement {
+/**
+ * A radio group drawn as HUD designation boxes: the chosen option is boxed like a designated target. With `rowOf`,
+ * the options sit in labelled rows (the jets, one row per team).
+ */
+function choiceGroup<T extends string>(
+  name: string,
+  legend: string,
+  choices: readonly Choice<T>[],
+  value: T,
+  onChange: (v: T) => void,
+  rowOf?: (c: Choice<T>) => string,
+): HTMLFieldSetElement {
   const set = el('fieldset', `pick pick-${name}`);
   set.appendChild(el('legend', 'eyebrow', legend));
-  const row = el('div', 'options');
+  const rows = new Map<string, HTMLDivElement>();
+  const rowFor = (c: Choice<T>) => {
+    const key = rowOf ? rowOf(c) : '';
+    let row = rows.get(key);
+    if (!row) {
+      row = el('div', rowOf ? 'options option-row' : 'options');
+      if (rowOf) row.appendChild(el('span', 'option-row-label', key));
+      rows.set(key, row);
+      set.appendChild(row);
+    }
+    return row;
+  };
   for (const c of choices) {
+    const row = rowFor(c);
     const input = el('input', 'sr-only');
     input.type = 'radio';
     input.name = name;
@@ -92,7 +114,6 @@ function choiceGroup<T extends string>(name: string, legend: string, choices: re
     label.appendChild(el('span', 'option-name', c.label));
     row.append(input, label);
   }
-  set.appendChild(row);
   return set;
 }
 
@@ -184,7 +205,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
 
   const main = el('div', 'start-main');
   const brand = el('header', 'brand');
-  brand.append(titleLockup(), el('p', 'brand-tag', 'Jet dogfight · you vs an AI pilot'));
+  brand.append(titleLockup(), el('p', 'brand-tag', 'Jet dogfight · AI pilots or online'));
   if (typeof window.matchMedia === 'function' && isTouchOnly((q) => window.matchMedia(q))) {
     const notice = el('p', 'notice', 'This game needs a keyboard and mouse. Open it on a desktop or laptop computer.');
     notice.setAttribute('role', 'status');
@@ -201,7 +222,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   const jets = choiceGroup(
     'aircraft',
     'Aircraft',
-    aircraft.map((a) => ({ value: a.id, label: a.name, kicker: TEAM_NAMES[a.team] })),
+    aircraft.map((a) => ({ value: a.id, label: a.name })),
     aircraftId,
     (id) => {
       aircraftId = id;
@@ -209,6 +230,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
       showSummary();
       handlers.onPreview(id);
     },
+    (c) => TEAM_NAMES[aircraft.find((a) => a.id === c.value)?.team ?? 'usa'],
   );
   jets.appendChild(summary);
   showSummary();
