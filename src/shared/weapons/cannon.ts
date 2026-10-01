@@ -26,6 +26,8 @@ export interface Projectile {
   ageS: number;
   pos: Vector3;
   prevPos: Vector3;
+  /** lag compensation: hit tests use targets as they were this many ticks ago (spec §7) */
+  rewindTicks: number;
 }
 
 export interface Trigger {
@@ -75,6 +77,7 @@ export function createProjectile(id: number, shooter: Shooter, spec: CannonSpec,
     ageS: 0,
     pos: pos.clone(),
     prevPos: pos.clone(),
+    rewindTicks: 0,
   };
 }
 

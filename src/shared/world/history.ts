@@ -38,6 +38,15 @@ export class MotionHistory {
     this.count = Math.min(this.count + 1, this.capacity);
   }
 
+  /** The position recorded `ticksAgo` records ago (0 = newest), clamped to the oldest. False when nothing is recorded. */
+  positionAt(ticksAgo: number, out: Vector3): boolean {
+    if (this.count === 0) return false;
+    const back = Math.min(Math.max(0, Math.round(ticksAgo)), this.count - 1);
+    const i = ((this.head - back + this.capacity) % this.capacity) * 3;
+    out.set(this.pos[i], this.pos[i + 1], this.pos[i + 2]);
+    return true;
+  }
+
   /**
    * Where the aircraft appeared to be `ticksAgo` records ago, extrapolated to now along the velocity it had then
    * (clamped to the oldest record). False when nothing has been recorded.

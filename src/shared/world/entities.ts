@@ -54,6 +54,8 @@ export interface AircraftEntity extends CreditRecord {
   targetId: number | null;
   readonly seeker: SeekerState;
   readonly history: MotionHistory;
+  /** online: how many ticks behind this pilot sees the others; cannon hit tests rewind by it (spec §7) */
+  viewDelayTicks: number;
 }
 
 export interface NewAircraft {
@@ -96,6 +98,7 @@ export function createAircraftEntity(n: NewAircraft): AircraftEntity {
     targetId: null,
     seeker: createSeeker(),
     history: new MotionHistory(),
+    viewDelayTicks: 0,
     lastDamagedBy: null,
     lastDamagedTick: -1,
     lastLockedBy: null,

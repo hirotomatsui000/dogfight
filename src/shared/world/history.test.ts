@@ -41,3 +41,16 @@ describe('MotionHistory', () => {
     expect(h.length).toBe(0);
   });
 });
+
+describe('MotionHistory.positionAt', () => {
+  it('returns recorded positions, clamped to the oldest', () => {
+    const h = new MotionHistory(4);
+    const v = new Vector3();
+    for (let i = 0; i < 6; i++) h.record(new Vector3(i, 0, 0), v);
+    const out = new Vector3();
+    expect(h.positionAt(0, out) && out.x).toBe(5);
+    expect(h.positionAt(2, out) && out.x).toBe(3);
+    expect(h.positionAt(99, out) && out.x).toBe(2);
+    expect(new MotionHistory().positionAt(0, out)).toBe(false);
+  });
+});

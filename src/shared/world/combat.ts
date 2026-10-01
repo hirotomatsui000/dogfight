@@ -16,6 +16,9 @@ import type { AircraftEntity } from './entities.ts';
 import type { GameEvent, WeaponKind } from './events.ts';
 import type { GroundTarget } from './ground-targets.ts';
 
+/** Lag compensation never rewinds further than this (250 ms, spec §7). */
+export const MAX_REWIND_TICKS = 15;
+
 /** The parts of the World that combat needs. */
 export interface CombatHost {
   readonly tick: number;
@@ -52,6 +55,8 @@ export class Combat {
   private readonly burst = new Vector3();
   private readonly victimPos = new Vector3();
   private readonly impact = new Vector3();
+  private readonly rewoundPrev = new Vector3();
+  private readonly rewoundPos = new Vector3();
 
   constructor(host: CombatHost) {
     this.host = host;
@@ -129,8 +134,11 @@ export class Combat {
     const shots = pullTrigger(a, spec, dt, a.stores.cannonRounds);
     if (shots === 0) return;
     const density = atmosphere(a.flight.pos.y, this.air).density;
+    const rewind = Math.min(Math.max(0, Math.round(a.viewDelayTicks)), MAX_REWIND_TICKS);
     for (let i = 0; i < shots; i++) {
-      this.projectiles.push(createProjectile(this.nextProjectileId++, a, spec, this.host.rng, density));
+      const p = createProjectile(this.nextProjectileId++, a, spec, this.host.rng, density);
+      p.rewindTicks = rewind;
+      this.projectiles.push(p);
       a.stores.cannonRounds -= spec.roundsPerProjectile;
     }
   }
@@ -212,7 +220,16 @@ export class Combat {
       let done = false;
       for (const t of host.aircraftList()) {
         if (!t.alive || t.team === p.team) continue;
-        if (closestApproach(p.prevPos, p.pos, t.prevPos, t.flight.pos, this.approach).distance > t.config.damage.hitRadiusM) continue;
+        let from = t.prevPos;
+        let to = t.flight.pos;
+        // Lag compensation: test against the target where the shooter saw it, within its current life only (the
+        // history starts again at every spawn).
+        const back = Math.min(p.rewindTicks, t.history.length - 2);
+        if (back > 0 && t.history.positionAt(back, this.rewoundPos) && t.history.positionAt(back + 1, this.rewoundPrev)) {
+          from = this.rewoundPrev;
+          to = this.rewoundPos;
+        }
+        if (closestApproach(p.prevPos, p.pos, from, to, this.approach).distance > t.config.damage.hitRadiusM) continue;
         host.applyDamage(t, p.damage, host.getAircraft(p.ownerId) ?? null, 'cannon');
         done = true;
         break;
