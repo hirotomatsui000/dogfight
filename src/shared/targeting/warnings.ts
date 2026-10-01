@@ -21,7 +21,7 @@ const qInv = new Quaternion();
  * The missile guiding on `self` that will arrive first (spec §10.3). Warnings start at launch, so the pilot can watch
  * it come and time a hard break. Missiles that are not closing rank after the closing ones, nearest first.
  */
-export function incomingMissileWarning(self: { id: number; flight: FlightState }, missiles: Iterable<Missile>): MissileWarning | null {
+export function incomingMissileWarning(self: { id: number; flight: FlightState }, missiles: Iterable<Pick<Missile, 'id' | 'targetId' | 'pos' | 'vel'>>): MissileWarning | null {
   let best: MissileWarning | null = null;
   for (const m of missiles) {
     if (m.targetId !== self.id) continue;
