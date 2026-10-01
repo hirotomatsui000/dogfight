@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "server": "node src/server/main.ts",
-    "start": "node src/server/main.ts"
+    "start": "node src/server/main.ts",
+    "smoke": "node tools/smoke-test.ts"
   },
   "dependencies": {
     "@fontsource/rajdhani": "5.3.0",

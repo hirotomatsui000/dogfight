@@ -4,7 +4,10 @@ A browser-based flight-combat prototype. Two teams, **USA** and **Russia**, fly 
 real aircraft over a fictional landscape inspired by Poland. This repository is being built in milestones (see
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
-**Current milestone: M1c "Website basics"** (after M1a "Fly", M1b "Fight" and M1d "Strike")
+**Current milestone: M2 "Multiplayer"** (after M1a "Fly", M1b "Fight", M1d "Strike" and M1c "Website basics")
+- **Online play** through a small Node.js game server: rooms of up to 16 pilots, bots in the empty seats, Dogfight
+  or Strike, invite links, quick chat, and automatic reconnects. The server is the referee; your own jet is predicted
+  so it answers the stick at once, and everyone else is drawn smoothly about 0.1 s in the past.
 - A **training flight** (about 3 minutes): fly through rings, gun a drone, lock and fire a missile, beat a missile.
 - **Settings**: volume, mouse sensitivity and invert, rebindable keys, gamepad and flight-stick setup, HUD color and
   size, graphics (Auto, Low, Medium, High) and camera shake.
@@ -18,7 +21,7 @@ real aircraft over a fictional landscape inspired by Poland. This repository is 
 - A combat HUD with target box, missile lock, missile warning, radar display, kill feed and scoreboard.
 - A third-person camera that follows your jet, and a title screen over a live 3D view of the jet you pick.
 - Sim-lite flight physics over a 60 × 60 km test range with photo scenery; Free Flight is still available.
-- Everything runs locally in the browser.
+- Offline play runs entirely in the browser; online play needs the game server (below).
 
 ## Requirements
 
@@ -38,6 +41,52 @@ aircraft and an opponent, and press **FLY** (or **Free flight** to fly without e
 Click the view to capture the mouse, then fly with the mouse.
 
 Other devices on the same network can open the "Network" URL that Vite prints.
+
+## Play online
+
+```bash
+npm run build
+npm start
+```
+
+`npm start` runs the game server: it serves the built site from `dist/`, the game connection at `/ws`, and prints the
+addresses to open, one for this machine and one for each network (for friends on the same Wi-Fi). Open one, press
+**ONLINE** next to FLY, and **Join room** (or **Quick play**). Everyone in a room shares one sky; bots fly the empty
+seats. Your jet picks your team, and a new room plays the Mission chosen on the title screen. **Copy invite link** gives
+a link like `http://192.168.1.20:8080/?room=friday` that drops a friend into the same room. Keys **7**, **8**, **9**
+and **0** send quick-chat lines. The match never pauses online: the pause menu only covers the screen.
+
+While developing, run `npm run server` in one terminal and `npm run dev` in another: Vite passes the game connection
+on to the server (set `GAME_SERVER=host:port` if it runs elsewhere).
+
+Testing aids, added to the page address: `?lag=150` delays every message by 150 ms each way (add `&jitter=30` for
+uneven delay), and `?debug=1` shows frames per second, round trip, input queue and prediction error.
+
+Server settings, as environment variables or `--name=value` options:
+
+| Variable | Option | Default | Meaning |
+|---|---|---|---|
+| `PORT` | `--port` | 8080 | port for the site and the game connection |
+| `HOST` | `--host` | 0.0.0.0 | address to listen on |
+| `MAX_ROOMS` | `--max-rooms` | 20 | rooms open at once |
+| `MAX_HUMANS_PER_ROOM` | `--max-humans` | 16 | pilots per room |
+| `BOTS_PER_TEAM` | `--bots-per-team` | 4 | team size that bots fill up to |
+| `BOT_SKILL` | `--bot-skill` | veteran | rookie, veteran or ace |
+| `DIST_DIR` | `--dist` | dist | the built site to serve |
+
+`GET /healthz` reports the server's health and `GET /api/rooms` lists the rooms.
+
+### Run the server with Docker
+
+```bash
+docker build -t contested-skies .
+docker run --rm -p 8080:8080 contested-skies
+```
+
+The image builds the site and runs the server as an unprivileged user on port 8080, with a health check. Any host
+that runs a container and allows WebSockets works (put it behind HTTPS so the page connects with `wss://`). After
+deploying, `npm run smoke -- https://your-server.example` checks it from outside: the health check, the page, and two
+test pilots who join a room, fly for 15 seconds, see each other and swap a chat line (`--lag=150` adds delay).
 
 ## Controls
 
@@ -107,6 +156,9 @@ top speed, turn rate, stall speed and G-limits.
 
 `npm run build` type-checks with TypeScript and builds the production bundle into `dist/`.
 
+`npm run smoke` checks a running game server (default http://localhost:8080) with two test pilots; see
+[Run the server with Docker](#run-the-server-with-docker).
+
 ## Publish as a website
 
 ```bash
@@ -123,7 +175,8 @@ To publish it on Netlify:
 2. Drag the `dist-single` folder onto the page.
 3. Netlify gives the site a public URL, which you can rename under **Site configuration**.
 
-Any static host works the same way, and the file also runs when opened directly in a browser. Visitors need a
+Any static host works the same way, and the file also runs when opened directly in a browser. A static site has
+no game server, so it plays offline only: for online play, run the server ([Play online](#play-online)). Visitors need a
 desktop or laptop with a keyboard and mouse; phones and tablets see a notice.
 
 ## Scenery photos
@@ -136,8 +189,10 @@ forest and the Tatra mountains (EOX, CC BY 4.0), tiled across the fictional map 
 
 | Path | Contents |
 |---|---|
-| `src/shared/` | Pure TypeScript game core, reused by the future multiplayer server. It holds data-driven aircraft (`data/aircraft/`), physics (`physics/`), steering AI (`ai/`), terrain and maps (`map/`, `data/maps/`), game modes (`modes/`) and the simulation `world/`. |
-| `src/client/` | Browser client: session loop, input, rendering (Three.js), cameras, HUD and menus. |
+| `src/shared/` | Pure TypeScript game core, shared by the browser and the game server. It holds data-driven aircraft (`data/aircraft/`), physics (`physics/`), steering AI (`ai/`), terrain and maps (`map/`, `data/maps/`), game modes (`modes/`) and the simulation `world/`. |
+| `src/client/` | Browser client: session loop (local or networked), input, rendering (Three.js), cameras, HUD and menus. |
+| `src/server/` | Game server: HTTP and WebSocket, rooms, bots, snapshots, lag compensation. Runs straight from TypeScript. |
+| `src/shared/net/` | The wire protocol: JSON control messages and the binary input and snapshot formats. |
 | `docs/superpowers/` | Design spec and implementation plans. |
 
 ### Adding an aircraft
