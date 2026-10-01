@@ -6,6 +6,7 @@ import { LoadProgress } from './render/load-progress.ts';
 import { QUALITY_PRESETS, resolveQuality } from './render/quality.ts';
 import { Renderer } from './render/renderer.ts';
 import { Showcase } from './render/showcase.ts';
+import { type LoadedMap, loadMap } from './render/terrain/map-loader.ts';
 import { showLoadBar } from './ui/load-bar.ts';
 import { type StartOptions, showStartMenu } from './ui/menu.ts';
 import { SettingsStore } from './ui/settings.ts';
@@ -49,7 +50,7 @@ function showError(message: string, title = 'Something went wrong', back?: () =>
 const prefersReducedMotion = () =>
   typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function run(scenery: Promise<SceneryTextures>, aircraftMeshes: Promise<AircraftMeshes>, settings: SettingsStore, progress: LoadProgress): void {
+function run(scenery: Promise<SceneryTextures>, world: Promise<LoadedMap>, aircraftMeshes: Promise<AircraftMeshes>, settings: SettingsStore, progress: LoadProgress): void {
   const launch = (options: StartOptions): void => {
     startGame(app, options, { onQuit: showMenu, onRestart: launch }, scenery, aircraftMeshes, settings, progress).catch((err: unknown) => {
       console.error(err);
@@ -63,7 +64,7 @@ function run(scenery: Promise<SceneryTextures>, aircraftMeshes: Promise<Aircraft
   function showMenu(): void {
     const s = settings.current;
     const quality = QUALITY_PRESETS[resolveQuality(s.graphics, s.autoGraphics, window.innerWidth, window.innerHeight, window.devicePixelRatio)];
-    const showcase = new Showcase(app, scenery, aircraftMeshes, prefersReducedMotion(), quality);
+    const showcase = new Showcase(app, scenery, world, aircraftMeshes, prefersReducedMotion(), quality);
     const close = showStartMenu(app, {
       onPreview: (id) => showcase.setAircraft(id),
       onStart: (options) => {
@@ -78,10 +79,11 @@ function run(scenery: Promise<SceneryTextures>, aircraftMeshes: Promise<Aircraft
 }
 
 if (Renderer.isWebGLAvailable()) {
-  // Start decoding the scenery photos and the jet models now: the title screen shows them, and the match reuses them.
+  // Start decoding the scenery photos and the jet models, and generating Lechovia, now: the title screen shows them,
+  // and the match reuses them.
   const progress = new LoadProgress();
   showLoadBar(app, progress);
-  run(loadSceneryTextures(progress), loadAircraftMeshes(IMPORTED_MODELS, progress), new SettingsStore(), progress);
+  run(loadSceneryTextures(progress), loadMap('lechovia', progress), loadAircraftMeshes(IMPORTED_MODELS, progress), new SettingsStore(), progress);
 } else {
   showError('WebGL is not available. Use a current desktop Chrome, Edge, Firefox or Safari with hardware acceleration enabled.');
 }

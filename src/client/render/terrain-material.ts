@@ -27,9 +27,9 @@ export function createTerrainMaterial(t: TerrainTextures): MeshStandardMaterial 
         '#include <common>',
         `#include <common>
 attribute vec4 landClass;
-attribute vec2 landExtra;
+attribute vec4 landExtra;
 varying vec4 vCsClass;
-varying vec2 vCsExtra;
+varying vec4 vCsExtra;
 varying vec2 vCsWorldXZ;
 varying float vCsViewDist;`,
       )
@@ -52,7 +52,7 @@ uniform sampler2D csForest;
 uniform sampler2D csMountain;
 uniform sampler2D csDetail;
 varying vec4 vCsClass;
-varying vec2 vCsExtra;
+varying vec4 vCsExtra;
 varying vec2 vCsWorldXZ;
 varying float vCsViewDist;
 
@@ -78,9 +78,18 @@ vec3 csPhoto(sampler2D tex, vec2 p, float tileM) {
   + csPhoto(csForest, vCsWorldXZ, 12000.0) * vCsClass.y
   + csPhoto(csMountain, vCsWorldXZ, 14000.0) * vCsClass.z
   + vec3(0.62, 0.53, 0.33) * vCsClass.w;
+// Towns: grey roofs and streets broken up in blocks of about 60 m; marshes: dark, olive, with pools.
+float csBlock = csNoise(vCsWorldXZ / 60.0);
+vec3 csTown = mix(vec3(0.2, 0.19, 0.18), vec3(0.31, 0.26, 0.22), csBlock) * (0.75 + 0.35 * csNoise(vCsWorldXZ / 17.0));
+// Parks and gardens keep some of the ground photo.
+float csGreen = smoothstep(0.62, 0.75, csNoise(vCsWorldXZ / 230.0 + 7.0));
+csColor = mix(csColor, csTown, vCsExtra.z * 0.75 * (1.0 - csGreen));
+float csPools = smoothstep(0.55, 0.7, csNoise(vCsWorldXZ / 140.0)) * vCsExtra.w;
+csColor = mix(csColor, csColor * vec3(0.7, 0.78, 0.55), vCsExtra.w * 0.7);
+csColor = mix(csColor, vec3(0.02, 0.04, 0.045), csPools);
 csColor = mix(csColor, vec3(0.012, 0.03, 0.045), vCsExtra.x);
 csColor = mix(csColor, vec3(0.82, 0.85, 0.9), vCsExtra.y * 0.85);
-float csFade = (1.0 - smoothstep(500.0, 2500.0, vCsViewDist)) * (1.0 - vCsExtra.x);
+float csFade = (1.0 - smoothstep(500.0, 2500.0, vCsViewDist)) * (1.0 - vCsExtra.x) * (1.0 - vCsExtra.z);
 vec3 csDet = texture2D(csDetail, vCsWorldXZ / 35.0).rgb;
 vec3 csDetMean = texture2D(csDetail, vec2(0.5), 16.0).rgb;
 float csRatio = dot(csDet, vec3(0.2126, 0.7152, 0.0722)) / max(dot(csDetMean, vec3(0.2126, 0.7152, 0.0722)), 0.01);
@@ -90,9 +99,9 @@ diffuseColor.rgb *= csColor;`,
       .replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
-roughnessFactor = mix(roughnessFactor, 0.2, vCsExtra.x);`,
+roughnessFactor = mix(roughnessFactor, 0.2, max(vCsExtra.x, csPools));`,
       );
   };
-  material.customProgramCacheKey = () => 'contested-skies-terrain-v1';
+  material.customProgramCacheKey = () => 'contested-skies-terrain-v2';
   return material;
 }

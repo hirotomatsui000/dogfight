@@ -10,12 +10,14 @@ export interface QualityPreset {
   particles: number;
   /** texture anisotropy for the ground photos */
   anisotropy: number;
+  /** terrain detail: a ground chunk splits when nearer than this many chunk widths (M4) */
+  terrainDetail: number;
 }
 
 export const QUALITY_PRESETS: Readonly<Record<QualityLevel, QualityPreset>> = {
-  low: { pixelRatio: 0.75, antialias: false, particles: 0.5, anisotropy: 2 },
-  medium: { pixelRatio: 1, antialias: true, particles: 0.75, anisotropy: 4 },
-  high: { pixelRatio: 2, antialias: true, particles: 1, anisotropy: 8 },
+  low: { pixelRatio: 0.75, antialias: false, particles: 0.5, anisotropy: 2, terrainDetail: 1.1 },
+  medium: { pixelRatio: 1, antialias: true, particles: 0.75, anisotropy: 4, terrainDetail: 1.4 },
+  high: { pixelRatio: 2, antialias: true, particles: 1, anisotropy: 8, terrainDetail: 1.8 },
 };
 
 /** Screens larger than this many device pixels start Auto on Medium (a Retina laptop panel stays on High; 4K drops). */

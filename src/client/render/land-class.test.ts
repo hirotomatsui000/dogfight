@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { LandCover } from '../../shared/map/land-cover.ts';
+import { LAND_COVERS } from '../../shared/map/land-cover.ts';
 import { landClassWeights } from './land-class.ts';
 
-const ALL: LandCover[] = ['sea', 'lake', 'river', 'beach', 'field', 'meadow', 'forest', 'rock', 'snow'];
 
 describe('landClassWeights', () => {
   it('maps land cover to the satellite land classes', () => {
@@ -15,11 +14,16 @@ describe('landClassWeights', () => {
   it('treats snow as mountain with a snow overlay', () => {
     expect(landClassWeights('snow')).toMatchObject({ mountain: 1, snow: 1 });
   });
+  it('paints towns and marshes as overlays on the farmland photo', () => {
+    expect(landClassWeights('urban')).toMatchObject({ farm: 1, urban: 1 });
+    expect(landClassWeights('marsh')).toMatchObject({ marsh: 1 });
+    expect(landClassWeights('airfield')).toMatchObject({ farm: 1, urban: 0 });
+  });
   it('marks every kind of water as water', () => {
     for (const cover of ['sea', 'lake', 'river'] as const) expect(landClassWeights(cover).water).toBe(1);
   });
   it('always has base weights that sum to 1', () => {
-    for (const cover of ALL) {
+    for (const cover of LAND_COVERS) {
       const w = landClassWeights(cover);
       expect(w.farm + w.forest + w.mountain + w.sand + w.water).toBe(1);
     }

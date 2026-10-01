@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
+import { createLechovia } from '../../shared/data/maps/lechovia/index.ts';
 import { buildTerrain } from '../../shared/data/maps/map-definition.ts';
-import { createTestRange } from '../../shared/data/maps/test-range.ts';
 import { showcaseCameraPosition, showcaseJetPose } from './showcase.ts';
 
 const pose = () => ({ position: new Vector3(), quaternion: new Quaternion() });
@@ -11,8 +11,8 @@ const rightWing = (q: Quaternion) => new Vector3(1, 0, 0).applyQuaternion(q);
 const times = Array.from({ length: 1200 }, (_, i) => i * 0.5);
 
 describe('title-screen jet', () => {
-  it('stays over the middle of the test range, well clear of the ground', () => {
-    const map = createTestRange(1);
+  it('stays over Lechovia, well clear of the ground', () => {
+    const map = createLechovia();
     const terrain = buildTerrain(map);
     const p = pose();
     for (const t of times) {

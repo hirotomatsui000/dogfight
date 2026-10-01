@@ -1,6 +1,7 @@
 import { DIFFICULTIES, type DifficultyId } from '../../shared/ai/difficulty.ts';
 import { listAircraft, TEAM_NAMES } from '../../shared/data/aircraft/registry.ts';
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
+import type { MapId } from '../../shared/data/maps/registry.ts';
 import { STRIKE_DEFAULTS, STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
@@ -20,6 +21,8 @@ export interface StartOptions {
   difficulty: DifficultyId;
   /** set for online play (M2): the room to join */
   online?: { room: string };
+  /** the map for Dogfight and Free Flight (M4); Lechovia when unset */
+  map?: MapId;
 }
 
 export interface StartMenuHandlers {

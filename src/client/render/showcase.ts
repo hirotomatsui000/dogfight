@@ -1,7 +1,5 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { getAircraft } from '../../shared/data/aircraft/registry.ts';
-import { buildTerrain } from '../../shared/data/maps/map-definition.ts';
-import { createTestRange } from '../../shared/data/maps/test-range.ts';
 import { DEG, G0 } from '../../shared/math/units.ts';
 import { type AircraftMeshes, aircraftModelFor } from './aircraft-meshes.ts';
 import type { AircraftModel } from './aircraft-model.ts';
@@ -10,17 +8,18 @@ import type { QualityPreset } from './quality.ts';
 import { Renderer } from './renderer.ts';
 import { Sea } from './sea.ts';
 import { SkySystem } from './sky.ts';
+import type { LoadedMap } from './terrain/map-loader.ts';
+import { TerrainLod } from './terrain/terrain-lod.ts';
 import { createTerrainMaterial } from './terrain-material.ts';
-import { TerrainMesh } from './terrain-mesh.ts';
 
 export interface Pose {
   position: Vector3;
   quaternion: Quaternion;
 }
 
-// The title-screen jet flies a steady right-hand turn over the lake district, well north of the mountain ridge.
-const ORBIT_CENTER_X = -6000;
-const ORBIT_CENTER_Z = -9000;
+// The title-screen jet flies a steady right-hand turn over Lechovia's lake district.
+const ORBIT_CENTER_X = 42000;
+const ORBIT_CENTER_Z = -42000;
 const ORBIT_RADIUS_M = 7000;
 const ORBIT_ALTITUDE_M = 1500;
 const ORBIT_SPEED_MS = 200;
@@ -80,7 +79,7 @@ const WIDE_LAYOUT_PX = 900;
 const FRAME_SHIFT = 0.17;
 const AFTERBURNER = 0.25;
 
-/** The live scene behind the title screen: the chosen jet circling over the test range. */
+/** The live scene behind the title screen: the chosen jet circling over Lechovia. */
 export class Showcase {
   private readonly renderer: Renderer;
   private readonly pose: Pose = { position: new Vector3(), quaternion: new Quaternion() };
@@ -89,21 +88,24 @@ export class Showcase {
   /** null until the jet models have loaded, so the generated model never flashes up first */
   private meshes: AircraftMeshes | null = null;
   private sea: Sea | null = null;
+  private ground: TerrainLod | null = null;
   private running = true;
   private rafId = 0;
   private startMs = 0;
   private readonly still: boolean;
+  private readonly detail: number;
 
   /** `still`: the system asks for reduced motion, so show one fixed shot. */
-  constructor(root: HTMLElement, scenery: Promise<SceneryTextures>, aircraftMeshes: Promise<AircraftMeshes>, still: boolean, quality?: QualityPreset) {
+  constructor(root: HTMLElement, scenery: Promise<SceneryTextures>, world: Promise<LoadedMap>, aircraftMeshes: Promise<AircraftMeshes>, still: boolean, quality?: QualityPreset) {
     this.still = still;
     this.renderer = new Renderer(root, quality);
     this.renderer.webgl.domElement.classList.add('showcase');
     this.renderer.camera.fov = SHOWCASE_FOV;
     this.renderer.camera.updateProjectionMatrix();
-    scenery.then(
-      (textures) => {
-        if (this.running) this.build(textures);
+    this.detail = quality?.terrainDetail ?? 1.6;
+    Promise.all([scenery, world]).then(
+      ([textures, map]) => {
+        if (this.running) void this.build(textures, map);
       },
       (err: unknown) => console.error('The title-screen scenery could not load; the menu still works.', err),
     );
@@ -129,16 +131,20 @@ export class Showcase {
   dispose(): void {
     this.running = false;
     cancelAnimationFrame(this.rafId);
+    this.ground?.dispose();
     this.renderer.dispose();
   }
 
-  private build(textures: SceneryTextures): void {
+  private async build(textures: SceneryTextures, map: LoadedMap): Promise<void> {
     const scene = this.renderer.scene;
     new SkySystem(scene, this.renderer.webgl, textures.sky);
-    const map = createTestRange(1);
-    scene.add(new TerrainMesh(buildTerrain(map), map, createTerrainMaterial(textures)).group);
+    this.ground = new TerrainLod(map, createTerrainMaterial(textures), this.detail);
+    scene.add(this.ground.group);
     this.sea = new Sea(textures.waterNormals);
     scene.add(this.sea.mesh);
+    // The ground under the first shot, before the scene fades in.
+    await this.ground.prepare(showcaseJetPose(0, this.pose).position);
+    if (!this.running) return;
     this.startMs = performance.now();
     this.rafId = requestAnimationFrame(this.frame);
   }
@@ -159,6 +165,7 @@ export class Showcase {
     }
     showcaseCameraPosition(t, this.pose, camera.position);
     camera.lookAt(this.pose.position);
+    this.ground?.update(camera.position);
     const w = window.innerWidth;
     const h = window.innerHeight;
     if (w >= WIDE_LAYOUT_PX) camera.setViewOffset(w, h, -w * FRAME_SHIFT, 0, w, h);

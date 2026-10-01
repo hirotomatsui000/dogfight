@@ -1,7 +1,6 @@
 import { Color, FogExp2, Quaternion, Vector2, Vector3 } from 'three';
 import { DIFFICULTIES } from '../shared/ai/difficulty.ts';
-import { buildTerrain } from '../shared/data/maps/map-definition.ts';
-import { createTestRange } from '../shared/data/maps/test-range.ts';
+import type { MapId } from '../shared/data/maps/registry.ts';
 import { BOMB_ANVIL, CANNONS } from '../shared/data/weapons.ts';
 import { timeToImpact } from '../shared/map/ground-proximity.ts';
 import { DEG } from '../shared/math/units.ts';
@@ -39,8 +38,9 @@ import { Renderer } from './render/renderer.ts';
 import { SceneSync } from './render/scene-sync.ts';
 import { Sea } from './render/sea.ts';
 import { SkySystem } from './render/sky.ts';
+import { loadMap } from './render/terrain/map-loader.ts';
+import { TerrainLod } from './render/terrain/terrain-lod.ts';
 import { createTerrainMaterial } from './render/terrain-material.ts';
-import { TerrainMesh } from './render/terrain-mesh.ts';
 import { TrainingRings } from './render/training-rings.ts';
 import { CHAT_KEYS, ConnectionOverlay, connectOnline, DebugOverlay, isOutdated, RECONNECT_DELAYS_MS, reportErrors, showUpdateNotice } from './online-play.ts';
 import type { GameSession } from './session/game-session.ts';
@@ -134,8 +134,20 @@ export async function startGame(
   }
   // Never rejects: a jet whose model fails to load uses its generated model.
   const meshes = await aircraftMeshes;
-  const map = createTestRange(1);
-  const terrain = buildTerrain(map);
+  // Strike and Training were laid out on the Test Range; online rooms fly there too until rooms choose maps.
+  const mapId: MapId = options.mission === 'strike' || options.mission === 'training' || options.online ? 'test-range' : (options.map ?? 'lechovia');
+  let loadedMap;
+  try {
+    loadedMap = await loadMap(mapId, progress);
+  } catch (err) {
+    renderer.dispose();
+    audio?.dispose();
+    stopLoadingText();
+    loading.remove();
+    throw new Error(`Could not build the map: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const map = loadedMap.def;
+  const terrain = loadedMap.terrain;
   const mode = createMode(options);
   /** the server connection in online play (M2), otherwise null */
   let online: NetworkSession | null = null;
@@ -166,9 +178,13 @@ export async function startGame(
     });
   }
   new SkySystem(renderer.scene, renderer.webgl, textures.sky);
-  renderer.scene.add(new TerrainMesh(terrain, map, createTerrainMaterial(textures)).group);
+  const ground = new TerrainLod(loadedMap, createTerrainMaterial(textures), QUALITY_PRESETS[quality].terrainDetail);
+  renderer.scene.add(ground.group);
   const sea = new Sea(textures.waterNormals);
   renderer.scene.add(sea.mesh);
+  // Build the ground around the start before the first frame.
+  const startView = session.localView();
+  if (startView) await ground.prepare(startView.position);
   stopLoadingText();
   loading.remove();
   const sceneSync = new SceneSync(renderer.scene, (config) => aircraftModelFor(config, meshes));
@@ -193,6 +209,7 @@ export async function startGame(
     renderer.setQuality(preset);
     effects.setParticleDensity(preset.particles);
     setSceneryAnisotropy(textures, preset.anisotropy);
+    ground.splitFactor = preset.terrainDetail;
   };
   /** Settings changed (or the match starts): apply everything that can change live. */
   const applySettings = (s: Readonly<Settings>) => {
@@ -533,6 +550,7 @@ export async function startGame(
     }
     const aim = mapper.settings.mode === 'mouse-aim' ? mapper.aimDirection : null;
     cameraRig.update(active ? dt : 0, local ? target : null, aim);
+    ground.update(renderer.camera.position);
     sceneSync.update(session.views(), nowS, renderer.camera.position);
     targetModels.update(session.groundTargets());
     trainingRings.update(session.modeStatus().training?.ring, renderer.camera.position);
@@ -621,6 +639,7 @@ export async function startGame(
     sceneSync.dispose();
     targetModels.dispose();
     trainingRings.dispose();
+    ground.dispose();
     session.dispose();
     renderer.dispose();
     audio?.dispose();
