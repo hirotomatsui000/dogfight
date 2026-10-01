@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 5)
+# Contested Skies — Design Spec (revision 6)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -9,6 +9,9 @@
     menu becomes a minimal title screen over a live 3D background (§15.5).
   - Revision 5 (2026-09-30) applies the owner's second round of feedback: smoother handling (§9.2), enemies and missiles
     that stay visible (§15.2, §15.4), and missiles that a well-timed hard break can beat (§10.2).
+  - Revision 6 (2026-09-30) adds the owner's Strike mode: Russia bombs three ground targets while the USA defends
+    them, with limited aircraft per team (§13.1). It brings an abstract free-fall bomb (§10.4), ground targets (§11),
+    strike AI (§14), strike HUD and title-screen mission choice (§15), and milestone M1d (§20).
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -24,7 +27,7 @@ A browser-based, online multiplayer flight-combat simulator prototype.
 - **Flight model:** an arcade/simulation hybrid. Real lift/drag/thrust physics with fly-by-wire style controls, so
   energy, stalls and G-limits matter while staying flyable with a mouse and keyboard.
 - **Weapons:** abstracted gameplay versions of a cannon, a short-range infrared missile, a medium-range radar missile,
-  and flares/chaff.
+  and flares/chaff; in the Strike mode the attackers also carry an abstract free-fall bomb.
 - **Multiplayer:** an authoritative Node.js server validates everything that matters. Browsers predict their own jet
   and interpolate the rest. AI bots fill empty seats.
 - **Development order:** a small single-player prototype first, then multiplayer, then expansion.
@@ -51,6 +54,8 @@ A browser-based, online multiplayer flight-combat simulator prototype.
 | Handling | Slower, smoother rotation: max roll rates ×0.64, roll response lag 0.35 s, pitch response lag 0.15 s | Owner feedback, 2026-09-30 |
 | Missile evasion | Short-range missiles guide with N = 3, a 20 g limit and a 0.5 s response lag, so a hard break timed shortly before impact beats them. Missile warnings start at launch | Owner feedback, 2026-09-30 |
 | Visibility | Distant aircraft and missiles keep a minimum apparent size; missiles get HUD markers, a motor flame and a thicker smoke trail | Owner feedback, 2026-09-30 |
+| Strike mode | A fifth mode: Russia must destroy two of three fictional ground targets; the USA must hold them for 8 minutes. Each team has 4 aircraft; losing the 4th loses the match. No draws | Owner request, 2026-09-30 |
+| Air-to-ground | Allowed only as the Strike mode's abstract free-fall bomb, which damages ground targets and never aircraft. The out-of-scope rule (§23) is narrowed accordingly | Owner request, 2026-09-30 |
 
 ## 3. Goals and non-goals
 
@@ -62,7 +67,7 @@ A browser-based, online multiplayer flight-combat simulator prototype.
    automatically superior: automated bot tournaments must show every pairing's win rate between 35% and 65%.
 5. The Lechovia map: cities, villages, roads, rivers, forests, fields, hills/mountains, fictional airfields,
    clouds/weather, day/night.
-6. Four game modes; a modern, readable fighter HUD; a smooth third-person camera.
+6. Five game modes (revision 6 adds Strike); a modern, readable fighter HUD; a smooth third-person camera.
 7. 60 fps on a 2020+ laptop at 1080p in a current desktop browser.
 8. A first-time visitor is flying within one minute, learns the basics from a guided training flight, and gets
    graphics settings that suit their hardware automatically (§24).
@@ -412,6 +417,23 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
   - `MISSILE` (with bearing, range and time to impact) from the moment a missile guides on you. When the time to
     impact drops below 2 s the HUD tells you to turn hard.
 
+### 10.4 Bombs (Strike mode only, M1d)
+
+The "Anvil" is an abstract, unguided free-fall bomb for the Strike mode (§13.1).
+
+- **Carriage:** only Russian aircraft in a Strike match carry it, 8 per aircraft. Every new aircraft (respawn) starts
+  with 8. No other mode or team carries bombs.
+- **Release:** one press of G releases one bomb, at most one per 0.25 s. The bomb starts at the aircraft's position
+  with the aircraft's velocity.
+- **Flight:** gravity plus a simple speed-squared drag, like cannon projectiles (§10.1); no guidance. It detonates on
+  reaching the surface (land or water). A bomb that leaves the combat area or falls for 60 s disappears.
+- **Effect:** bombs damage ground targets only, never aircraft. Damage is 40 within 15 m of a target's center,
+  falling linearly to 0 at 60 m, so three good hits destroy a target (100 HP, §11).
+- **Impact prediction:** a shared function integrates the same bomb physics from the current aircraft state until the
+  path meets the terrain. The HUD and the bots use it; it must agree with the real impact within 5 m.
+- **After the launcher dies:** bombs already falling keep going and still count. Impacts after the match has ended
+  have no effect.
+
 ## 11. Damage model
 
 - **Hit points** per aircraft (§9.3). Cannon damage is per projectile; missile blast uses distance falloff (§10.2).
@@ -430,6 +452,8 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
   - Mid-air collision (centers closer than `0.5·(r₁ + r₂)`) destroys both aircraft.
   - Leaving the combat area, or climbing above 18 km, for 15 s continuous → destroyed.
 - **Respawn:** after 5 s, per the mode's spawn rules, with full stores.
+- **Ground targets (Strike, M1d):** each has 100 hit points and takes damage only from bombs (§10.4). It shows smoke
+  below 50% and becomes a burning wreck at 0, when it counts as destroyed. Targets are not repaired.
 
 ## 12. Maps
 
@@ -450,6 +474,9 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
   `2026-09-29-realistic-graphics-design.md`.
 - **Combat area:** a 25 km radius circle.
 - **Spawns:** the two teams spawn airborne 15 km apart, facing each other.
+- **Strike layout (M1d):** three target sites on open farmland west of the river, about 8 km apart along a north–south
+  line, each on flat, dry ground away from the lake. The USA spawns 8 km west of that line at 4,000 m; Russia spawns
+  24 km east of it at 5,000 m. Both face the targets.
 
 ### 12.3 Lechovia (M4)
 
@@ -491,9 +518,32 @@ All modes implement `GameMode`: setup, per-tick update, scoring on events, spawn
 | **Team Deathmatch** | +1 per enemy kill; each death of a team's aircraft gives the other team +1; first to 15 or most after 10 min | M1 (vs AI), M2 (online) |
 | **Air Superiority** | Three capture zones (cylinders, 4 km radius, 1–7 km altitude) along the front. A zone's capture progress moves toward the team with more aircraft inside (rate ∝ numeric advantage, 10 s to capture with +1). Each owned zone gives +1 point every 2 s. First to 300 or most after 12 min | M5 |
 | **Team Objective** | Each team protects two AI-flown high-value "Sentinel" radar aircraft (slow, 400 HP) orbiting behind its lines. Destroying one gives +20 and cuts the enemy team's datalink for 60 s; kills give +1; destroyed Sentinels return after 120 s. First to 60 or most after 15 min | M5 |
+| **Strike** | Russia must destroy two of three ground targets; the USA must hold them for 8 min. 4 aircraft per team. Details in §13.1 | M1d (vs AI) |
 
 **Spawning:** airborne at the team's spawn line (5,000 m, 250 m/s, facing the front) or, from M4, at the team's airfield
-on the runway, as the player chooses.
+on the runway, as the player chooses. Strike uses its own spawn points (§12.2).
+
+### 13.1 Strike (M1d)
+
+An asymmetric mode: Russia attacks, the USA defends. In M1d it is a 1v1 against one AI pilot, like Team Deathmatch,
+and the player's jet decides the side: the Kestrel defends for the USA, the Kobchik attacks for Russia.
+
+- **Targets:** three fictional facilities, "A" (supply depot), "B" (radar site) and "C" (fuel depot), placed per §12.2.
+  Each has 100 HP and is damaged only by bombs (§10.4).
+- **Aircraft:** each team has 4 aircraft. Any loss uses one: shot down, crashed, mid-air collision, or leaving the
+  combat area. After a loss the next aircraft spawns 5 s later with full stores; a team with none left does not
+  respawn. (Online, from M2, each team gets 4 aircraft per player.)
+- **Time limit:** 8 minutes.
+- **Russia wins** when two targets are destroyed, or when the USA loses its 4th aircraft.
+- **The USA wins** when the time runs out, or when Russia loses its 4th aircraft.
+- **No draws.** The checks run each tick in this order, and the first that applies decides the match:
+  1. Two targets destroyed → Russia wins. A target destroyed in the final tick still counts.
+  2. A team has lost its 4th aircraft → the other team wins. If both lose their last aircraft in the same tick, the
+     USA wins: the attack failed.
+  3. Time is up → the USA wins.
+- **Ordnance:** bombs released before the attacker died still count; impacts after the match ends do not.
+- **Mode status** (for the HUD and the end screen): time left, each target's HP, aircraft left per team, the winner,
+  and the reason (targets destroyed, targets held, or a team out of aircraft).
 
 ## 14. AI
 
@@ -528,9 +578,23 @@ on the runway, as the player chooses.
 | Time-to-impact judgement spread | 45% | 20% | 7% |
 | Gun range | 500 m | 700 m | 900 m |
 | Fire threshold | 2.5° | 1.5° | 0.8° |
+| Bomb impact error, 1σ (Strike) | 35 m | 18 m | 6 m |
 
 - **Mode-specific AI:** Sentinel aircraft (Team Objective) fly orbits and flee threats; bots contest zones in Air
   Superiority.
+- **Strike attacker (Russia, M1d):** priorities 1–3 above stay first. Then:
+  4. **Self-defense:** fight the defender (as in Engage) when it is within 3 km and within 60° of the bot's tail.
+  5. **Bombing run:**
+     - Pick the standing target that needs the fewest further hits, nearest first.
+     - Approach about 1,500 m above the ground at full military power, steering so the predicted impact point
+       (§10.4) runs across the target.
+     - Release when the predicted impact point lies within the target's 15 m full-damage radius, plus an error drawn
+       from the profile's bomb impact error. Release up to 3 bombs per pass, at least 0.4 s apart.
+     - Then climb and turn back for another pass, or move on to the next target.
+  6. **Out of bombs:** fight the defender as in Team Deathmatch.
+- **Strike defender (USA, M1d):** priorities 1–3 above stay first. Then:
+  4. Engage the attacker nearest to any standing target, if it is within 15 km of one.
+  5. Otherwise patrol: orbit the center of the standing targets at 4,000 m with a 5 km radius.
 
 ## 15. Client
 
@@ -562,6 +626,14 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 - **Radar display:** a top-down scope, heading-up, with range scales 10 / 20 / 40 / 80 km. It shows own-radar contacts,
   datalink contacts and missiles in flight.
 - **Game:** mode status (scores, zones, time), kill feed, hit markers, scoreboard (Tab), map (M), respawn countdown.
+- **Strike (M1d):**
+  - **Status:** time left, targets standing, and aircraft left per team.
+  - **Targets (both sides):** each target has a ground marker with its letter and an HP bar, and an edge arrow when
+    off-screen. Destroyed targets are crossed out.
+  - **Attacker:** bombs left (`BMB 8`) in the weapons status. The predicted impact point is drawn on the ground,
+    joined to the flight-path marker by a fall line. `RELEASE` flashes while it lies within a target's 15 m radius.
+  - **Defender:** banners `TARGET B UNDER ATTACK` (when a target is hit, at most once per 3 s per target) and
+    `TARGET B DESTROYED`; the kill feed also records destroyed targets.
 - **G effects:** blackout vignette when > 7 G is sustained for more than 2 s; red tint below −2.5 G.
 
 ### 15.3 Controls
@@ -579,6 +651,7 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 | Shift / Z, mouse wheel | Throttle up / down (top 10% = afterburner) |
 | Space or left mouse | Cannon |
 | F | Fire missile (one per press, needs a lock) |
+| G | Drop a bomb (one per press; Strike, Russian side, M1d) |
 | 1 / 2 | Select SRM / MRM (MRM from M3) |
 | R | Cycle target |
 | X | Countermeasures |
@@ -598,6 +671,9 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   - Visibility (revision 5): an aircraft farther away than where it would shrink below about 0.7° is drawn larger in
     proportion to distance (up to 8×), and a missile likewise below about 0.4°, so neither fades to a single pixel. A
     missile shows a bright motor flame while its motor burns and leaves a thick smoke trail. Hit detection is unaffected.
+  - Strike (M1d): each target is a small group of simple fictional structures (sheds, a dish, tanks) built from boxes
+    and cylinders on a concrete pad. Damaged targets smoke; destroyed ones burn. Bomb impacts reuse the explosion
+    effect with a dust burst.
 - **M4/M5 target (a modern military-sim look):**
   - Lighting: PBR aircraft materials; shadows near the camera; bloom for afterburners and explosions.
   - Atmosphere: haze and height fog with aerial perspective; cloud layers.
@@ -615,12 +691,18 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
     loading wait. Until they are ready the title shows over a dark background.
   - Typography: the display font Rajdhani (SIL Open Font License 1.1) is bundled with the page, Latin subset only;
     small text uses the system font.
-- **Later menus:** mode, map, time of day, weather and bots arrive with the features that need them (M2–M5).
+- **Mission choice (M1d):** the title screen offers DOGFIGHT (Team Deathmatch) or STRIKE. With STRIKE selected, one
+  line states the selected jet's role: "Kestrel · USA: hold all three targets for 8 minutes" or "Kobchik · Russia:
+  destroy two of the three targets". Free Flight stays a link.
+- **Later menus:** map, time of day, weather and bots arrive with the features that need them (M2–M5).
 - **Other screens:** loading, pause/settings, death/respawn (killer, weapon, countdown, aircraft change), match end.
+  - In Strike the match-end screen leads with the reason (`TARGETS HELD`, `TARGETS DESTROYED`, `RUSSIA OUT OF
+    AIRCRAFT` or `USA OUT OF AIRCRAFT`) and lists the targets destroyed above the per-pilot table.
 - **Settings** persist in `localStorage` (try/catch, defaults if unavailable).
 - **Audio:** WebAudio-synthesized, no asset files.
   - Engine and afterburner, wind, cannons.
   - SRM growl and lock tone, radar lock warning, missile warning, explosions and hits.
+  - Bomb release (a short thump); bomb impacts use the explosion sound, scaled by distance.
   - Master volume.
 
 ## 16. Server (M2)
@@ -682,6 +764,16 @@ pane at each stage.
   - Terrain determinism and bilinear sampling; `surfaceAt` over the sea; line of sight.
   - (M4) Feature placement: airfields flat, villages not in water, roads connected.
 - **Modes:** scoring, win conditions, zone capture math, Sentinel rules, spawn placement.
+- **Strike (M1d):**
+  - Rules: time-out → USA; two targets destroyed → Russia; a team's 4th loss → the other team; the same-tick order of
+    §13.1; no respawn without aircraft left; impacts after the match ends are ignored.
+  - Bombs: carried only by Russian jets in Strike, 8 per aircraft, refilled on respawn, at most one per 0.25 s; the
+    impact prediction agrees with the real impact within 5 m for level and diving releases from 500 to 3,000 m above
+    the ground at 200–350 m/s; damage falloff; a target is destroyed at 0 HP.
+  - Layout: every target sits on dry land with a gentle slope, inside the combat area.
+  - AI: unopposed, Veteran and Ace attackers destroy two targets within 8 minutes in at least 80% of seeded runs; a
+    defender bot intercepts an attacker; over 20 seeded Veteran-vs-Veteran matches the attacker wins 35–65% (so neither
+    side is automatically superior).
 - **AI:**
   - Steering converges on a direction (< 3° within 5 s); ground avoidance recovers from a low dive.
   - Fires only when aligned; defends against inbound missiles.
@@ -707,6 +799,7 @@ brief (§11 of the brief: steps 1–11).
 | M1a | **Fly** | 1–6 (+ basic HUD) | Scaffold; math; atmosphere; data-driven aircraft config (Kestrel); flight model; steering; test-range terrain; local World and session; renderer, sky, terrain mesh, parametric model; keyboard + mouse-aim; HUD and chase cameras with transitions/shake; free camera; basic flight HUD; start menu with Free Flight | One aircraft is flyable at 60 fps; stall, G-limit, energy bleed and altitude effects observable; tests green |
 | M1b | **Fight** | 7–9 | Second aircraft (Kobchik) as the AI opponent; cannon + lead; SRM + IR seeker; flares; basic radar detection and designation; damage model; destruction and respawn; Team Deathmatch vs 1 AI; bot pilot; effects (tracers, missile trails, flares, explosions, smoke); full combat HUD (target info, lock, missile warning, radar display, ammo, kill feed, hit markers, scoreboard); minimal audio; third-person camera and a minimal title screen over a live 3D background (checkpoint feedback) | A 1v1 dogfight against the AI is playable end to end with both weapons and countermeasures |
 | M1c | **Website basics** | — (§24) | Guided training flight; settings screen (volume, mouse sensitivity, invert, HUD color and size, key remapping); gamepad and flight-stick support; Low/Medium/High graphics presets chosen from the frame rate; loading progress; page metadata, social-preview image and icon; color-blind-safe team markers; every sound warning also shown as text | A first-time visitor completes the training flight and a fight on a mid-range laptop without reading the README |
+| M1d | **Strike** (built before M1c, owner's priority) | — (owner request, 2026-09-30) | Strike mode vs 1 AI (§13.1): three ground targets, the Anvil bomb with impact prediction, 4 aircraft per team, attacker and defender AI, strike HUD, mission choice on the title screen, match-end reasons, sounds | A 1v1 Strike match is playable end to end from both sides; the Veteran-vs-Veteran attacker win rate is 35–65% |
 | M2 | **Multiplayer** | 10 | Node server, rooms, protocol and codecs, authoritative World, NetworkSession (prediction, reconciliation, interpolation, clock sync, lag compensation), lobby (team + aircraft), bots fill, LAN URLs, lag simulator; invite links and Quick play; preset quick-chat; callsign filter; page/server version check; error reporting and a health check; one browser smoke test; multi-file site build; Dockerfile for the owner's host | Two tabs plus a second LAN machine fight each other smoothly at `?lag=150`; integration tests green; `docker build`/`run` serves the game |
 | M3 | **Roster & weapons** | 11 | The remaining 6 aircraft (data + parametric models); upgraded model generator (smooth fuselage, canopy glass, panel lines, sky-reflecting paint, team paint schemes); radar/stealth model; MRM "Lance" + chaff; RWR `LOCK` warning; balance tournament | All 8 aircraft selectable; tournament win rates within 35–65% |
 | M4 | **World** | 11 | Lechovia map (terrain LOD in worker, geography, settlements, roads, airfields), runway spawns with ground handling, clouds and weather, day/night cycle | Take off from a fictional airfield and fight over recognizable Poland-inspired terrain at 60 fps, day and night |
@@ -729,6 +822,8 @@ brief (§11 of the brief: steps 1–11).
 - **Fictional content:** aircraft, weapons, the country, cities, villages and airfields are fictional.
   - Aircraft are only "inspired by" real types; no real designations or real specifications are shown.
   - No real-world military installations are reproduced.
+  - Strike targets are fictional facilities in open country (a supply depot, a radar site, a fuel depot). Towns,
+    villages and people are never targets, and no casualties are shown.
 - **Abstraction:** weapons and sensors are gameplay abstractions (§10). No real-world construction or operational
   guidance.
 - **Tone:** a neutral game scenario, with no real events, casualties or political messaging.
@@ -739,7 +834,7 @@ brief (§11 of the brief: steps 1–11).
 - Accounts, persistence, stats history, rankings and leaderboards.
 - Free-text and voice chat (preset quick-chat is in scope, M2).
 - Landing and rearming, fuel, spins/departures, wind.
-- Air-to-ground weapons.
+- Air-to-ground weapons other than the Strike mode's abstract bomb (§10.4), which never damages aircraft.
 - Real-world map data.
 - Functional cockpit instruments/MFDs.
 - VR, mobile/touch.
