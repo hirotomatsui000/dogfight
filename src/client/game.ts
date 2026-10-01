@@ -217,7 +217,7 @@ export async function startGame(
   // Online, the mode status arrives from the server after the first frames: read it when needed.
   const strikeTeams = () => session.modeStatus().strike ?? null;
   const impactPoint = new Vector3();
-  const effects = new Effects(renderer.scene);
+  const effects = new Effects(renderer.scene, { terrain, wreckModel: (id) => sceneSync.modelFor(id)?.root ?? null });
   const cameraRig = new CameraRig(renderer.camera);
   const hud = new Hud(root);
   const input = new DomInput(renderer.webgl.domElement);
@@ -654,7 +654,8 @@ export async function startGame(
     trainingRings.update(session.modeStatus().training?.ring, renderer.camera.position);
     renderer.webgl.getDrawingBufferSize(bufferSize);
     particleFrame.pixelScale = bufferSize.y / (2 * Math.tan((renderer.camera.fov * DEG) / 2));
-    effects.update(active ? dt : 0, session, particleFrame, renderer.camera.position);
+    effects.update(active ? dt : 0, session, particleFrame, renderer.camera.position, 1 - 0.85 * environment.night);
+    for (const p of effects.drainImpacts()) audio?.explosion(explosionGain(p.distanceTo(renderer.camera.position)) * 0.7);
     sea.update(nowS);
     renderer.render();
 

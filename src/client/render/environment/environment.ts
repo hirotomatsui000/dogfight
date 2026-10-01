@@ -83,6 +83,8 @@ export class Environment {
   night = 0;
   /** how much daylight reaches the camera, after the clouds: 0 … 1 */
   light = 1;
+  /** rain is falling round the camera (for its sound, M5) */
+  raining = false;
   private readonly preset: WeatherPreset;
   private readonly scene: Scene;
   private readonly renderer: WebGLRenderer;
@@ -233,7 +235,8 @@ export class Environment {
     this.cloudLayer.shadow.setRGB(0.55, 0.58, 0.64).multiplyScalar(sunLight * (p.deck ? 0.75 : 0.9) + 0.02);
     this.cloudLayer.update(cam);
     this.nightSky.update(cam, this.night, this.moonDirection, clearSky);
-    this.rain.update(dt, cam, this.cameraVelocity, p.rain && cam.y < p.cloudBaseM, day);
+    this.raining = p.rain && cam.y < p.cloudBaseM;
+    this.rain.update(dt, cam, this.cameraVelocity, this.raining, day);
     this.groundLights?.update(this.night);
     updateNavLights(this.night, performance.now() / 1000, this.pixelRatio);
 

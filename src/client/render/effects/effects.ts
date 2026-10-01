@@ -1,10 +1,13 @@
-import { Color, type Scene, Vector3 } from 'three';
+import { Color, type Object3D, Quaternion, type Scene, Vector3 } from 'three';
+import type { Terrain } from '../../../shared/map/terrain.ts';
+import { smoothstep } from '../../../shared/math/units.ts';
 import { damageState } from '../../../shared/damage/damage.ts';
 import type { GameEvent } from '../../../shared/world/events.ts';
 import type { AircraftView, GameSession, GroundTargetView, MissileView } from '../../session/game-session.ts';
 import { BOMB_LOOK, LANCE_LOOK, MISSILE_LOOK, OrdnanceModels } from './ordnance-models.ts';
 import { type ParticleFrame, ParticleSystem } from './particles.ts';
 import { Tracers } from './tracers.ts';
+import { loadFactorFromVelocity, TrailRibbons, type TrailLook } from './trails.ts';
 
 const SMOKE_CAPACITY = 9000;
 const FIRE_CAPACITY = 3000;
@@ -30,6 +33,35 @@ const DUST = new Color(0x8b7d62);
 
 const rand = (a: number, b: number) => a + (b - a) * Math.random();
 
+/** Contrails (spec §15.4): from 8 km up, long-lived and spreading. */
+const CONTRAIL_LOOK: TrailLook = { lifeS: 40, sampleS: 0.35, width0: 1.5, width1: 28, alpha: 0.55, fadeInS: 0.3, maxPoints: 120, color: new Color(0.96, 0.97, 1) };
+const CONTRAIL_FROM_M = 7600;
+const CONTRAIL_FULL_M = 8600;
+/** Wingtip vapour (spec §15.4): above 5 G, short wisps from the wingtips. */
+const VAPOR_LOOK: TrailLook = { lifeS: 0.8, sampleS: 1 / 40, width0: 0.9, width1: 3, alpha: 0.7, fadeInS: 0, maxPoints: 40, color: new Color(1, 1, 1) };
+const VAPOR_FROM_G = 4.5;
+const VAPOR_FULL_G = 6.5;
+/** Burning wrecks fall for at most this long; at most this many at once. */
+const WRECK_MAX_S = 15;
+const MAX_WRECKS = 8;
+const WRECK_DRAG_PER_S = 0.12;
+
+interface Wreck {
+  obj: Object3D;
+  vel: Vector3;
+  axis: Vector3;
+  spinRadS: number;
+  ageS: number;
+  emitS: number;
+}
+
+export interface EffectsOptions {
+  /** the ground wrecks fall onto */
+  terrain?: Terrain;
+  /** a jet's model as drawn now, to copy into a falling wreck (M5) */
+  wreckModel?: (aircraftId: number) => Object3D | null;
+}
+
 interface Flare {
   pos: Vector3;
   vel: Vector3;
@@ -51,13 +83,26 @@ export class Effects {
   private readonly targetTimers = new Map<string, number>();
   private readonly trailFrom = new Map<number, Vector3>();
   private damageTimer = 0;
+  private readonly contrails = new TrailRibbons(CONTRAIL_LOOK, 4000);
+  private readonly vapor = new TrailRibbons(VAPOR_LOOK, 1500);
+  private readonly loads = new Map<number, { vel: Vector3; g: number }>();
+  private readonly wrecks: Wreck[] = [];
+  private readonly options: EffectsOptions;
+  /** effect time: stands still while the game is paused */
+  private clock = 0;
+  /** wrecks that hit the ground since the last call (for their sound) */
+  private impacts: Vector3[] = [];
+  private readonly spin = new Quaternion();
+  private readonly emitAt = new Vector3();
   private readonly tmp = new Vector3();
   private readonly dir = new Vector3();
   private readonly tail = new Vector3();
   private readonly zero = new Vector3();
 
-  constructor(scene: Scene) {
+  constructor(scene: Scene, options: EffectsOptions = {}) {
     this.scene = scene;
+    this.options = options;
+    scene.add(this.contrails.mesh, this.vapor.mesh);
     this.missileModels = new OrdnanceModels(scene, MISSILE_LOOK);
     this.lanceModels = new OrdnanceModels(scene, LANCE_LOOK);
     this.bombModels = new OrdnanceModels(scene, BOMB_LOOK);
@@ -78,7 +123,11 @@ export class Effects {
   onEvent(e: GameEvent, session: GameSession): void {
     if (e.type === 'destroyed') {
       const v = session.view(e.aircraftId);
-      if (v) this.explosion(v.position, v.flight.vel, 1);
+      if (v) {
+        this.explosion(v.position, v.flight.vel, 1);
+        // Shot down, collided or lost in the air: the burning airframe falls (M5). A crash ends on the ground.
+        if (e.cause !== 'crash') this.spawnWreck(e.aircraftId, v);
+      }
     } else if (e.type === 'missileDetonated') {
       this.explosion(this.tmp.set(e.x, e.y, e.z), this.zero, e.nearAircraft ? 0.6 : 0.45);
     } else if (e.type === 'countermeasures') {
@@ -95,8 +144,12 @@ export class Effects {
     }
   }
 
-  update(dt: number, session: GameSession, frame: ParticleFrame, cameraPos: Vector3): void {
+  /** `light`: how lit the sky is (1 day … about 0.15 at night), for the trails. */
+  update(dt: number, session: GameSession, frame: ParticleFrame, cameraPos: Vector3, light = 1): void {
+    this.clock += dt;
     if (dt > 0) {
+      for (const v of session.views()) this.emitTrails(v, dt);
+      this.updateWrecks(dt);
       for (const m of session.missiles()) this.missileTrail(m);
       for (const id of this.trailFrom.keys()) if (!this.hasMissile(session, id)) this.trailFrom.delete(id);
       this.updateFlares(dt);
@@ -119,10 +172,105 @@ export class Effects {
     this.tracers.update(session.projectiles(), frame);
     this.smoke.update(dt, frame);
     this.fire.update(dt, frame);
+    this.contrails.update(this.clock, frame, light);
+    this.vapor.update(this.clock, frame, light);
+  }
+
+  /** Wrecks that reached the ground since the last call, for the explosion sound. */
+  drainImpacts(): Vector3[] {
+    const out = this.impacts;
+    this.impacts = [];
+    return out;
+  }
+
+  /** Contrails from the engines above 8 km and vapour from the wingtips above 5 G (spec §15.4). */
+  private emitTrails(v: AircraftView, dt: number): void {
+    const t = this.clock;
+    const vis = v.config.visual;
+    const L = vis.lengthM;
+    if (!v.alive) {
+      this.loads.delete(v.id);
+      return;
+    }
+    let load = this.loads.get(v.id);
+    if (!load) {
+      load = { vel: v.flight.vel.clone(), g: 1 };
+      this.loads.set(v.id, load);
+    }
+    this.dir.set(0, 1, 0).applyQuaternion(v.quaternion);
+    // Interpolated jets (online) carry no load factor: estimate it from how their velocity turns.
+    const raw = v.isLocal ? v.flight.gLoad : loadFactorFromVelocity(load.vel, v.flight.vel, dt, this.dir.x, this.dir.y, this.dir.z);
+    load.g += (raw - load.g) * Math.min(1, dt / 0.15);
+    load.vel.copy(v.flight.vel);
+    const contrail = smoothstep(CONTRAIL_FROM_M, CONTRAIL_FULL_M, v.position.y) * (0.5 + 0.5 * Math.min(1, v.flight.throttle / 0.9));
+    const engines = vis.engines === 2 ? [-1, 1] : [0];
+    const spacing = vis.engineSpacingM ?? 1.25 * vis.fuselageRadiusM;
+    for (const [i, side] of engines.entries()) {
+      this.emitAt.set((side * spacing) / 2, 0, L / 2 + 2).applyQuaternion(v.quaternion).add(v.position);
+      this.contrails.store.emit(`${v.id}:${v.spawnGen}:e${i}`, this.emitAt, contrail, t);
+    }
+    const vapor = smoothstep(VAPOR_FROM_G, VAPOR_FULL_G, load.g);
+    const sweep = Math.tan((vis.wingSweepDeg * Math.PI) / 180) * (vis.spanM / 2);
+    const tipZ = (vis.wingPositionFraction - 0.5) * L + sweep + vis.wingTipChordM;
+    for (const side of [-1, 1]) {
+      this.emitAt.set(side * vis.spanM * 0.49, 0, tipZ).applyQuaternion(v.quaternion).add(v.position);
+      this.vapor.store.emit(`${v.id}:${v.spawnGen}:w${side}`, this.emitAt, vapor, t);
+    }
+  }
+
+  private spawnWreck(id: number, v: AircraftView): void {
+    const model = this.options.wreckModel?.(id);
+    if (!model) return;
+    const obj = model.clone(true);
+    // No lights or wheels on a wreck.
+    for (const name of ['nav-lights', 'landing-gear']) obj.getObjectByName(name)?.removeFromParent();
+    obj.visible = true;
+    obj.position.copy(v.position);
+    obj.quaternion.copy(v.quaternion);
+    this.scene.add(obj);
+    const axis = new Vector3(rand(-1, 1), rand(-0.3, 0.3), rand(-1, 1)).normalize();
+    this.wrecks.push({ obj, vel: v.flight.vel.clone(), axis, spinRadS: rand(0.6, 1.8), ageS: 0, emitS: 0 });
+    if (this.wrecks.length > MAX_WRECKS) this.removeWreck(0);
+  }
+
+  /** Falling, tumbling, burning airframes; each bursts where it meets the ground. */
+  private updateWrecks(dt: number): void {
+    for (let i = this.wrecks.length - 1; i >= 0; i--) {
+      const w = this.wrecks[i];
+      w.ageS += dt;
+      w.vel.multiplyScalar(Math.max(0, 1 - WRECK_DRAG_PER_S * dt));
+      w.vel.y -= 9.80665 * dt;
+      w.obj.position.addScaledVector(w.vel, dt);
+      w.obj.quaternion.premultiply(this.spin.setFromAxisAngle(w.axis, w.spinRadS * dt));
+      w.emitS += dt;
+      if (w.emitS >= 0.05) {
+        w.emitS = 0;
+        const p = w.obj.position;
+        this.fire.spawn({ x: p.x, y: p.y, z: p.z, vx: rand(-3, 3), vy: rand(-1, 3), vz: rand(-3, 3), lifeS: rand(0.4, 0.8), size0: rand(5, 9), size1: rand(2, 4), color: FIRE[Math.floor(Math.random() * FIRE.length)], alpha: 1, lift: 2 });
+        this.smoke.spawn({ x: p.x, y: p.y, z: p.z, vx: 0, vy: 0, vz: 0, lifeS: rand(5, 8), size0: 5, size1: rand(30, 45), color: DARK_SMOKE, alpha: 0.75, lift: 1.5 });
+      }
+      const ground = this.options.terrain?.surfaceAt(w.obj.position.x, w.obj.position.z) ?? -Infinity;
+      if (w.obj.position.y <= ground + 2) {
+        this.tmp.copy(w.obj.position).setY(ground + 2);
+        this.bombBlast(this.tmp);
+        this.impacts.push(this.tmp.clone());
+        this.removeWreck(i);
+      } else if (w.ageS > WRECK_MAX_S) {
+        this.removeWreck(i);
+      }
+    }
+  }
+
+  private removeWreck(i: number): void {
+    this.scene.remove(this.wrecks[i].obj);
+    this.wrecks.splice(i, 1);
   }
 
   dispose(): void {
-    this.scene.remove(this.smoke.points, this.fire.points, this.tracers.lines, this.tracers.heads);
+    this.scene.remove(this.smoke.points, this.fire.points, this.tracers.lines, this.tracers.heads, this.contrails.mesh, this.vapor.mesh);
+    for (let i = this.wrecks.length - 1; i >= 0; i--) this.removeWreck(i);
+    this.contrails.dispose();
+    this.vapor.dispose();
     this.smoke.dispose();
     this.fire.dispose();
     this.tracers.dispose();
@@ -307,15 +455,24 @@ export class Effects {
       vx: v.flight.vel.x * 0.1,
       vy: v.flight.vel.y * 0.1,
       vz: v.flight.vel.z * 0.1,
-      lifeS: critical ? 4 : 3,
-      size0: critical ? 3 : 2,
-      size1: critical ? 18 : 14,
+      lifeS: critical ? 6 : 3,
+      size0: critical ? 4 : 2,
+      size1: critical ? 30 : 14,
       color: critical ? DARK_SMOKE : GREY_SMOKE,
       alpha: 0.7,
       lift: 1.5,
     });
     if (critical) {
-      this.fire.spawn({ x: this.tail.x, y: this.tail.y, z: this.tail.z, vx: 0, vy: 0, vz: 0, lifeS: 0.25, size0: 3, size1: 1, color: FIRE[1], alpha: 1 });
+      // A fire at the engines and along a wing root, trailing thick black smoke (M5).
+      const back = this.dir.set(0, 0, 1).applyQuaternion(v.quaternion);
+      for (let k = 0; k < 2; k++) {
+        const vx = v.flight.vel.x * 0.85 + back.x * rand(5, 20);
+        const vy = v.flight.vel.y * 0.85 + back.y * rand(5, 20);
+        const vz = v.flight.vel.z * 0.85 + back.z * rand(5, 20);
+        this.fire.spawn({ x: this.tail.x, y: this.tail.y, z: this.tail.z, vx, vy, vz, lifeS: rand(0.25, 0.45), size0: rand(3.5, 6), size1: rand(1, 2), color: FIRE[Math.floor(Math.random() * FIRE.length)], alpha: 1 });
+      }
+      const wing = this.tmp.set(rand(-1, 1) * v.config.visual.spanM * 0.25, 0, 0).applyQuaternion(v.quaternion).add(v.position);
+      this.fire.spawn({ x: wing.x, y: wing.y, z: wing.z, vx: v.flight.vel.x * 0.9, vy: v.flight.vel.y * 0.9, vz: v.flight.vel.z * 0.9, lifeS: 0.3, size0: rand(2, 4), size1: 1, color: FIRE[2], alpha: 0.9 });
     }
   }
 
