@@ -585,7 +585,9 @@ and the player's jet decides the side: the Kestrel defends for the USA, the Kobc
 - **Mode-specific AI:** Sentinel aircraft (Team Objective) fly orbits and flee threats; bots contest zones in Air
   Superiority.
 - **Strike attacker (Russia, M1d):** priorities 1–3 above stay first. Then:
-  4. **Self-defense:** fight the defender (as in Engage) when it is within 3 km and within 60° of the bot's tail.
+  4. **Self-defense:** fight the defender (as in Engage) when it is within 600 m and within 60° of the bot's tail.
+     Farther out the bot presses the run: bot-vs-bot turning fights rarely end in a kill, so fighting from 3 km (the
+     first design) let the defender run out the clock in all 20 balance matches.
   5. **Bombing run:**
      - Pick the standing target that needs the fewest further hits, nearest first.
      - Approach about 1,500 m above the ground at full military power, steering so the predicted impact point
@@ -593,11 +595,13 @@ and the player's jet decides the side: the Kestrel defends for the USA, the Kobc
      - Release a two-bomb stick that straddles the target: the first bomb when the predicted impact point, offset by
        an error drawn from the profile's bomb impact error, enters the target's 30 m full-damage radius, and the
        second 0.25 s later.
+     - On the final 1.5 km of the run it re-predicts the impact every tick, flies level and holds its track.
      - Then fly on until about 5 km beyond the release distance and turn back for another pass, unless the next
        target is already ahead.
   6. **Out of bombs:** fight the defender as in Team Deathmatch.
 - **Strike defender (USA, M1d):** priorities 1–3 above stay first. Then:
-  4. Engage the attacker nearest to any standing target, if it is within 15 km of one.
+  4. Engage the attacker nearest to any standing target, if it is within 15 km of one; break off once the fight
+     drifts farther than that from every target.
   5. Otherwise patrol: orbit the center of the standing targets at 4,000 m with a 5 km radius.
 
 ## 15. Client

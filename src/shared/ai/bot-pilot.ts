@@ -67,9 +67,16 @@ const FINAL_RUN_CORRECTION_M = 500;
 /** After a pass, fly on this far beyond the throw before turning back, so the next run can line up. */
 const REATTACK_DISTANCE_M = 5000;
 const STICK_SIZE = 2;
-/** An attacker turns to fight a defender this close behind it. */
-const CHASER_RANGE_M = 3000;
+/**
+ * An attacker turns to fight a defender only this close behind it; farther out it presses the run. Bot-vs-bot turning
+ * fights rarely end in a kill, so fighting from farther out would run out the clock (the 35–65% balance check, §19).
+ */
+const CHASER_RANGE_M = 600;
 const CHASER_TAIL_COS = Math.cos(60 * DEG);
+/** A defender intercepts attackers this close to a standing target, and otherwise orbits over the targets. */
+const DEFENDED_RADIUS_M = 15000;
+const ORBIT_RADIUS_M = 5000;
+const ORBIT_ALTITUDE_M = 4000;
 const UP = new Vector3(0, 1, 0);
 
 /** Bot seed per aircraft, so bots differ but stay deterministic for a World seed. */
@@ -110,8 +117,11 @@ export class BotPilot {
   private readonly nose = new Vector3();
   private readonly right = new Vector3();
   private readonly upAxis = new Vector3();
+  private lastSpawnGen = -1;
   private runTargetId: string | null = null;
   private stickBombs = 0;
+  /** a stick has gone; the next one waits until the jet has come around for a new pass */
+  private awaitingPass = false;
   private stickTick = -1e9;
   private throwAlong = 0;
   private throwRefreshTick = 0;
@@ -140,6 +150,11 @@ export class BotPilot {
     out.helmetSight = false;
     out.lookYaw = 0;
     out.lookPitch = 0;
+    if (self.spawnGen !== this.lastSpawnGen) {
+      // A new aircraft starts a fresh bombing run.
+      this.lastSpawnGen = self.spawnGen;
+      this.runTargetId = null;
+    }
     const reactionTicks = Math.round(this.profile.reactionS * world.tickRate);
     if (world.tick >= this.aimHoldUntilTick) {
       this.aimYaw = this.rng.gaussian() * this.profile.aimNoiseDeg * DEG;
@@ -154,7 +169,14 @@ export class BotPilot {
     if (this.avoidGround(world, self.flight, out)) return out;
     if (this.returnToArea(world, self.flight, out)) return out;
     if (warning && impactS <= IDEAL_BREAK_S - this.profile.reactionS && this.defend(world, self.flight, warning, out)) return out;
-    if (hasStandingTarget(world) && self.bombLoad > 0 && this.attack(world, self, reactionTicks, out)) return out;
+    if (hasStandingTarget(world)) {
+      if (self.bombLoad > 0) {
+        if (this.attack(world, self, reactionTicks, out)) return out;
+      } else {
+        this.defendTargets(world, self, reactionTicks, out);
+        return out;
+      }
+    }
     const target = this.perceiveTarget(world, self, reactionTicks);
     if (target) this.engage(world, self, target, out);
     else this.patrol(world, self, reactionTicks, out);
@@ -339,6 +361,8 @@ export class BotPilot {
     const f = self.flight;
     if (t.id !== this.runTargetId) {
       this.runTargetId = t.id;
+      this.throwRefreshTick = 0;
+      this.fineTick = -1;
       this.newStick();
     }
     this.track.set(f.vel.x, 0, f.vel.z);
@@ -361,15 +385,19 @@ export class BotPilot {
     }
     const ex = this.miss.x;
     const ez = this.miss.z;
+    if (this.awaitingPass && along > FINE_THROW_ALONG_M) this.newStick();
     if (this.stickBombs > 0 && this.stickBombs < STICK_SIZE) {
       if (world.tick - this.stickTick >= interval) this.releaseInStick(world, out);
-    } else if (this.stickBombs === 0) {
+    } else if (this.stickBombs === 0 && !this.awaitingPass) {
       // Center the stick on the target: the first bomb half a spacing short, the second half a spacing beyond.
       const cross = Math.abs(ex * this.track.z - ez * this.track.x);
       if (cross <= r && along <= 0.5 * spacing && along > -r) this.releaseInStick(world, out);
     }
     const passed = along < -r;
-    if (passed && this.stickBombs >= STICK_SIZE) this.newStick();
+    if (this.stickBombs >= STICK_SIZE) {
+      this.stickBombs = 0;
+      this.awaitingPass = true;
+    }
     const distance = Math.hypot(t.pos.x - f.pos.x, t.pos.z - f.pos.z);
     const steady = finalRun || (this.stickBombs > 0 && this.stickBombs < STICK_SIZE);
     if (passed && distance < this.throwAlong + REATTACK_DISTANCE_M) {
@@ -416,8 +444,54 @@ export class BotPilot {
   /** A fresh stick, with a new error drawn from this pilot's bomb accuracy (RMS split over two axes). */
   private newStick(): void {
     this.stickBombs = 0;
+    this.awaitingPass = false;
     const sigma = this.profile.bombErrorM / Math.SQRT2;
     this.bombAim.set(this.rng.gaussian() * sigma, 0, this.rng.gaussian() * sigma);
+  }
+
+  /**
+   * Strike defender: intercept the attacker nearest to a standing target, else orbit (spec §14). It breaks off once a
+   * fight drifts more than 15 km from every target, so a turning fight far from the targets cannot run out the clock.
+   */
+  private defendTargets(world: BotWorld, self: AircraftEntity, reactionTicks: number, out: ControlInput): void {
+    let threat: AircraftEntity | null = null;
+    let threatScore = DEFENDED_RADIUS_M;
+    for (const a of world.aircraftList()) {
+      if (!a.alive || a.team === self.team) continue;
+      if (!a.history.perceive(reactionTicks, 1 / world.tickRate, this.tPos, this.tVel)) continue;
+      let score = Infinity;
+      for (const t of world.groundTargetList()) {
+        if (!t.destroyed) score = Math.min(score, Math.hypot(this.tPos.x - t.pos.x, this.tPos.z - t.pos.z));
+      }
+      if (score < threatScore) {
+        threatScore = score;
+        threat = a;
+      }
+    }
+    if (threat && threat.history.perceive(reactionTicks, 1 / world.tickRate, this.tPos, this.tVel)) {
+      this.engage(world, self, threat, out);
+      return;
+    }
+    this.orbitTargets(world, self, out);
+  }
+
+  /** Circles the standing targets 5 km out at 4,000 m. */
+  private orbitTargets(world: BotWorld, self: AircraftEntity, out: ControlInput): void {
+    const f = self.flight;
+    let n = 0;
+    this.goal.set(0, 0, 0);
+    for (const t of world.groundTargetList()) {
+      if (t.destroyed) continue;
+      this.goal.add(t.pos);
+      n++;
+    }
+    this.goal.divideScalar(Math.max(n, 1));
+    this.rel.subVectors(f.pos, this.goal).setY(0);
+    const r = Math.max(this.rel.length(), 1);
+    const lean = clamp((r - ORBIT_RADIUS_M) / ORBIT_RADIUS_M, -1, 1);
+    this.desired.set(-this.rel.z / r, 0, this.rel.x / r).addScaledVector(this.rel, -lean / r).normalize();
+    this.desired.setY(clamp((ORBIT_ALTITUDE_M - f.pos.y) / 3000, -0.35, 0.35)).normalize();
+    this.fly(f, this.desired, Math.min(this.profile.maxPull, 0.6), 0.85, out);
   }
 
   /** Heads for the nearest enemy (where it was last heard of) or the middle of the area. */
