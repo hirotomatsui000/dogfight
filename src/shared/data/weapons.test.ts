@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { listAircraft } from './aircraft/registry.ts';
-import { BOMB_ANVIL, CANNONS, COUNTERMEASURES, SRM_DART } from './weapons.ts';
+import { BOMB_ANVIL, CANNONS, COUNTERMEASURES, MISSILES, MRM_LANCE, SRM_DART } from './weapons.ts';
 
 describe('weapon data', () => {
   it('matches the cannon table in the spec', () => {
@@ -38,6 +38,33 @@ describe('weapon data', () => {
       decoyChance: 0.35,
     });
     expect(COUNTERMEASURES.flareBurnS).toBe(3);
+  });
+
+  it('matches the medium-range missile table in the spec', () => {
+    expect(MRM_LANCE).toMatchObject({
+      guidance: 'radar',
+      activeRangeM: 10000,
+      lockTimeS: 1.5,
+      twoSeatLockTimeFactor: 0.7,
+      sensorFusionLockTimeFactor: 0.8,
+      navigationConstant: 3,
+      maxAccelG: 20,
+      responseLagS: 0.5,
+      motorAccelMs2: 110,
+      burnTimeS: 8,
+      maxFlightTimeS: 60,
+      fuzeRadiusM: 9,
+      blastFullDamageRadiusM: 4,
+      blastMaxRadiusM: 18,
+      blastDamage: 130,
+      minLaunchIntervalS: 2,
+      decoyChance: 0.3,
+      stealthyDecoyFactor: 1.3,
+    });
+    expect(SRM_DART.guidance).toBe('ir');
+    expect(MISSILES.dart).toBe(SRM_DART);
+    expect(MISSILES.lance).toBe(MRM_LANCE);
+    expect(COUNTERMEASURES.chaffLastS).toBe(4);
   });
 
   it('has a cannon spec for every aircraft', () => {

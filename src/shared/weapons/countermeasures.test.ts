@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SRM_DART } from '../data/weapons.ts';
+import { MRM_LANCE, SRM_DART } from '../data/weapons.ts';
 import { Rng } from '../math/rng.ts';
 import { decoyChance, rollDecoy } from './countermeasures.ts';
 
@@ -14,6 +14,13 @@ describe('countermeasures', () => {
   it('decoys a short-range missile 35% of the time, half as often against afterburner', () => {
     expect(decoyChance(SRM_DART, false)).toBeCloseTo(0.35, 9);
     expect(decoyChance(SRM_DART, true)).toBeCloseTo(0.175, 9);
+  });
+
+  it('breaks a Lance lock with chaff 30% of the time, 39% against a stealthy target, whatever the throttle', () => {
+    expect(decoyChance(MRM_LANCE, false, 0)).toBeCloseTo(0.3, 9);
+    expect(decoyChance(MRM_LANCE, true, 0.15)).toBeCloseTo(0.3, 9);
+    expect(decoyChance(MRM_LANCE, false, 0.6)).toBeCloseTo(0.39, 9);
+    expect(decoyChance(SRM_DART, false, 0.85)).toBeCloseTo(0.35, 9);
   });
 
   it('matches the expected rate within ±5% over 1,000 seeded trials', () => {

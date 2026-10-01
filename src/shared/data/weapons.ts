@@ -52,9 +52,15 @@ export const CANNONS: Readonly<Record<CannonId, CannonSpec>> = {
   },
 };
 
+export type MissileKind = 'dart' | 'lance';
+
 export interface MissileSpec {
-  id: 'dart';
+  id: MissileKind;
   name: string;
+  /** infrared: the missile's own seeker from launch; radar: the launcher's radar guides it until it goes active */
+  guidance: 'ir' | 'radar';
+  /** radar missiles guide on their own inside this range, × (1 − 0.5 · target stealth); 0 for infrared */
+  activeRangeM: number;
   /** half-angle of the cone around the seeker axis in which the seeker can pick up a target */
   acquisitionConeDeg: number;
   /** how far off the launcher's nose the seeker can look */
@@ -63,6 +69,10 @@ export interface MissileSpec {
   lockTimeS: number;
   /** lock-time multiplier for aircraft with a helmet sight */
   helmetLockTimeFactor: number;
+  /** lock-time multiplier for two-seat aircraft (the back-seater runs the radar) */
+  twoSeatLockTimeFactor: number;
+  /** lock-time multiplier for aircraft with sensor fusion */
+  sensorFusionLockTimeFactor: number;
   lockRangeTailM: number;
   lockRangeHeadOnM: number;
   /** lock-range multiplier against a target on afterburner */
@@ -98,17 +108,26 @@ export interface MissileSpec {
   decoyChance: number;
   /** decoy-chance multiplier when the target is on afterburner */
   afterburnerDecoyFactor: number;
+  /** decoy-chance multiplier against a stealthy target (stealth ≥ STEALTHY_FROM) */
+  stealthyDecoyFactor: number;
 }
+
+/** Aircraft at least this stealthy make chaff work better (spec §10.2). */
+export const STEALTHY_FROM = 0.5;
 
 /** Short-range infrared missile "Dart" (spec §10.2). */
 export const SRM_DART: MissileSpec = {
   id: 'dart',
   name: 'Dart',
+  guidance: 'ir',
+  activeRangeM: 0,
   acquisitionConeDeg: 10,
   offBoresightDeg: 60,
   offBoresightHelmetDeg: 75,
   lockTimeS: 0.8,
   helmetLockTimeFactor: 0.7,
+  twoSeatLockTimeFactor: 1,
+  sensorFusionLockTimeFactor: 1,
   lockRangeTailM: 9000,
   lockRangeHeadOnM: 4000,
   afterburnerRangeFactor: 1.3,
@@ -131,15 +150,62 @@ export const SRM_DART: MissileSpec = {
   selfDestructSpeedMs: 250,
   decoyChance: 0.35,
   afterburnerDecoyFactor: 0.5,
+  stealthyDecoyFactor: 1,
 };
 
+/**
+ * Medium-range radar missile "Lance" (spec §10.2, M3). It needs a radar lock; the launcher's radar guides it until it
+ * is close enough to guide itself, so the launcher must keep the target inside its radar cone until then. The seeker
+ * fields that only an infrared missile uses are zero.
+ */
+export const MRM_LANCE: MissileSpec = {
+  id: 'lance',
+  name: 'Lance',
+  guidance: 'radar',
+  activeRangeM: 10000,
+  acquisitionConeDeg: 0,
+  offBoresightDeg: 0,
+  offBoresightHelmetDeg: 0,
+  lockTimeS: 1.5,
+  helmetLockTimeFactor: 1,
+  twoSeatLockTimeFactor: 0.7,
+  sensorFusionLockTimeFactor: 0.8,
+  lockRangeTailM: 0,
+  lockRangeHeadOnM: 0,
+  afterburnerRangeFactor: 1,
+  lockKeepRangeFactor: 1,
+  navigationConstant: 3,
+  maxAccelG: 20,
+  responseLagS: 0.5,
+  motorAccelMs2: 110,
+  burnTimeS: 8,
+  maxFlightTimeS: 60,
+  dragCoef: 6e-5,
+  maneuverDragFactor: 0.1,
+  gimbalLimitDeg: 60,
+  armTimeS: 0.5,
+  fuzeRadiusM: 9,
+  blastFullDamageRadiusM: 4,
+  blastMaxRadiusM: 18,
+  blastDamage: 130,
+  minLaunchIntervalS: 2,
+  selfDestructSpeedMs: 250,
+  decoyChance: 0.3,
+  afterburnerDecoyFactor: 1,
+  stealthyDecoyFactor: 1.3,
+};
+
+export const MISSILES: Readonly<Record<MissileKind, MissileSpec>> = { dart: SRM_DART, lance: MRM_LANCE };
+
+/** One salvo is a flare and a chaff cloud: Darts roll against the flare, Lances against the chaff. */
 export interface CountermeasureSpec {
   /** minimum time between two salvos */
   minIntervalS: number;
   flareBurnS: number;
+  chaffLastS: number;
 }
 
-export const COUNTERMEASURES: CountermeasureSpec = { minIntervalS: 0.4, flareBurnS: 3 };
+export const COUNTERMEASURES: CountermeasureSpec = { minIntervalS: 0.4, flareBurnS: 3, chaffLastS: 4 };
 
 /** Throttle above which the engine is on afterburner (spec §5.3). */
 export const AFTERBURNER_THROTTLE = 0.9;
