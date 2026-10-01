@@ -1,7 +1,7 @@
 import { DIFFICULTIES, type DifficultyId } from '../../shared/ai/difficulty.ts';
 import { listAircraft, TEAM_NAMES } from '../../shared/data/aircraft/registry.ts';
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
-import { STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
+import { STRIKE_DEFAULTS, STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
 import { isTouchOnly } from './device.ts';
@@ -48,7 +48,7 @@ export function pickValid<T extends string>(value: unknown, allowed: readonly T[
 /** What the selected jet does in a Strike match (spec §15.5). */
 export function strikeRole(c: AircraftConfig): string {
   return c.team === STRIKE_DEFENDER
-    ? `${c.name} · ${TEAM_NAMES[c.team]}: hold all three targets for 8 minutes`
+    ? `${c.name} · ${TEAM_NAMES[c.team]}: hold all three targets for ${STRIKE_DEFAULTS.timeLimitS / 60} minutes`
     : `${c.name} · ${TEAM_NAMES[c.team]}: destroy two of the three targets`;
 }
 

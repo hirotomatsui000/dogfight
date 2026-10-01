@@ -46,10 +46,10 @@ describe('controls help', () => {
 
 describe('strike role', () => {
   it('tells each jet what it does in a Strike match', () => {
-    expect(strikeRole(kestrel)).toBe('Kestrel · USA: hold all three targets for 8 minutes');
+    expect(strikeRole(kestrel)).toBe('Kestrel · USA: hold all three targets for 9 minutes');
     expect(strikeRole(kobchik)).toBe('Kobchik · Russia: destroy two of the three targets');
     // the words above are written out, so they must follow the rules
-    expect([STRIKE_DEFAULTS.timeLimitS, STRIKE_DEFAULTS.targetsToWin]).toEqual([480, 2]);
+    expect([STRIKE_DEFAULTS.timeLimitS, STRIKE_DEFAULTS.targetsToWin]).toEqual([540, 2]);
   });
 });
 

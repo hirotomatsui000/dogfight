@@ -11,6 +11,9 @@ export interface StrikeSides {
   attacker: DifficultyProfile;
   /** null: nobody defends */
   defender: DifficultyProfile | null;
+  /** jets (aircraft ids); by default the first of each team */
+  attackerJet?: string;
+  defenderJet?: string;
 }
 
 export interface StrikeMatchResult {
@@ -32,9 +35,9 @@ function firstAircraft(team: TeamId): string {
 export function runStrikeMatch(map: MapDefinition, terrain: Terrain, sides: StrikeSides, seed: number): StrikeMatchResult {
   const mode = new StrikeMode();
   const world = new World({ map, terrain, mode, seed });
-  world.addAircraft({ callsign: 'Attacker', team: STRIKE_ATTACKER, aircraftId: firstAircraft(STRIKE_ATTACKER), bot: sides.attacker });
+  world.addAircraft({ callsign: 'Attacker', team: STRIKE_ATTACKER, aircraftId: sides.attackerJet ?? firstAircraft(STRIKE_ATTACKER), bot: sides.attacker });
   if (sides.defender) {
-    world.addAircraft({ callsign: 'Defender', team: STRIKE_DEFENDER, aircraftId: firstAircraft(STRIKE_DEFENDER), bot: sides.defender });
+    world.addAircraft({ callsign: 'Defender', team: STRIKE_DEFENDER, aircraftId: sides.defenderJet ?? firstAircraft(STRIKE_DEFENDER), bot: sides.defender });
   }
   const maxTicks = Math.ceil((mode.options.timeLimitS + 1) * TICK_RATE);
   for (let i = 0; i < maxTicks; i++) {

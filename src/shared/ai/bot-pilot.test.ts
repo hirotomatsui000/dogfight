@@ -121,6 +121,32 @@ describe('BotPilot', () => {
     expect(headOnMissile(DIFFICULTIES.rookie)).toBe(true);
   });
 
+  it('fights a distant enemy with a Lance: selects it, locks on radar and fires one at a time', () => {
+    const w = newWorld();
+    const bot = w.addAircraft({ callsign: 'B', team: 'usa', aircraftId: 'condor', bot: DIFFICULTIES.ace });
+    const enemy = w.addAircraft({ callsign: 'E', team: 'russia', aircraftId: 'yastreb' });
+    place(bot, 0, 5000, 0, 0);
+    place(enemy, 0, 5000, -18000, 180);
+    const launches: number[] = [];
+    for (let i = 0; i < 6 * 60; i++) {
+      w.step(NO_INPUTS);
+      for (const e of w.drainEvents()) if (e.type === 'missileLaunched' && e.kind === 'lance') launches.push(i);
+    }
+    expect(bot.input.weapon).toBe('mrm');
+    expect(launches).toHaveLength(1);
+    expect(bot.stores.mrm).toBe(bot.config.stores.mrm - 1);
+  });
+
+  it('switches to the Dart inside its range', () => {
+    const w = newWorld();
+    const bot = w.addAircraft({ callsign: 'B', team: 'usa', aircraftId: 'condor', bot: DIFFICULTIES.ace });
+    const enemy = w.addAircraft({ callsign: 'E', team: 'russia', aircraftId: 'yastreb' });
+    place(bot, 0, 5000, 0, 0);
+    place(enemy, 0, 5000, -3000, 0);
+    for (let i = 0; i < 30; i++) w.step(NO_INPUTS);
+    expect(bot.input.weapon).toBe('srm');
+  });
+
   it('heads for an enemy it cannot see yet', () => {
     const w = newWorld();
     const bot = w.addAircraft({ callsign: 'B', team: 'usa', aircraftId: 'kestrel', bot: DIFFICULTIES.veteran });

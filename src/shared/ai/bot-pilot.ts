@@ -42,6 +42,11 @@ const SRM_MAX_RANGE_M = 7000;
 const SRM_SPEED_GAIN_MS = 450;
 const SRM_MAX_INTERCEPT_S = 12;
 const MISSILES_PER_TARGET_INTERVAL_S = 5;
+/** Lances are for targets beyond Dart range, out to where the missile still arrives with energy (spec §10.2). */
+const MRM_MIN_RANGE_M = 6000;
+const MRM_MAX_RANGE_M = 25000;
+const MRM_SPEED_GAIN_MS = 450;
+const MRM_MAX_INTERCEPT_S = 40;
 const AIM_NOISE_HOLD_S = 0.5;
 const LEAD_PURSUIT_RANGE_M = 2500;
 const DEFEND_DIVE_ABOVE_M = 1500;
@@ -295,6 +300,15 @@ export class BotPilot {
     this.nose.set(0, 0, -1).applyQuaternion(f.quat);
     out.fireCannon = range <= p.gunRangeM && self.stores.cannonRounds > 0 && this.nose.angleTo(this.aim) <= p.fireThresholdDeg * DEG;
 
+    // Beyond Dart range a jet with Lances left fights with them (M3). Pursuit keeps the target in the radar cone,
+    // which the Lance needs until it goes active.
+    const onRadar = self.contacts.some((c) => c.id === target.id && c.radar);
+    if (self.stores.mrm > 0 && onRadar && range > MRM_MIN_RANGE_M) {
+      out.weapon = 'mrm';
+      this.fireLance(world, self, target, range, closure, out);
+      return;
+    }
+
     const s = self.seeker;
     if (s.mode !== 'locked' || s.targetId !== target.id || self.stores.srm <= 0) return;
     if (range < SRM_MIN_RANGE_M || range > SRM_MAX_RANGE_M) return;
@@ -303,6 +317,15 @@ export class BotPilot {
     if (last !== undefined && world.tick - last < MISSILES_PER_TARGET_INTERVAL_S * world.tickRate) return;
     out.fireMissile = true;
     this.lastLaunchTick.set(target.id, world.tick);
+  }
+
+  /** Fires a Lance on a radar lock when it can reach the target, one at a time per target. */
+  private fireLance(world: BotWorld, self: AircraftEntity, target: AircraftEntity, range: number, closure: number, out: ControlInput): void {
+    const lock = self.radarLock;
+    if (lock.mode !== 'locked' || lock.targetId !== target.id) return;
+    if (range > MRM_MAX_RANGE_M || range / Math.max(closure + MRM_SPEED_GAIN_MS, 1) > MRM_MAX_INTERCEPT_S) return;
+    for (const m of world.missileList()) if (m.ownerId === self.id && m.targetId === target.id) return;
+    out.fireMissile = true;
   }
 
   /** Strike attacker: fight a defender on our tail, otherwise bomb (spec §14). False when there is nothing to bomb with. */

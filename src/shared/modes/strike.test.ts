@@ -15,14 +15,14 @@ const lose = (m: StrikeMode, team: TeamId, times = 1) => {
 };
 
 describe('StrikeMode', () => {
-  it('starts with 8 minutes, 4 aircraft a side, two targets to win and bombs only for Russia', () => {
+  it('starts with 9 minutes, 4 aircraft a side, two targets to win and bombs only for Russia', () => {
     const m = new StrikeMode();
     m.update(ctx(0));
     expect(m.status(ctx(0))).toMatchObject({
       modeId: 'strike',
       label: 'Strike',
       scores: null,
-      timeLeftS: 480,
+      timeLeftS: 540,
       winner: null,
       strike: { attacker: 'russia', defender: 'usa', aircraftLeft: { usa: 4, russia: 4 }, targetsDestroyed: 0, targetsToWin: 2, reason: null },
     });
@@ -43,15 +43,15 @@ describe('StrikeMode', () => {
   it('gives the USA the win when the time runs out', () => {
     const m = new StrikeMode();
     m.update(ctx(0));
-    m.update(ctx(480 * 60));
-    expect(m.status(ctx(480 * 60))).toMatchObject({ winner: 'usa', timeLeftS: 0, strike: { reason: 'targets-held' } });
+    m.update(ctx(540 * 60));
+    expect(m.status(ctx(540 * 60))).toMatchObject({ winner: 'usa', timeLeftS: 0, strike: { reason: 'targets-held' } });
   });
 
   it('counts a target destroyed in the final tick for Russia', () => {
     const m = new StrikeMode();
     m.update(ctx(0));
-    m.update(ctx(480 * 60, [target('A', true), target('B', true), target('C')]));
-    expect(m.status(ctx(480 * 60)).winner).toBe('russia');
+    m.update(ctx(540 * 60, [target('A', true), target('B', true), target('C')]));
+    expect(m.status(ctx(540 * 60)).winner).toBe('russia');
   });
 
   it('ends the match when a team loses its 4th aircraft', () => {

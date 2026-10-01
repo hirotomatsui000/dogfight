@@ -10,7 +10,8 @@ export interface StrikeOptions {
   targetsToWin: number;
 }
 
-export const STRIKE_DEFAULTS: StrikeOptions = { timeLimitS: 480, aircraftPerTeam: 4, targetsToWin: 2 };
+/** Nine minutes since M3 (8 before): defenders' Lances slow the attack, and 9 minutes keeps the match even (§13.1). */
+export const STRIKE_DEFAULTS: StrikeOptions = { timeLimitS: 540, aircraftPerTeam: 4, targetsToWin: 2 };
 /** Russia attacks and the USA defends (spec §13.1). */
 export const STRIKE_ATTACKER: TeamId = 'russia';
 export const STRIKE_DEFENDER: TeamId = 'usa';

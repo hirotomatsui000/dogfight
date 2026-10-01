@@ -58,7 +58,7 @@ describe('Strike attacker AI', () => {
     expect(turn(true)).toBeGreaterThan(30 * DEG);
   });
 
-  it('destroys two targets unopposed within 8 minutes (Veteran and Ace, 8 of 10 seeds)', () => {
+  it('destroys two targets unopposed within 9 minutes (Veteran and Ace, 8 of 10 seeds)', () => {
     for (const profile of [DIFFICULTIES.veteran, DIFFICULTIES.ace]) {
       let wins = 0;
       for (let seed = 1; seed <= 10; seed++) {
@@ -102,10 +102,11 @@ describe('Strike defender AI', () => {
 });
 
 describe('Strike balance', () => {
-  it('keeps Strike fair: a Veteran attacker beats a Veteran defender in 7–13 of 20 seeded matches', () => {
+  it('keeps Strike fair: a Veteran Kobchik attacking beats a Veteran Kestrel defending in 7–13 of 20 seeded matches', () => {
     let attackerWins = 0;
     for (let seed = 1; seed <= 20; seed++) {
-      if (runStrikeMatch(map, terrain, { attacker: DIFFICULTIES.veteran, defender: DIFFICULTIES.veteran }, seed).winner === 'russia') attackerWins++;
+      const sides = { attacker: DIFFICULTIES.veteran, defender: DIFFICULTIES.veteran, attackerJet: 'kobchik', defenderJet: 'kestrel' };
+      if (runStrikeMatch(map, terrain, sides, seed).winner === 'russia') attackerWins++;
     }
     expect(attackerWins).toBeGreaterThanOrEqual(7);
     expect(attackerWins).toBeLessThanOrEqual(13);
