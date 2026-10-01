@@ -117,6 +117,7 @@ export class Hud {
     this.drawModeAndHint(f);
     if (f.banner) this.drawCenterText(f.banner, this.height * 0.3, AMBER, FONT_BIG);
     if (f.message) this.drawCenterText(f.message, this.height * 0.38, WHITE, FONT_BIG);
+    if (f.message) (f.deathInfo ?? []).forEach((line, i) => this.drawCenterText(line, this.height * 0.38 + 34 + i * 24, WHITE, FONT));
     ctx.restore();
   }
 

@@ -1,5 +1,6 @@
 import { Color, Quaternion, Vector2, Vector3 } from 'three';
 import { DIFFICULTIES } from '../shared/ai/difficulty.ts';
+import { listAircraft } from '../shared/data/aircraft/registry.ts';
 import type { MapId } from '../shared/data/maps/registry.ts';
 import { BOMB_ANVIL, CANNONS } from '../shared/data/weapons.ts';
 import { timeToImpact } from '../shared/map/ground-proximity.ts';
@@ -17,6 +18,7 @@ import { DT } from '../shared/world/world.ts';
 import { AudioEngine } from './audio/audio-engine.ts';
 import { explosionGain, missileTone } from './audio/sound-mix.ts';
 import { CameraRig, type CameraTarget } from './camera/camera-rig.ts';
+import { DeathCam, killcamFov, killcamPosition } from './camera/death-cam.ts';
 import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
 import { setHudColor } from './hud/palette.ts';
@@ -26,6 +28,7 @@ import { sentinelDownText, zoneEventText, zoneFeedText } from './hud/objective-h
 import { takeoffHint } from './hud/takeoff.ts';
 import { trainingPrompt } from './hud/training-prompts.ts';
 import { BASE_MOUSE_SENSITIVITY, ControlMapper, type ControlMode } from './input/control-mapper.ts';
+import { keyLabel } from './input/bindings.ts';
 import { capturedKeys, DomInput } from './input/dom-input.ts';
 import { GamepadReader, pollGamepad } from './input/gamepad.ts';
 import { type AircraftMeshes, aircraftModelFor } from './render/aircraft-meshes.ts';
@@ -353,6 +356,13 @@ export async function startGame(
     lookYaw: 0,
     lookPitch: 0,
   };
+  // While waiting to respawn (M5): the kill cam, then spectating; and the jet to fly next.
+  const deathCam = new DeathCam();
+  const watchTarget: CameraTarget = { ...target, position: new Vector3(), quaternion: new Quaternion() };
+  const watchAim = new Vector3();
+  const killcamAt = new Vector3();
+  let nextJet: string | null = null;
+  const canChangeJet = options.mission !== 'training';
 
   const pause = new PauseMenu(root, {
     onResume: () => {
@@ -410,6 +420,10 @@ export async function startGame(
       if (e.aircraftId === session.localId) {
         deathMessage = deathText(e.cause, killer?.callsign ?? null);
         respawnAt = nowS + mode.respawnDelayS;
+        if (victim) {
+          deathCam.start(victim.position, killer && killer.id !== victim.id ? killer.id : null);
+          nextJet = victim.config.id;
+        }
       } else if (victim?.config.support && me) {
         showBanner(sentinelDownText(victim.team, me.team), nowS);
       } else if (killer?.isLocal) {
@@ -544,6 +558,8 @@ export async function startGame(
         cameraRig.reset();
         hud.resetMaxG();
         deathMessage = null;
+        deathCam.stop();
+        nextJet = null;
         if (me.flight.onGround) showBanner('CLEARED FOR TAKE-OFF', nowS);
       }
       // Online the jet keeps flying while the menu is open: hold the throttle, centre the stick.
@@ -560,6 +576,23 @@ export async function startGame(
         }
       }
       killFeed.update(dt);
+      const meNow = session.localView();
+      if (meNow && !meNow.alive && deathCam.phase !== 'off') {
+        deathCam.update(dt, session.views(), meNow.team);
+        if (active) {
+          const c = mapper.deathControls(snap, padFrame.active ? padFrame : null);
+          if (c.watch !== 0) {
+            deathCam.cycle(session.views(), meNow.team, c.watch);
+            cameraRig.reset();
+          }
+          if (c.jet !== 0 && canChangeJet) {
+            const jets = listAircraft(meNow.team);
+            const i = jets.findIndex((j) => j.id === (nextJet ?? meNow.config.id));
+            nextJet = jets[(i + c.jet + jets.length) % jets.length].id;
+            session.chooseNextJet(nextJet);
+          }
+        }
+      }
       if (!matchOver && session.modeStatus().winner !== null) endMatch();
     }
     if (debug) {
@@ -591,7 +624,25 @@ export async function startGame(
       target.lookPitch = mapper.lookPitch;
     }
     const aim = mapper.settings.mode === 'mouse-aim' ? mapper.aimDirection : null;
-    cameraRig.update(active ? dt : 0, local ? target : null, aim);
+    const watched = local && !local.alive && deathCam.phase === 'spectate' && deathCam.watchingId !== null ? session.view(deathCam.watchingId) : null;
+    if (local && !local.alive && deathCam.phase === 'killcam') {
+      const killer = deathCam.killerId === null ? null : session.view(deathCam.killerId);
+      const k = killer && killer.alive ? killer : null;
+      killcamPosition(deathCam.wreck, k ? k.position : null, killcamAt);
+      // Reduce motion: the shot cuts in instead of easing over.
+      cameraRig.frame(killcamAt, k ? k.position : deathCam.wreck, k ? killcamFov(killcamAt.distanceTo(k.position)) : 60, settings.current.reduceMotion ? 0 : dt);
+    } else if (watched && watched.alive) {
+      watchTarget.position.copy(watched.position);
+      watchTarget.quaternion.copy(watched.quaternion);
+      watchTarget.mach = 0;
+      watchTarget.gLoad = 1;
+      watchTarget.throttle = 0;
+      // Level with the horizon, along the watched jet's flight path.
+      const v = watched.flight.vel;
+      cameraRig.update(dt, watchTarget, v.lengthSq() > 1 ? watchAim.copy(v).normalize() : null);
+    } else {
+      cameraRig.update(active ? dt : 0, local ? target : null, aim);
+    }
     ground.update(renderer.camera.position);
     worldFeatures.update(renderer.camera.position);
     environment.update(session.hour(), renderer.camera, active ? dt : 0);
@@ -618,6 +669,21 @@ export async function startGame(
         leadDir = lead;
       }
       const message = paused || !deathMessage ? null : `${deathMessage} — RESPAWN IN ${Math.max(0, Math.ceil(respawnAt - nowS))}`;
+      const deathInfo: string[] = [];
+      if (message && !local.alive) {
+        const keys = settings.current.keys;
+        const pad = padFrame.active;
+        if (deathCam.phase === 'killcam' && deathCam.killerId !== null) {
+          const k = session.view(deathCam.killerId);
+          if (k) deathInfo.push(`${k.callsign} · ${k.config.name} · ${Math.round((100 * k.hp) / k.config.damage.hitPoints)}% HP left`);
+        } else if (watched) {
+          deathInfo.push(`WATCHING ${watched.callsign} · ${watched.config.name}   ${pad ? 'stick' : `${keyLabel(keys.rollLeft[0])} / ${keyLabel(keys.rollRight[0])}`} to switch`);
+        }
+        if (canChangeJet && nextJet) {
+          const name = listAircraft(local.team).find((j) => j.id === nextJet)?.name ?? '';
+          deathInfo.push(`NEXT JET  ◀ ${pad ? 'LB' : keyLabel(keys.yawLeft[0])}  ${name.toUpperCase()}  ${pad ? 'RB' : keyLabel(keys.yawRight[0])} ▶`);
+        }
+      }
       const targets = session.groundTargets();
       const status = session.modeStatus();
       const bombImpact = local.alive && local.stores.bombs > 0 ? predictImpact(f.pos, f.vel, BOMB_ANVIL, terrain, DT, impactPoint) : null;
@@ -635,6 +701,7 @@ export async function startGame(
         // Not on the take-off run: the gear is down until the jet is well clear of the runway.
         pullUp: local.alive && f.gear === 0 && timeToImpact(f, terrain) !== null,
         message,
+        deathInfo,
         banner: nowS < bannerUntil ? banner : null,
         hint:
           local.alive && f.onGround

@@ -20,6 +20,8 @@ const CHASE_TAU = 0.15;
 const TRAUMA_DECAY_PER_S = 1.5;
 const SHAKE_MAX_ANGLE = 1.2 * DEG;
 const SHAKE_MAX_ROLL = 1.5 * DEG;
+/** The kill cam eases onto its shot with this time constant. */
+const FRAME_TAU_S = 0.35;
 
 /** Continuous shake sources: high G, the transonic buffet band and afterburner rumble. */
 export function sustainedTrauma(gLoad: number, mach: number, throttle: number): number {
@@ -43,6 +45,8 @@ export class CameraRig {
   private time = 0;
   private readonly offset = new Vector3();
   private offsetReady = false;
+  /** the kill cam framed the last frame */
+  private framing = false;
   private readonly tmpA = new Vector3();
   private readonly tmpB = new Vector3();
   private readonly tmpUp = new Vector3();
@@ -66,6 +70,7 @@ export class CameraRig {
   /** `aimDirection`: the mouse-aim direction to look along (horizon level); null follows the jet's nose and roll. */
   update(dt: number, target: CameraTarget | null, aimDirection: Vector3 | null): void {
     if (!target) return;
+    this.framing = false;
     this.time += dt;
     const dir = this.tmpA;
     if (aimDirection) dir.copy(aimDirection).normalize();
@@ -96,6 +101,27 @@ export class CameraRig {
       this.camera.fov = FOV;
       this.camera.updateProjectionMatrix();
     }
+  }
+
+  /**
+   * Looks at `lookAt` from `position` with a field of view of `fovDeg` (the kill cam, M5), easing over from where the
+   * camera was. The next chase update starts fresh behind its target.
+   */
+  frame(position: Vector3, lookAt: Vector3, fovDeg: number, dt: number): void {
+    const cam = this.camera;
+    const k = dt > 0 ? 1 - Math.exp(-dt / FRAME_TAU_S) : 1;
+    cam.position.lerp(position, this.framing ? k : 1);
+    this.tmpM.lookAt(cam.position, lookAt, WORLD_UP);
+    this.tmpQ.setFromRotationMatrix(this.tmpM);
+    if (this.framing) cam.quaternion.slerp(this.tmpQ, k);
+    else cam.quaternion.copy(this.tmpQ);
+    const fov = this.framing ? cam.fov + (fovDeg - cam.fov) * k : fovDeg;
+    if (Math.abs(fov - cam.fov) > 1e-3) {
+      cam.fov = fov;
+      cam.updateProjectionMatrix();
+    }
+    this.framing = true;
+    this.offsetReady = false;
   }
 
   private applyShake(): void {

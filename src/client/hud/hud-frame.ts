@@ -24,6 +24,8 @@ export interface HudFrame {
   pullUp: boolean;
   /** large centered text, e.g. the respawn countdown */
   message: string | null;
+  /** lines under the message while waiting to respawn (M5): the killer, who you watch, the next jet */
+  deathInfo?: readonly string[];
   /** short notice, e.g. "MISSILE DECOYED" */
   banner: string | null;
   hint: string;

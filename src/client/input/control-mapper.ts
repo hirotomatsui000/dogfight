@@ -58,6 +58,7 @@ export class ControlMapper {
   private aimHeading = 0;
   private aimPitch = 0;
   private throttle = 0.8;
+  private lastPadRoll = 0;
   private weapon: WeaponSelect = 'srm';
   private pitchAxis = 0;
   private rollAxis = 0;
@@ -165,6 +166,22 @@ export class ControlMapper {
   /** Esc always pauses (browsers use it to release the mouse); so do the pause key and the pad's Start. */
   pauseRequested(snap: InputSnapshot, pad: PadFrame | null): boolean {
     return snap.pressed.has('Escape') || this.settings.bindings.pause.some((c) => snap.pressed.has(c)) || (pad !== null && pad.pressed.has('pause'));
+  }
+
+  /**
+   * While waiting to respawn (M5): the roll keys (or the stick, pushed past halfway) step through the pilots to watch,
+   * the rudder keys (or the bumpers) through the next jet. Each is −1, 0 or +1 for this frame.
+   */
+  deathControls(snap: InputSnapshot, pad: PadFrame | null): { watch: number; jet: number } {
+    const tapped = (a: KeyAction) => this.settings.bindings[a].some((c) => snap.pressed.has(c));
+    let watch = tapped('rollRight') ? 1 : tapped('rollLeft') ? -1 : 0;
+    let jet = tapped('yawRight') ? 1 : tapped('yawLeft') ? -1 : 0;
+    const roll = pad?.roll ?? 0;
+    if (Math.abs(roll) > 0.6 && Math.abs(this.lastPadRoll) <= 0.6) watch = Math.sign(roll);
+    this.lastPadRoll = roll;
+    if (pad?.pressed.has('rudderRight')) jet = 1;
+    else if (pad?.pressed.has('rudderLeft')) jet = -1;
+    return { watch, jet };
   }
 
   /** The map key was pressed this frame (M4): it opens and closes the map screen. */
