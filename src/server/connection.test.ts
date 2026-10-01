@@ -131,6 +131,22 @@ describe('ClientConnection and RoomManager', () => {
     expect(chatty.socket.json().filter((m) => m.type === 'chat')).toHaveLength(2);
   });
 
+  it('passes jet choices and Free Flight requests to the room, at most 8 a second (M5)', () => {
+    const manager = new RoomManager(settings(), () => ({ map, terrain }));
+    const { socket, conn } = connect(manager, 1);
+    conn.onMessage(hello('ff', { mode: 'free-flight' }));
+    conn.onMessage(JSON.stringify({ type: 'world', weather: 'rain', hour: 20, clockRunning: false }));
+    expect(socket.json().find((m) => m.type === 'environment')).toMatchObject({ environment: { weather: 'rain', startHour: 20 } });
+    conn.onMessage(JSON.stringify({ type: 'jet', aircraftId: 'condor' }));
+    const room = manager.room('ff')!;
+    const me = [...room.world.aircraftList()].find((a) => !a.isBot)!;
+    expect(me.nextAircraftId).toBe('condor');
+    conn.onMessage(JSON.stringify({ type: 'flyFrom', x: 1000, z: 2000 }));
+    expect(me.flight.pos.x).toBeCloseTo(1000, 0);
+    for (let i = 0; i < 12; i++) conn.onMessage(JSON.stringify({ type: 'jet', aircraftId: 'shade' }));
+    expect(socket.closedWith).toBe(CLOSE_VIOLATIONS);
+  });
+
   it('closes a room 30 s after its last pilot leaves', () => {
     const manager = new RoomManager(settings(), () => ({ map, terrain }));
     const { conn } = connect(manager, 1);

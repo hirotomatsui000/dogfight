@@ -31,6 +31,7 @@ export function testView(id: number, over: Partial<AircraftView> = {}): Aircraft
     bombLoad: 0,
     targetId: null,
     contacts: [],
+    datalink: [],
     seeker: createSeeker(),
     radarLock: createRadarLock(),
     lockedByRadar: false,

@@ -11,8 +11,8 @@ import { CALM_NOON, type EnvironmentSettings, hourAt } from '../../shared/world/
 import type { Terrain } from '../../shared/map/terrain.ts';
 import { Rng } from '../../shared/math/rng.ts';
 import type { GameMode, ModeStatus } from '../../shared/modes/mode.ts';
-import { StrikeMode } from '../../shared/modes/strike.ts';
-import { TeamDeathmatchMode } from '../../shared/modes/team-deathmatch.ts';
+import { createMode, MODE_LABELS } from '../../shared/modes/registry.ts';
+import type { WeatherId } from '../../shared/world/weather.ts';
 import { decodeSnapshot, encodeInput, quantizeInput, type Snapshot } from '../../shared/net/codec.ts';
 import {
   type OnlineModeId,
@@ -91,7 +91,7 @@ class NetAircraft implements AircraftView {
   readonly id: number;
   readonly callsign: string;
   readonly team: TeamId;
-  readonly config: AircraftView['config'];
+  config: AircraftView['config'];
   readonly isLocal: boolean;
   readonly isBot: boolean;
   alive = true;
@@ -108,6 +108,7 @@ class NetAircraft implements AircraftView {
   readonly bombLoad: number;
   targetId: number | null = null;
   contacts: Contact[] = [];
+  datalink: number[] = [];
   seeker = createSeeker();
   radarLock = createRadarLock();
   lockedByRadar = false;
@@ -281,8 +282,9 @@ export class NetworkSession implements GameSession {
     this.environment = welcome.environment ?? CALM_NOON;
     this.serverBuild = welcome.build;
     this.modeId = welcome.modeId;
-    this.mode = welcome.modeId === 'strike' ? new StrikeMode() : new TeamDeathmatchMode();
-    this.status = { modeId: welcome.modeId, label: welcome.modeId === 'strike' ? 'Strike' : 'Team Deathmatch', scores: null, timeLeftS: null, winner: null };
+    this.mode = createMode(welcome.modeId);
+    this.mode.prepare?.(map);
+    this.status = { modeId: welcome.modeId, label: MODE_LABELS[welcome.modeId], scores: null, timeLeftS: null, winner: null };
     this.tickBase = welcome.tick;
     this.msBase = now();
     this.targetViews = this.mode.groundTargets(map).map((spec) => {
@@ -297,8 +299,8 @@ export class NetworkSession implements GameSession {
     this.ping();
   }
 
-  /** Weather and clock of the room (M4). */
-  readonly environment: EnvironmentSettings;
+  /** Weather and clock of the room (M4); a Free Flight room can change them (M5). */
+  environment: EnvironmentSettings;
 
   hour(): number {
     return hourAt(this.environment.startHour, this.environment.clockRunning, this.serverTickNow() / TICK_RATE);
@@ -398,6 +400,23 @@ export class NetworkSession implements GameSession {
   sendChat(index: number): void {
     if (!this.closed) this.transport.send(JSON.stringify({ type: 'chat', index }));
   }
+
+  chooseNextJet(aircraftId: string): void {
+    if (!this.closed) this.transport.send(JSON.stringify({ type: 'jet', aircraftId }));
+  }
+
+  changeWorld(weather: WeatherId, hour: number, clockRunning: boolean): void {
+    if (!this.closed && this.modeId === 'free-flight') this.transport.send(JSON.stringify({ type: 'world', weather, hour, clockRunning }));
+  }
+
+  flyFrom(x: number, z: number): void {
+    if (!this.closed && this.modeId === 'free-flight') this.transport.send(JSON.stringify({ type: 'flyFrom', x, z }));
+  }
+
+  /** Online Free Flight has no drones: weapons stay off for everyone (M5). */
+  readonly canCallDrones = false;
+
+  setDrones(): void {}
 
   /** True once after the server started a new match in this room (new aircraft ids). */
   consumeMatchStart(): boolean {
@@ -514,6 +533,9 @@ export class NetworkSession implements GameSession {
       case 'chat':
         this.chatLines.push({ from: msg.from, index: msg.index });
         break;
+      case 'environment':
+        this.environment = msg.environment;
+        break;
       case 'pong':
         this.applyPong(msg.t, msg.tick);
         break;
@@ -553,6 +575,8 @@ export class NetworkSession implements GameSession {
       }
       a.kills = r.kills;
       a.deaths = r.deaths;
+      // A pilot who respawned in another jet (M5).
+      if (a.config.id !== r.aircraftId) a.config = getAircraft(r.aircraftId);
     }
     for (const id of [...this.aircraft.keys()]) {
       if (!seen.has(id)) {
@@ -634,6 +658,7 @@ export class NetworkSession implements GameSession {
     me.hp = own.hp;
     me.targetId = own.targetId;
     me.contacts = own.contacts.map((c) => ({ ...c }));
+    me.datalink = own.datalink;
     me.seeker.mode = own.seekerMode;
     me.seeker.targetId = own.seekerTargetId;
     v3(me.seeker.axis, own.seekerAxis);

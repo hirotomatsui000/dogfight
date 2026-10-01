@@ -4,10 +4,10 @@ import type { ModeStatus } from '../modes/mode.ts';
 import type { GameEvent } from '../world/events.ts';
 import { SPAWN_STARTS, type SpawnStart } from '../world/spawns.ts';
 import { CALM_NOON, type EnvironmentSettings } from '../world/time-of-day.ts';
-import { isWeatherId } from '../world/weather.ts';
+import { isWeatherId, type WeatherId } from '../world/weather.ts';
 
-/** Bumped whenever a message layout changes; client and server must agree (spec §7, M2; 3 since M4). */
-export const PROTOCOL_VERSION = 3;
+/** Bumped whenever a message layout changes; client and server must agree (spec §7, M2; 3 since M4, 4 since M5). */
+export const PROTOCOL_VERSION = 4;
 
 /** The server sends a snapshot every this many ticks (30 Hz at 60 Hz ticks). */
 export const SNAPSHOT_EVERY_TICKS = 2;
@@ -17,10 +17,12 @@ export const MAX_CLIENT_BINARY_BYTES = 64;
 export const MAX_CLIENT_JSON_BYTES = 2048;
 export const MAX_INPUTS_PER_S = 120;
 export const MAX_CHATS_PER_S = 1;
+/** Jet choices, Free Flight weather changes and "fly from here" together (M5). */
+export const MAX_ACTIONS_PER_S = 8;
 
-/** Modes a room can be created with. */
-export type OnlineModeId = 'team-deathmatch' | 'strike';
-export const ONLINE_MODES: readonly OnlineModeId[] = ['team-deathmatch', 'strike'];
+/** Modes a room can be created with (M5: all but Training). */
+export type OnlineModeId = 'team-deathmatch' | 'air-superiority' | 'team-objective' | 'free-flight' | 'strike';
+export const ONLINE_MODES: readonly OnlineModeId[] = ['team-deathmatch', 'air-superiority', 'team-objective', 'free-flight', 'strike'];
 
 /** Preset quick-chat lines (spec §24: no free text). */
 export const QUICK_CHAT: readonly string[] = ['Nice shot!', 'Help me!', 'On my way', 'Good game'];
@@ -59,7 +61,28 @@ export interface ChatMessage {
   index: number;
 }
 
-export type ClientJsonMessage = HelloMessage | PingMessage | ChatMessage;
+/** The jet this pilot flies from the next respawn on (M5). */
+export interface JetMessage {
+  type: 'jet';
+  aircraftId: string;
+}
+
+/** Free Flight rooms (M5): new weather and the hour it is now, for everyone in the room. */
+export interface WorldMessage {
+  type: 'world';
+  weather: WeatherId;
+  hour: number;
+  clockRunning: boolean;
+}
+
+/** Free Flight rooms (M5): fly from a point of the map (a runway when the point is on an airfield). */
+export interface FlyFromMessage {
+  type: 'flyFrom';
+  x: number;
+  z: number;
+}
+
+export type ClientJsonMessage = HelloMessage | PingMessage | ChatMessage | JetMessage | WorldMessage | FlyFromMessage;
 
 export interface RosterEntry {
   id: number;
@@ -95,6 +118,8 @@ export type ServerJsonMessage =
   | { type: 'chat'; from: number; index: number }
   | { type: 'matchEnd'; status: ModeStatus; restartInS: number }
   | { type: 'matchStart'; you: number; tick: number }
+  /** a Free Flight room's weather or clock changed (M5) */
+  | { type: 'environment'; environment: EnvironmentSettings }
   | { type: 'shutdown' };
 
 /** Room names: 1–24 of a–z, 0–9 and dashes; anything else is folded into that form (or the public room). */
@@ -142,6 +167,16 @@ export function parseClientJson(text: string): ClientJsonMessage {
     case 'chat':
       if (!Number.isInteger(raw.index) || (raw.index as number) < 0 || (raw.index as number) >= QUICK_CHAT.length) throw new ProtocolError('bad chat');
       return { type: 'chat', index: raw.index as number };
+    case 'jet':
+      if (typeof raw.aircraftId !== 'string') throw new ProtocolError('bad jet');
+      return { type: 'jet', aircraftId: raw.aircraftId.slice(0, 32) };
+    case 'world': {
+      if (!isWeatherId(raw.weather) || typeof raw.hour !== 'number' || !Number.isFinite(raw.hour)) throw new ProtocolError('bad world');
+      return { type: 'world', weather: raw.weather, hour: ((raw.hour % 24) + 24) % 24, clockRunning: raw.clockRunning === true };
+    }
+    case 'flyFrom':
+      if (typeof raw.x !== 'number' || typeof raw.z !== 'number' || !Number.isFinite(raw.x) || !Number.isFinite(raw.z)) throw new ProtocolError('bad flyFrom');
+      return { type: 'flyFrom', x: raw.x, z: raw.z };
     default:
       throw new ProtocolError('unknown message type');
   }

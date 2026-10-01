@@ -45,6 +45,7 @@ const snapshot = (): Snapshot => ({
     targetId: 9,
     outOfBoundsTicks: 0,
     contacts: [{ id: 9, visual: true, radar: false, rangeM: 3500.5, offNoseRad: 0.25 }],
+    datalink: [12, 40],
   },
 });
 
@@ -116,6 +117,7 @@ describe('snapshot codec', () => {
     expect(own.seekerMode).toBe('track');
     expect(own.cannonRounds).toBe(433);
     expect(own.contacts[0]).toMatchObject({ id: 9, visual: true, radar: false });
+    expect(own.datalink).toEqual([12, 40]);
     expect(own.targetId).toBe(9);
     expect(own).toMatchObject({ radarLockMode: 'tracking', radarLockTargetId: 9, lockedByRadar: true });
     expect(own.radarLockProgress).toBeCloseTo(0.4, 2);

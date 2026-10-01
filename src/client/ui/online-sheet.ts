@@ -9,7 +9,13 @@ interface RoomInfo {
   maxHumans: number;
 }
 
-const MODE_LABELS: Readonly<Record<string, string>> = { 'team-deathmatch': 'Dogfight', strike: 'Strike' };
+const MODE_LABELS: Readonly<Record<string, string>> = {
+  'team-deathmatch': 'Dogfight',
+  'air-superiority': 'Air Superiority',
+  'team-objective': 'Team Objective',
+  'free-flight': 'Free Flight',
+  strike: 'Strike',
+};
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);

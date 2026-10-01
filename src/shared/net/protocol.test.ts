@@ -27,6 +27,16 @@ describe('protocol', () => {
     }
   });
 
+  it('reads the M5 messages: a jet choice, Free Flight weather and clock, and fly-from-here', () => {
+    expect(parseClientJson('{"type":"jet","aircraftId":"condor"}')).toEqual({ type: 'jet', aircraftId: 'condor' });
+    expect(parseClientJson('{"type":"world","weather":"broken","hour":25,"clockRunning":true}')).toEqual({ type: 'world', weather: 'broken', hour: 1, clockRunning: true });
+    expect(parseClientJson('{"type":"flyFrom","x":10,"z":-20}')).toEqual({ type: 'flyFrom', x: 10, z: -20 });
+    expect(parseClientJson(JSON.stringify({ type: 'hello', version: 4, aircraftId: 'kestrel', mode: 'team-objective' }))).toMatchObject({ mode: 'team-objective' });
+    for (const text of ['{"type":"jet"}', '{"type":"world","weather":"hail","hour":3}', '{"type":"world","weather":"rain","hour":"x"}', '{"type":"flyFrom","x":1}']) {
+      expect(() => parseClientJson(text), text).toThrow(ProtocolError);
+    }
+  });
+
   it('keeps room names and callsigns short and plain', () => {
     expect(sanitizeRoomName('a'.repeat(40))).toHaveLength(24);
     expect(sanitizeRoomName('---')).toBe('public');

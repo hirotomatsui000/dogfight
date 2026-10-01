@@ -67,5 +67,6 @@ export function ownState(a: AircraftEntity): OwnState {
     targetId: a.targetId,
     outOfBoundsTicks: a.outOfBoundsTicks,
     contacts: a.contacts.map((c) => ({ id: c.id, visual: c.visual, radar: c.radar, rangeM: c.rangeM, offNoseRad: c.offNoseRad })),
+    datalink: [...a.datalink],
   };
 }

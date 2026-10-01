@@ -14,7 +14,7 @@ import { openSettings } from './settings-screen.ts';
 import type { SettingsStore } from './settings.ts';
 import { loadSetting, saveSetting } from './storage.ts';
 
-export type MissionId = 'team-deathmatch' | 'free-flight' | 'strike' | 'training';
+export type MissionId = 'team-deathmatch' | 'air-superiority' | 'team-objective' | 'free-flight' | 'strike' | 'training';
 
 export interface StartOptions {
   aircraftId: string;

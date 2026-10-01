@@ -154,6 +154,8 @@ export interface OwnState {
   targetId: number | null;
   outOfBoundsTicks: number;
   contacts: SnapshotContact[];
+  /** enemies on teammates' radar (datalink, M5) */
+  datalink: number[];
 }
 
 export interface Snapshot {
@@ -181,7 +183,7 @@ const CONTACT_BYTES = 2 + 1 + 4 + 4;
 const MAX_LIST = 255;
 
 export function snapshotBytes(s: Snapshot): number {
-  const own = s.own ? OWN_FIXED + CONTACT_BYTES * Math.min(s.own.contacts.length, MAX_LIST) : 0;
+  const own = s.own ? OWN_FIXED + CONTACT_BYTES * Math.min(s.own.contacts.length, MAX_LIST) + 1 + 2 * Math.min(s.own.datalink.length, MAX_LIST) : 0;
   return (
     HEADER +
     1 +
@@ -299,6 +301,9 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
       f32(c.rangeM);
       f32(c.offNoseRad);
     }
+    const linked = w.datalink.slice(0, MAX_LIST);
+    u8(linked.length);
+    for (const d of linked) u16(d);
   }
   return buf;
 }
@@ -403,7 +408,9 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot {
       const flags = u8();
       contacts.push({ id: cid, visual: (flags & 1) !== 0, radar: (flags & 2) !== 0, rangeM: f32(), offNoseRad: f32() });
     }
-    own = { pos, vel: velocity, angVel, quat: q, throttle, airbrake, hp, cannonRounds, srm, mrm, countermeasures, bombs: bombsLeft, seekerMode, seekerTargetId, seekerAxis, radarLockMode, radarLockTargetId, radarLockProgress, lockedByRadar, gear, onGround, targetId, outOfBoundsTicks, contacts };
+    const datalink: number[] = [];
+    for (let n = u8(); n > 0; n--) datalink.push(u16());
+    own = { pos, vel: velocity, angVel, quat: q, throttle, airbrake, hp, cannonRounds, srm, mrm, countermeasures, bombs: bombsLeft, seekerMode, seekerTargetId, seekerAxis, radarLockMode, radarLockTargetId, radarLockProgress, lockedByRadar, gear, onGround, targetId, outOfBoundsTicks, contacts, datalink };
   }
   return { tick, ackSeq, queueDepth, aircraft, missiles, bombs, targets, own };
 }

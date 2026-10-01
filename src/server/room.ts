@@ -6,16 +6,16 @@ import type { MapDefinition } from '../shared/data/maps/map-definition.ts';
 import type { MapId } from '../shared/data/maps/registry.ts';
 import type { Terrain } from '../shared/map/terrain.ts';
 import { Rng } from '../shared/math/rng.ts';
-import type { GameMode, ModeStatus } from '../shared/modes/mode.ts';
-import { StrikeMode } from '../shared/modes/strike.ts';
-import { TeamDeathmatchMode } from '../shared/modes/team-deathmatch.ts';
+import type { ModeStatus } from '../shared/modes/mode.ts';
+import { createMode } from '../shared/modes/registry.ts';
 import { type DecodedInput, encodeSnapshot } from '../shared/net/codec.ts';
 import { type HelloMessage, type OnlineModeId, PROTOCOL_VERSION, type RosterEntry, type ServerJsonMessage, SNAPSHOT_EVERY_TICKS } from '../shared/net/protocol.ts';
 import { type ControlInput, neutralInput } from '../shared/physics/controls.ts';
 import type { AircraftEntity } from '../shared/world/entities.ts';
 import type { GameEvent } from '../shared/world/events.ts';
 import type { SpawnStart } from '../shared/world/spawns.ts';
-import { CALM_NOON, type EnvironmentSettings } from '../shared/world/time-of-day.ts';
+import { CALM_NOON, type EnvironmentSettings, environmentAt } from '../shared/world/time-of-day.ts';
+import type { WeatherId } from '../shared/world/weather.ts';
 import { TICK_RATE, World } from '../shared/world/world.ts';
 import { ownState, sharedSnapshot } from './snapshot.ts';
 
@@ -39,7 +39,7 @@ export interface RoomOptions {
   seed?: number;
   /** seconds between the end of a match and the next (default 10) */
   restartDelayS?: number;
-  /** Team Deathmatch score limit (tests use small ones) */
+  /** score limit of the scoring modes (tests use small ones) */
   tdmScoreLimit?: number;
   /** the room's map id, weather and clock (M4; fixed by the pilot who creates the room) */
   mapId?: MapId;
@@ -56,7 +56,8 @@ const STATUS_EVERY_TICKS = TICK_RATE;
 interface Player {
   readonly peer: Peer;
   readonly callsign: string;
-  readonly aircraftId: string;
+  /** the jet this pilot flies; a jet change (M5) also carries over to the next match */
+  aircraftId: string;
   readonly team: TeamId;
   /** in the air or on the runway (M4) */
   readonly start: SpawnStart;
@@ -108,9 +109,14 @@ export class Room {
     return this.options.mapId ?? (this.map.id === 'lechovia' ? 'lechovia' : 'test-range');
   }
 
-  /** The room's weather and clock (M4). */
+  /** The room's weather and clock (M4); Free Flight pilots can change them (M5). */
   get environment(): EnvironmentSettings {
     return this.options.environment ?? CALM_NOON;
+  }
+
+  /** Free Flight rooms fly without bots or weapons (M5). */
+  private get freeFlight(): boolean {
+    return this.mode === 'free-flight';
   }
 
   get humanCount(): number {
@@ -153,7 +159,7 @@ export class Room {
       modeId: this.mode,
       mapSeed: this.map.seed,
       map: this.mapId,
-      environment: this.environment,
+      environment: this.world.environment,
       tick: this.world.tick,
       tickRate: TICK_RATE,
       snapshotEvery: SNAPSHOT_EVERY_TICKS,
@@ -184,6 +190,27 @@ export class Room {
   chat(peerId: number, index: number): void {
     const p = this.players.get(peerId);
     if (p) this.broadcast({ type: 'chat', from: p.entityId, index });
+  }
+
+  /** The jet a pilot flies from their next respawn on, and in the next match (M5). */
+  chooseJet(peerId: number, aircraftId: string): void {
+    const p = this.players.get(peerId);
+    if (p && this.world.setNextAircraft(p.entityId, aircraftId)) p.aircraftId = aircraftId;
+  }
+
+  /** Free Flight (M5): anyone in the room sets the weather and the hour it is now, for everyone. */
+  changeWorld(peerId: number, weather: WeatherId, hour: number, clockRunning: boolean): void {
+    if (!this.freeFlight || !this.players.has(peerId)) return;
+    const env = environmentAt(weather, hour, clockRunning, this.world.tick / TICK_RATE);
+    this.world.setEnvironment(env);
+    this.options.environment = env;
+    this.broadcast({ type: 'environment', environment: env });
+  }
+
+  /** Free Flight (M5): fly from a point of the map. */
+  flyFrom(peerId: number, x: number, z: number): void {
+    const p = this.players.get(peerId);
+    if (p && this.freeFlight) this.world.flyFrom(p.entityId, x, z);
   }
 
   pong(peerId: number, t: number): void {
@@ -243,10 +270,10 @@ export class Room {
   }
 
   private createWorld(): World {
-    const mode: GameMode =
-      this.mode === 'strike'
-        ? new StrikeMode({ aircraftPerTeam: STRIKE_AIRCRAFT_PER_PILOT * Math.max(1, this.options.teamSize) })
-        : new TeamDeathmatchMode(this.options.tdmScoreLimit ? { scoreLimit: this.options.tdmScoreLimit } : {});
+    const mode = createMode(this.mode, {
+      strike: { aircraftPerTeam: STRIKE_AIRCRAFT_PER_PILOT * Math.max(1, this.options.teamSize) },
+      scoreLimit: this.options.tdmScoreLimit,
+    });
     const seed = (this.options.seed ?? Math.floor(Math.random() * 0x7fffffff)) + this.matchNumber;
     const world = new World({ map: this.map, terrain: this.terrain, mode, seed, environment: this.environment });
     this.world = world;
@@ -275,8 +302,9 @@ export class Room {
     return n;
   }
 
+  /** Bots that fill seats: never the Sentinels the mode flies itself. */
   private botsOn(team: TeamId): AircraftEntity[] {
-    return [...this.world.aircraftList()].filter((a) => a.isBot && a.team === team);
+    return [...this.world.aircraftList()].filter((a) => a.isBot && !a.support && a.team === team);
   }
 
   private removeBot(team: TeamId): void {
@@ -284,11 +312,12 @@ export class Room {
     if (bot) this.world.removeAircraft(bot.id);
   }
 
-  /** Tops each team up with bots to the team size. */
+  /** Tops each team up with bots to the team size (none in Free Flight). */
   private fillBots(): void {
+    const size = this.freeFlight ? 0 : this.options.teamSize;
     for (const team of ['usa', 'russia'] as const) {
       const bots = this.botsOn(team);
-      let missing = this.options.teamSize - this.humansOn(team) - bots.length;
+      let missing = size - this.humansOn(team) - bots.length;
       let index = bots.length;
       while (missing-- > 0) {
         const jet = randomAircraft(team, this.botJets);

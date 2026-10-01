@@ -2,13 +2,16 @@
  * Smoke test for a running game server (spec §16): the health check, the page, and two headless pilots that join one
  * room over real WebSockets, fly for a while, see each other and swap a quick-chat line. Exits non-zero on failure.
  *
- *   node tools/smoke-test.ts [http://localhost:8080] [--lag=150] [--seconds=15]
+ *   node tools/smoke-test.ts [http://localhost:8080] [--lag=150] [--seconds=15] [--mode=air-superiority]
  *
  * `--lag` delays both directions like the page's `?lag=`, to check prediction and clock sync at a given round trip.
+ * `--mode` opens the room in another mode (M5): team-deathmatch (default), air-superiority, team-objective,
+ * free-flight or strike.
  */
 import { buildTerrain } from '../src/shared/data/maps/map-definition.ts';
 import { createTestRange } from '../src/shared/data/maps/test-range.ts';
 import { CALM_NOON } from '../src/shared/world/time-of-day.ts';
+import { ONLINE_MODES, type OnlineModeId } from '../src/shared/net/protocol.ts';
 import { type ControlInput, neutralInput } from '../src/shared/physics/controls.ts';
 import { NetworkSession } from '../src/client/session/network-session.ts';
 import { gameServerUrl, LaggedTransport, type Transport, WebSocketTransport } from '../src/client/session/net-transport.ts';
@@ -21,6 +24,8 @@ const flag = (name: string, fallback: number) => {
 const base = new URL(args.find((x) => !x.startsWith('--')) ?? 'http://localhost:8080');
 const lagMs = flag('lag', 0);
 const seconds = flag('seconds', 15);
+const modeArg = args.find((x) => x.startsWith('--mode='))?.slice(7) ?? 'team-deathmatch';
+const mode: OnlineModeId = ONLINE_MODES.find((m) => m === modeArg) ?? 'team-deathmatch';
 
 const failures: string[] = [];
 const check = (ok: boolean, what: string) => {
@@ -40,11 +45,11 @@ const line = (): Transport => {
   const ws = new WebSocketTransport(gameServerUrl({ protocol: base.protocol, host: base.host }));
   return lagMs > 0 ? new LaggedTransport(ws, lagMs) : ws;
 };
-const pilot = { room, mode: 'team-deathmatch', map: 'test-range', environment: CALM_NOON, start: 'air' } as const;
+const pilot = { room, mode, map: 'test-range', environment: CALM_NOON, start: 'air' } as const;
 const loadMap = async () => ({ map, terrain });
 const a = await NetworkSession.connect(line(), { ...pilot, callsign: 'Smoke A', aircraftId: 'kestrel' }, loadMap);
 const b = await NetworkSession.connect(line(), { ...pilot, callsign: 'Smoke B', aircraftId: 'kobchik' }, loadMap);
-check(true, `two pilots joined room ${room}`);
+check(true, `two pilots joined room ${room} (${mode})`);
 
 const weave = (t: number): ControlInput => ({ ...neutralInput(0.85), roll: 0.5 * Math.sin(t * 1.3), pitch: 0.25 + 0.25 * Math.sin(t * 0.7) });
 const errors: number[] = [];
@@ -92,6 +97,11 @@ check(p90 < 0.5, `own jet prediction error: 90% of frames under ${p90.toFixed(3)
 const meanDepth = depths.reduce((x, y) => x + y, 0) / Math.max(1, depths.length);
 check(meanDepth > 0.5 && meanDepth < 5, `server input queue ${meanDepth.toFixed(1)} on average (aim 2, starved ${depths.filter((d) => d === 0).length} of ${depths.length})`);
 check(heard.includes(0), 'quick chat arrived');
+const status = a.modeStatus();
+check(status.modeId === mode, `the room plays ${status.label}`);
+if (mode === 'air-superiority') check((status.zones ?? []).length === 3, 'three zones on the status');
+if (mode === 'team-objective') check([...a.views()].filter((v) => v.config.support).length === 4, 'four Sentinels in the sky');
+if (mode === 'free-flight') check([...a.views()].every((v) => !v.isBot), 'no bots in Free Flight');
 
 a.dispose();
 b.dispose();

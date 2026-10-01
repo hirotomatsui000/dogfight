@@ -4,6 +4,7 @@ import { buildTerrain, type MapDefinition } from '../../shared/data/maps/map-def
 import { createTestRange } from '../../shared/data/maps/test-range.ts';
 import type { GridTerrain } from '../../shared/map/terrain.ts';
 import { type ControlInput, neutralInput } from '../../shared/physics/controls.ts';
+import type { OnlineModeId } from '../../shared/net/protocol.ts';
 import { CALM_NOON } from '../../shared/world/time-of-day.ts';
 import { ClientConnection } from '../../server/connection.ts';
 import { RoomManager } from '../../server/room-manager.ts';
@@ -87,10 +88,10 @@ class Harness {
   }
 }
 
-async function join(h: Harness, id: number, aircraftId = 'kestrel') {
+async function join(h: Harness, id: number, aircraftId = 'kestrel', mode: OnlineModeId = 'team-deathmatch') {
   const promise = NetworkSession.connect(
     h.line(id),
-    { room: 'net', callsign: `P${id}`, aircraftId, mode: 'team-deathmatch', map: 'test-range', environment: CALM_NOON, start: 'air' },
+    { room: 'net', callsign: `P${id}`, aircraftId, mode, map: 'test-range', environment: CALM_NOON, start: 'air' },
     async () => ({ map, terrain }),
     () => h.t,
   );
@@ -199,5 +200,36 @@ describe('NetworkSession', () => {
     fly(h, b, 1, () => neutralInput(0.8));
     expect([...b.views()].filter((v) => !v.isBot)).toHaveLength(1);
     expect(reason).toBe('');
+  });
+
+  it('respawns in the jet the pilot picked, and shows it (M5)', async () => {
+    const h = new Harness(20);
+    const s = await join(h, 1, 'kestrel');
+    fly(h, s, 0.5, () => neutralInput(0.8));
+    s.chooseNextJet('condor');
+    fly(h, s, 0.2, () => neutralInput(0.8));
+    const room = h.manager.room('net')!;
+    room.world.applyDamage(room.world.getAircraft(s.localId)!, 9999, null, 'cannon');
+    fly(h, s, 6, () => neutralInput(0.8));
+    expect(s.localView()?.alive).toBe(true);
+    expect(s.localView()?.config.id).toBe('condor');
+    expect(s.localView()?.stores.cannonRounds).toBe(940);
+  });
+
+  it('flies a Free Flight room with a shared, changeable sky and fly-from-here (M5)', async () => {
+    const h = new Harness(20);
+    const a = await join(h, 1, 'kestrel', 'free-flight');
+    const b = await join(h, 2, 'kobchik', 'free-flight');
+    fly(h, a, 0.5, () => neutralInput(0.8));
+    expect([...a.views()].filter((v) => v.isBot)).toHaveLength(0);
+    expect(a.modeStatus().label).toBe('Free Flight');
+    expect(a.canCallDrones).toBe(false);
+    b.changeWorld('rain', 22, false);
+    fly(h, a, 0.5, () => neutralInput(0.8));
+    expect(a.environment.weather).toBe('rain');
+    expect(a.hour()).toBeCloseTo(22, 2);
+    a.flyFrom(4000, 8000);
+    fly(h, a, 1, () => neutralInput(0.8));
+    expect(Math.hypot((a.localView()?.position.x ?? 0) - 4000, (a.localView()?.position.z ?? 0) - 8000)).toBeLessThan(400);
   });
 });

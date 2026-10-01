@@ -11,8 +11,10 @@ import { incomingMissileWarning } from '../../shared/targeting/warnings.ts';
 import { projectileVelocity } from '../../shared/weapons/cannon.ts';
 import type { GameEvent } from '../../shared/world/events.ts';
 import type { SpawnStart } from '../../shared/world/spawns.ts';
-import type { EnvironmentSettings } from '../../shared/world/time-of-day.ts';
-import { DT, World } from '../../shared/world/world.ts';
+import { type EnvironmentSettings, environmentAt } from '../../shared/world/time-of-day.ts';
+import type { WeatherId } from '../../shared/world/weather.ts';
+import { FreeFlightMode } from '../../shared/modes/free-flight.ts';
+import { DT, TICK_RATE, World } from '../../shared/world/world.ts';
 import { FixedStepper } from './fixed-stepper.ts';
 import type { AircraftView, BombView, GameSession, GroundTargetView, MissileView, ProjectileView } from './game-session.ts';
 
@@ -157,6 +159,26 @@ export class LocalSession implements GameSession {
     return this.world.mode.status(this.world);
   }
 
+  chooseNextJet(aircraftId: string): void {
+    this.world.setNextAircraft(this.localId, aircraftId);
+  }
+
+  changeWorld(weather: WeatherId, hour: number, clockRunning: boolean): void {
+    if (this.world.mode.id === 'free-flight') this.world.setEnvironment(environmentAt(weather, hour, clockRunning, this.world.tick / TICK_RATE));
+  }
+
+  flyFrom(x: number, z: number): void {
+    this.world.flyFrom(this.localId, x, z);
+  }
+
+  get canCallDrones(): boolean {
+    return this.world.mode instanceof FreeFlightMode;
+  }
+
+  setDrones(on: boolean): void {
+    if (this.world.mode instanceof FreeFlightMode) this.world.mode.setDrones(on);
+  }
+
   dispose(): void {
     this.viewCache.clear();
     this.previous.clear();
@@ -206,6 +228,7 @@ export class LocalSession implements GameSession {
           bombLoad: a.bombLoad,
           targetId: null,
           contacts: a.contacts,
+          datalink: a.datalink,
           seeker: a.seeker,
           radarLock: a.radarLock,
           lockedByRadar: false,
@@ -221,6 +244,7 @@ export class LocalSession implements GameSession {
         view.position.copy(a.flight.pos);
         view.quaternion.copy(a.flight.quat);
       }
+      view.config = a.config;
       view.alive = a.alive;
       view.hp = a.hp;
       view.spawnGen = a.spawnGen;

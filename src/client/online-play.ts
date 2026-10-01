@@ -1,5 +1,6 @@
 import type { MapId } from '../shared/data/maps/registry.ts';
 import { CALM_NOON } from '../shared/world/time-of-day.ts';
+import { ONLINE_MODES } from '../shared/net/protocol.ts';
 import type { LoadedMap } from './render/terrain/map-loader.ts';
 import { NetworkSession } from './session/network-session.ts';
 import { gameServerUrl, LaggedTransport, lagFromQuery, type Transport, WebSocketTransport } from './session/net-transport.ts';
@@ -25,7 +26,7 @@ export function connectOnline(options: StartOptions, load: (id: MapId) => Promis
       room: options.online.room,
       callsign: options.callsign,
       aircraftId: options.aircraftId,
-      mode: options.mission === 'strike' ? 'strike' : 'team-deathmatch',
+      mode: ONLINE_MODES.find((m) => m === options.mission) ?? 'team-deathmatch',
       map: options.map ?? 'lechovia',
       environment: options.environment ?? CALM_NOON,
       start: options.start ?? 'air',

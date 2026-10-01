@@ -11,6 +11,7 @@ import type { RadarLockState } from '../../shared/targeting/radar-lock.ts';
 import type { Contact } from '../../shared/targeting/sensors.ts';
 import type { MissileWarning } from '../../shared/targeting/warnings.ts';
 import type { EnvironmentSettings } from '../../shared/world/time-of-day.ts';
+import type { WeatherId } from '../../shared/world/weather.ts';
 import type { StoresState } from '../../shared/world/entities.ts';
 import type { GameEvent } from '../../shared/world/events.ts';
 
@@ -19,7 +20,8 @@ export interface AircraftView {
   readonly id: number;
   readonly callsign: string;
   readonly team: TeamId;
-  readonly config: AircraftConfig;
+  /** changes when the pilot respawns in another jet (M5) */
+  config: AircraftConfig;
   readonly isLocal: boolean;
   readonly isBot: boolean;
   alive: boolean;
@@ -41,6 +43,8 @@ export interface AircraftView {
   /** designated target */
   targetId: number | null;
   contacts: readonly Contact[];
+  /** enemies on teammates' radar (datalink, M5); filled for the local aircraft */
+  datalink: readonly number[];
   seeker: Readonly<SeekerState>;
   /** the Lance's radar lock */
   radarLock: Readonly<RadarLockState>;
@@ -93,7 +97,7 @@ export interface GameSession {
   readonly map: MapDefinition;
   readonly terrain: Terrain;
   readonly localId: number | null;
-  /** weather and clock of this match (M4) */
+  /** weather and clock of this match (M4); a new object when Free Flight changes them (M5) */
   readonly environment: EnvironmentSettings;
   /** the local hour now (M4) */
   hour(): number;
@@ -107,5 +111,14 @@ export interface GameSession {
   bombs(): Iterable<BombView>;
   drainEvents(): GameEvent[];
   modeStatus(): ModeStatus;
+  /** The jet the local pilot flies from the next respawn on: one of their team's (M5). */
+  chooseNextJet(aircraftId: string): void;
+  /** Free Flight (M5): new weather and the hour it is now (online, for the whole room). */
+  changeWorld(weather: WeatherId, hour: number, clockRunning: boolean): void;
+  /** Free Flight (M5): fly from a point of the map, or its runway when the point is on an airfield. */
+  flyFrom(x: number, z: number): void;
+  /** Free Flight target drones (M5): offline only. */
+  readonly canCallDrones: boolean;
+  setDrones(on: boolean): void;
   dispose(): void;
 }

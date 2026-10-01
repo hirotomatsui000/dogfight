@@ -1,5 +1,6 @@
 import { decodeInput } from '../shared/net/codec.ts';
 import {
+  MAX_ACTIONS_PER_S,
   MAX_CHATS_PER_S,
   MAX_CLIENT_BINARY_BYTES,
   MAX_INPUTS_PER_S,
@@ -40,6 +41,8 @@ export class ClientConnection implements Peer {
   private inputWindowStart = 0;
   private inputsInWindow = 0;
   private lastChatMs = -Infinity;
+  private actionWindowStart = 0;
+  private actionsInWindow = 0;
 
   constructor(id: number, socket: SocketLike, manager: RoomManager, now: () => number = Date.now) {
     this.id = id;
@@ -95,13 +98,25 @@ export class ClientConnection implements Peer {
     }
     const room = this.manager.roomOf(this.id);
     if (!this.joined || !room) throw new ProtocolError('not in a room');
-    if (msg.type === 'ping') {
-      room.pong(this.id, msg.t);
-    } else {
-      const now = this.now();
-      if (now - this.lastChatMs < 1000 / MAX_CHATS_PER_S) throw new ProtocolError('chat too often');
-      this.lastChatMs = now;
-      room.chat(this.id, msg.index);
+    const now = this.now();
+    switch (msg.type) {
+      case 'ping':
+        room.pong(this.id, msg.t);
+        return;
+      case 'chat':
+        if (now - this.lastChatMs < 1000 / MAX_CHATS_PER_S) throw new ProtocolError('chat too often');
+        this.lastChatMs = now;
+        room.chat(this.id, msg.index);
+        return;
+      default:
+        if (now - this.actionWindowStart >= 1000) {
+          this.actionWindowStart = now;
+          this.actionsInWindow = 0;
+        }
+        if (++this.actionsInWindow > MAX_ACTIONS_PER_S) throw new ProtocolError('too many actions');
+        if (msg.type === 'jet') room.chooseJet(this.id, msg.aircraftId);
+        else if (msg.type === 'world') room.changeWorld(this.id, msg.weather, msg.hour, msg.clockRunning);
+        else room.flyFrom(this.id, msg.x, msg.z);
     }
   }
 

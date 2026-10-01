@@ -176,4 +176,67 @@ describe('Room', () => {
     room.join(new FakePeer(1), { ...hello('kobchik'), mode: 'strike' });
     expect(room.world.mode.status(room.world).strike?.aircraftLeft).toEqual({ usa: 16, russia: 16 });
   });
+
+  it('runs Air Superiority and Team Objective rooms; Sentinels never count as seat-filling bots (M5)', () => {
+    const as = new Room(options({ mode: 'air-superiority' }), map, terrain);
+    const a = new FakePeer(1);
+    as.join(a, { ...hello(), mode: 'air-superiority' });
+    as.tick();
+    as.tick();
+    expect(a.last('status')?.status.zones).toHaveLength(3);
+    expect(a.last('welcome')?.modeId).toBe('air-superiority');
+
+    const to = new Room(options({ mode: 'team-objective' }), map, terrain);
+    const p = new FakePeer(2);
+    const q = new FakePeer(3);
+    to.join(p, { ...hello(), mode: 'team-objective' });
+    to.join(q, { ...hello('kobchik', 'Two'), mode: 'team-objective' });
+    const roster = q.last('roster')?.players ?? [];
+    expect(roster.filter((r) => r.aircraftId.startsWith('sentinel'))).toHaveLength(4);
+    expect(roster.filter((r) => !r.aircraftId.startsWith('sentinel') && r.team === 'usa')).toHaveLength(4);
+    expect(roster.filter((r) => !r.aircraftId.startsWith('sentinel') && r.team === 'russia')).toHaveLength(4);
+    to.leave(2);
+    expect([...to.world.aircraftList()].filter((x) => x.support)).toHaveLength(4);
+    to.tick();
+    to.tick();
+    expect(q.snapshots.at(-1)?.own?.datalink).toBeDefined();
+  });
+
+  it('flies the chosen jet after the next respawn and in the next match (M5)', () => {
+    const room = new Room(options({ tdmScoreLimit: 50 }), map, terrain);
+    const p = new FakePeer(1);
+    room.join(p, hello('kestrel'));
+    const me = room.world.getAircraft(p.last('welcome')?.you ?? -1)!;
+    room.chooseJet(1, 'kobchik');
+    expect(me.nextAircraftId).toBeNull();
+    room.chooseJet(1, 'condor');
+    room.world.applyDamage(me, 9999, null, 'cannon');
+    for (let t = 0; t < 6 * 60; t++) room.tick();
+    expect(me.alive).toBe(true);
+    expect(me.config.id).toBe('condor');
+    expect(p.last('roster')?.players.find((r) => r.id === me.id)?.aircraftId).toBe('condor');
+  });
+
+  it('Free Flight rooms have no bots, take weather and fly-from requests and tell everyone (M5)', () => {
+    const room = new Room(options({ mode: 'free-flight' }), map, terrain);
+    const a = new FakePeer(1);
+    const b = new FakePeer(2);
+    room.join(a, { ...hello(), mode: 'free-flight' });
+    room.join(b, { ...hello('kobchik', 'Two'), mode: 'free-flight' });
+    expect(b.last('roster')?.players.filter((r) => r.isBot)).toHaveLength(0);
+    for (let t = 0; t < 120; t++) room.tick();
+    room.changeWorld(2, 'overcast', 21, true);
+    expect(a.last('environment')?.environment.weather).toBe('overcast');
+    expect(room.world.hour()).toBeCloseTo(21, 6);
+    const jet = room.world.getAircraft(a.last('welcome')?.you ?? -1)!;
+    room.flyFrom(1, 6000, -9000);
+    expect(jet.flight.pos.x).toBeCloseTo(6000, 0);
+    // Only in Free Flight.
+    const tdm = new Room(options(), map, terrain);
+    const c = new FakePeer(3);
+    tdm.join(c, hello());
+    tdm.changeWorld(3, 'rain', 3, false);
+    expect(c.last('environment')).toBeUndefined();
+    expect(tdm.world.environment.weather).toBe('clear');
+  });
 });
