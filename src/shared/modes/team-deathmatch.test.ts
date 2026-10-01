@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { TeamId } from '../data/aircraft/types.ts';
+import { createTestRange } from '../data/maps/test-range.ts';
 import type { AircraftEntity } from '../world/entities.ts';
 import type { ModeContext } from './mode.ts';
 import { TeamDeathmatchMode } from './team-deathmatch.ts';
 
-const ctx = (tick: number): ModeContext => ({ tick, tickRate: 60, aircraftList: () => [] });
+const ctx = (tick: number): ModeContext => ({ tick, tickRate: 60, aircraftList: () => [], groundTargetList: () => [] });
 const victim = (team: TeamId) => ({ team }) as AircraftEntity;
 
 describe('TeamDeathmatchMode', () => {
@@ -44,5 +45,12 @@ describe('TeamDeathmatchMode', () => {
     m.update(ctx(60));
     expect(m.status(ctx(60)).winner).toBe('draw');
     expect(m.status(ctx(60)).label).toBe('Team Deathmatch');
+  });
+
+  it('uses the map spawns, has no ground targets or bombs, and always respawns', () => {
+    const m = new TeamDeathmatchMode();
+    const map = createTestRange(1);
+    expect(m.spawnPoint(map, 'usa')).toBe(map.spawns.usa);
+    expect([m.groundTargets(), m.bombLoad(), m.canRespawn()]).toEqual([[], 0, true]);
   });
 });

@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { blastDamage } from '../damage/damage.ts';
-import { AFTERBURNER_THROTTLE, CANNONS, COUNTERMEASURES, SRM_DART } from '../data/weapons.ts';
+import { AFTERBURNER_THROTTLE, BOMB_ANVIL, CANNONS, COUNTERMEASURES, SRM_DART } from '../data/weapons.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { type Approach, closestApproach } from '../math/closest-approach.ts';
 import type { Rng } from '../math/rng.ts';
@@ -10,9 +10,11 @@ import { resetSeeker, updateSeeker } from '../targeting/ir-seeker.ts';
 import { detectContacts, RADAR_SCAN_INTERVAL_S } from '../targeting/sensors.ts';
 import { advanceProjectile, createProjectile, type Projectile, pullTrigger, TRIGGER_AT_REST } from '../weapons/cannon.ts';
 import { decoyChance, rollDecoy } from '../weapons/countermeasures.ts';
+import { type Bomb, bombDamage, hasLanded, releaseBomb, stepBomb, surfaceCrossing } from '../weapons/bomb.ts';
 import { isArmed, isSpent, launchMissile, type Missile, stepMissile, withinGimbal } from '../weapons/missile.ts';
 import type { AircraftEntity } from './entities.ts';
 import type { GameEvent, WeaponKind } from './events.ts';
+import type { GroundTarget } from './ground-targets.ts';
 
 /** The parts of the World that combat needs. */
 export interface CombatHost {
@@ -24,6 +26,11 @@ export interface CombatHost {
   getAircraft(id: number): AircraftEntity | undefined;
   emit(event: GameEvent): void;
   applyDamage(victim: AircraftEntity, amount: number, attacker: AircraftEntity | null, weapon: WeaponKind): void;
+  readonly combatArea: { readonly x: number; readonly z: number; readonly radiusM: number };
+  groundTargetList(): readonly GroundTarget[];
+  applyTargetDamage(target: GroundTarget, amount: number, attacker: AircraftEntity | null): void;
+  /** true once the mode has a winner: later bomb impacts do nothing (spec §10.4) */
+  matchOver(): boolean;
 }
 
 /**
@@ -34,14 +41,17 @@ export interface CombatHost {
 export class Combat {
   readonly projectiles: Projectile[] = [];
   readonly missiles: Missile[] = [];
+  readonly bombs: Bomb[] = [];
   private readonly host: CombatHost;
   private readonly scanTicks: number;
   private nextProjectileId = 1;
   private nextMissileId = 1;
+  private nextBombId = 1;
   private readonly approach: Approach = { distance: 0, fraction: 0 };
   private readonly air: AirData = { density: 0, temperature: 0, speedOfSound: 0, sigma: 0 };
   private readonly burst = new Vector3();
   private readonly victimPos = new Vector3();
+  private readonly impact = new Vector3();
 
   constructor(host: CombatHost) {
     this.host = host;
@@ -53,6 +63,7 @@ export class Combat {
     if (host.tick % this.scanTicks === 0) this.scanSensors();
     this.stepProjectiles(dt);
     this.stepMissiles(dt);
+    this.stepBombs(dt);
     for (const a of host.aircraftList()) {
       if (!a.alive) continue;
       if (a.input.cycleTarget) a.targetId = cycleDesignation(a.targetId, a.contacts);
@@ -60,6 +71,7 @@ export class Combat {
       this.fireCannon(a, dt);
       this.updateSeeker(a, dt);
       this.launchMissile(a);
+      this.dropBomb(a);
     }
   }
 
@@ -141,6 +153,46 @@ export class Combat {
     a.stores.srm--;
     a.lastMissileTick = host.tick;
     host.emit({ type: 'missileLaunched', missileId: m.id, shooterId: a.id, targetId: s.targetId });
+  }
+
+  private dropBomb(a: AircraftEntity): void {
+    const host = this.host;
+    if (!a.input.dropBomb || a.stores.bombs <= 0) return;
+    if (host.tick - a.lastBombTick < BOMB_ANVIL.minReleaseIntervalS * host.tickRate) return;
+    const b = releaseBomb(this.nextBombId++, a, BOMB_ANVIL);
+    this.bombs.push(b);
+    a.stores.bombs--;
+    a.lastBombTick = host.tick;
+    host.emit({ type: 'bombReleased', bombId: b.id, aircraftId: a.id });
+  }
+
+  private stepBombs(dt: number): void {
+    const host = this.host;
+    const area = host.combatArea;
+    const list = this.bombs;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const b = list[i];
+      stepBomb(b, dt);
+      const landed = hasLanded(b, host.terrain);
+      if (landed) this.explodeBomb(b);
+      if (landed || b.ageS >= b.spec.maxFallS || Math.hypot(b.pos.x - area.x, b.pos.z - area.z) > area.radiusM) {
+        list[i] = list[list.length - 1];
+        list.pop();
+      }
+    }
+  }
+
+  /** Bursts where the bomb met the ground and damages every target in reach, unless the match is already over. */
+  private explodeBomb(b: Bomb): void {
+    const host = this.host;
+    const at = surfaceCrossing(b.prevPos, b.pos, host.terrain, this.impact);
+    host.emit({ type: 'bombImpact', bombId: b.id, x: at.x, y: at.y, z: at.z });
+    if (host.matchOver()) return;
+    const owner = host.getAircraft(b.ownerId) ?? null;
+    for (const t of host.groundTargetList()) {
+      const damage = bombDamage(at.distanceTo(t.pos), b.spec);
+      if (damage > 0) host.applyTargetDamage(t, damage, owner);
+    }
   }
 
   private stepProjectiles(dt: number): void {

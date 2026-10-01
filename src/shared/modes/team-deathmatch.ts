@@ -1,5 +1,6 @@
 import { opposingTeam } from '../data/aircraft/registry.ts';
 import type { TeamId } from '../data/aircraft/types.ts';
+import type { GroundTargetSpec, MapDefinition, SpawnSpec } from '../data/maps/map-definition.ts';
 import type { AircraftEntity } from '../world/entities.ts';
 import type { DeathCause } from '../world/events.ts';
 import type { GameMode, ModeContext, ModeStatus } from './mode.ts';
@@ -26,6 +27,22 @@ export class TeamDeathmatchMode implements GameMode {
 
   constructor(options: Partial<TeamDeathmatchOptions> = {}) {
     this.options = { ...TEAM_DEATHMATCH_DEFAULTS, ...options };
+  }
+
+  spawnPoint(map: MapDefinition, team: TeamId): SpawnSpec {
+    return map.spawns[team];
+  }
+
+  groundTargets(): readonly GroundTargetSpec[] {
+    return [];
+  }
+
+  bombLoad(): number {
+    return 0;
+  }
+
+  canRespawn(): boolean {
+    return true;
   }
 
   onAircraftDestroyed(_ctx: ModeContext, victim: AircraftEntity, _killer: AircraftEntity | null, _cause: DeathCause): void {

@@ -13,6 +13,7 @@ export interface StoresState {
   srm: number;
   mrm: number;
   countermeasures: number;
+  bombs: number;
 }
 
 /** Long ago: "never fired" for launch and countermeasure intervals. */
@@ -44,6 +45,9 @@ export interface AircraftEntity extends CreditRecord {
   firingCannon: boolean;
   lastMissileTick: number;
   lastCountermeasureTick: number;
+  lastBombTick: number;
+  /** bombs every new aircraft of this one carries in this mode (Strike attackers) */
+  readonly bombLoad: number;
   /** enemies this aircraft currently sees or has on radar */
   readonly contacts: Contact[];
   /** designated target */
@@ -60,6 +64,7 @@ export interface NewAircraft {
   isBot: boolean;
   flight: FlightState;
   spawnSlot: number;
+  bombLoad: number;
 }
 
 export function createAircraftEntity(n: NewAircraft): AircraftEntity {
@@ -80,11 +85,13 @@ export function createAircraftEntity(n: NewAircraft): AircraftEntity {
     kills: 0,
     deaths: 0,
     spawnSlot: n.spawnSlot,
-    stores: { cannonRounds: 0, srm: 0, mrm: 0, countermeasures: 0 },
+    stores: { cannonRounds: 0, srm: 0, mrm: 0, countermeasures: 0, bombs: 0 },
     cannonAccumulator: TRIGGER_AT_REST,
     firingCannon: false,
     lastMissileTick: NEVER,
     lastCountermeasureTick: NEVER,
+    lastBombTick: NEVER,
+    bombLoad: n.bombLoad,
     contacts: [],
     targetId: null,
     seeker: createSeeker(),
@@ -106,10 +113,12 @@ export function resetForSpawn(a: AircraftEntity): void {
   a.stores.srm = s.srm;
   a.stores.mrm = s.mrm;
   a.stores.countermeasures = s.countermeasures;
+  a.stores.bombs = a.bombLoad;
   a.cannonAccumulator = TRIGGER_AT_REST;
   a.firingCannon = false;
   a.lastMissileTick = NEVER;
   a.lastCountermeasureTick = NEVER;
+  a.lastBombTick = NEVER;
   a.contacts.length = 0;
   a.targetId = null;
   resetSeeker(a.seeker, 'off');

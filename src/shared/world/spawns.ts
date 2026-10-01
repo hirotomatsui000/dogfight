@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
-import type { AircraftPhysics, TeamId } from '../data/aircraft/types.ts';
-import type { MapDefinition } from '../data/maps/map-definition.ts';
+import type { AircraftPhysics } from '../data/aircraft/types.ts';
+import type { SpawnSpec } from '../data/maps/map-definition.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { trimAlpha } from '../physics/aero.ts';
 import { atmosphere } from '../physics/atmosphere.ts';
@@ -11,17 +11,10 @@ export const SPAWN_SLOT_SPACING = 600;
 const MIN_SPAWN_CLEARANCE = 1500;
 
 /**
- * Airborne spawn on the team's spawn line, trimmed for 1 G level flight.
+ * Airborne spawn on a spawn line, trimmed for 1 G level flight.
  * Slots alternate right/left of the line center.
  */
-export function spawnFlightState(
-  map: MapDefinition,
-  terrain: Terrain,
-  team: TeamId,
-  slot: number,
-  physics: AircraftPhysics,
-): FlightState {
-  const spec = map.spawns[team];
+export function spawnFlightState(spec: SpawnSpec, terrain: Terrain, slot: number, physics: AircraftPhysics): FlightState {
   const side = slot === 0 ? 0 : (slot % 2 === 1 ? 1 : -1) * Math.ceil(slot / 2);
   const offset = side * SPAWN_SLOT_SPACING;
   const x = spec.x + Math.cos(spec.headingRad) * offset;

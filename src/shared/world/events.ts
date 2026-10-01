@@ -8,4 +8,8 @@ export type GameEvent =
   | { type: 'missileLaunched'; missileId: number; shooterId: number; targetId: number }
   | { type: 'missileDetonated'; missileId: number; x: number; y: number; z: number; nearAircraft: boolean }
   | { type: 'missileDecoyed'; missileId: number; targetId: number }
-  | { type: 'countermeasures'; aircraftId: number };
+  | { type: 'countermeasures'; aircraftId: number }
+  | { type: 'bombReleased'; bombId: number; aircraftId: number }
+  | { type: 'bombImpact'; bombId: number; x: number; y: number; z: number }
+  | { type: 'targetHit'; targetId: string; attackerId: number | null; damage: number }
+  | { type: 'targetDestroyed'; targetId: string; attackerId: number | null };

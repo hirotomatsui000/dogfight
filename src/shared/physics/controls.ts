@@ -16,6 +16,8 @@ export interface ControlInput {
   fireCannon: boolean;
   fireMissile: boolean;
   countermeasures: boolean;
+  /** one bomb per press (Strike attackers) */
+  dropBomb: boolean;
   cycleTarget: boolean;
   weapon: WeaponSelect;
   /** true while the pilot is looking around (padlock/free look): the IR seeker follows the head */
@@ -36,6 +38,7 @@ export function neutralInput(throttle = 0.7): ControlInput {
     fireCannon: false,
     fireMissile: false,
     countermeasures: false,
+    dropBomb: false,
     cycleTarget: false,
     weapon: 'srm',
     helmetSight: false,
@@ -56,6 +59,7 @@ export function sanitizeInput(input: ControlInput, out: ControlInput = neutralIn
   out.fireCannon = input.fireCannon === true;
   out.fireMissile = input.fireMissile === true;
   out.countermeasures = input.countermeasures === true;
+  out.dropBomb = input.dropBomb === true;
   out.cycleTarget = input.cycleTarget === true;
   out.weapon = input.weapon === 'mrm' ? 'mrm' : 'srm';
   out.helmetSight = input.helmetSight === true;

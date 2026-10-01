@@ -11,10 +11,12 @@ import type { GameMode, ModeContext } from '../modes/mode.ts';
 import { type ControlInput, neutralInput, sanitizeInput } from '../physics/controls.ts';
 import { type FlightEnv, stepFlight } from '../physics/flight-model.ts';
 import type { Projectile } from '../weapons/cannon.ts';
+import type { Bomb } from '../weapons/bomb.ts';
 import type { Missile } from '../weapons/missile.ts';
 import { Combat, type CombatHost } from './combat.ts';
 import { type AircraftEntity, createAircraftEntity, resetForSpawn } from './entities.ts';
 import type { DeathCause, GameEvent, WeaponKind } from './events.ts';
+import { createGroundTarget, damageGroundTarget, type GroundTarget } from './ground-targets.ts';
 import { spawnFlightState } from './spawns.ts';
 
 export const TICK_RATE = 60;
@@ -49,6 +51,7 @@ export class World implements ModeContext, CombatHost, BotWorld {
   tick = 0;
   private readonly seed: number;
   private readonly aircraft = new Map<number, AircraftEntity>();
+  private readonly groundTargets: GroundTarget[];
   private readonly bots = new Map<number, { pilot: BotPilot; input: ControlInput }>();
   private events: GameEvent[] = [];
   private nextId = 1;
@@ -62,6 +65,7 @@ export class World implements ModeContext, CombatHost, BotWorld {
     this.mode = opts.mode;
     this.seed = opts.seed;
     this.rng = new Rng(opts.seed);
+    this.groundTargets = opts.mode.groundTargets(opts.map).map((spec) => createGroundTarget(spec, opts.terrain));
     this.combat = new Combat(this);
   }
 
@@ -85,6 +89,28 @@ export class World implements ModeContext, CombatHost, BotWorld {
     return this.combat.projectiles;
   }
 
+  bombList(): readonly Bomb[] {
+    return this.combat.bombs;
+  }
+
+  groundTargetList(): readonly GroundTarget[] {
+    return this.groundTargets;
+  }
+
+  /** Bomb damage to a ground target; emits targetHit and, at 0 hit points, targetDestroyed. */
+  applyTargetDamage(target: GroundTarget, amount: number, attacker: AircraftEntity | null): void {
+    const before = target.hp;
+    const result = damageGroundTarget(target, amount);
+    if (result === null) return;
+    const attackerId = attacker ? attacker.id : null;
+    this.emit({ type: 'targetHit', targetId: target.id, attackerId, damage: before - target.hp });
+    if (result === 'destroyed') this.emit({ type: 'targetDestroyed', targetId: target.id, attackerId });
+  }
+
+  matchOver(): boolean {
+    return this.mode.status(this).winner !== null;
+  }
+
   addAircraft(opts: AddAircraftOptions): AircraftEntity {
     const config = getAircraft(opts.aircraftId);
     if (config.team !== opts.team) {
@@ -98,8 +124,9 @@ export class World implements ModeContext, CombatHost, BotWorld {
       team: opts.team,
       config,
       isBot: opts.bot !== undefined,
-      flight: spawnFlightState(this.map, this.terrain, opts.team, slot, config.physics),
+      flight: spawnFlightState(this.mode.spawnPoint(this.map, opts.team), this.terrain, slot, config.physics),
       spawnSlot: slot,
+      bombLoad: this.mode.bombLoad(opts.team),
     });
     this.aircraft.set(entity.id, entity);
     if (opts.bot) this.bots.set(entity.id, { pilot: new BotPilot(opts.bot, botSeed(this.seed, entity.id)), input: neutralInput(0.8) });
@@ -151,7 +178,8 @@ export class World implements ModeContext, CombatHost, BotWorld {
       a.input.cycleTarget = false;
       a.input.countermeasures = false;
       a.input.fireMissile = false;
-      if (!a.alive && a.respawnAtTick >= 0 && this.tick >= a.respawnAtTick) this.respawn(a);
+      a.input.dropBomb = false;
+      if (!a.alive && a.respawnAtTick >= 0 && this.tick >= a.respawnAtTick && this.mode.canRespawn(a.team)) this.respawn(a);
     }
     this.mode.update(this);
     this.tick++;
@@ -223,7 +251,7 @@ export class World implements ModeContext, CombatHost, BotWorld {
   }
 
   private respawn(a: AircraftEntity): void {
-    a.flight = spawnFlightState(this.map, this.terrain, a.team, a.spawnSlot, a.config.physics);
+    a.flight = spawnFlightState(this.mode.spawnPoint(this.map, a.team), this.terrain, a.spawnSlot, a.config.physics);
     a.alive = true;
     a.spawnGen++;
     a.respawnAtTick = -1;

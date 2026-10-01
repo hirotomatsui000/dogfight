@@ -23,4 +23,9 @@ describe('controls', () => {
     const raw = { ...neutralInput(), weapon: 'laser' as unknown as 'srm' };
     expect(sanitizeInput(raw).weapon).toBe('srm');
   });
+  it('treats dropBomb as a button that is off unless pressed', () => {
+    expect(neutralInput().dropBomb).toBe(false);
+    expect(sanitizeInput({ ...neutralInput(), dropBomb: true }).dropBomb).toBe(true);
+    expect(sanitizeInput({ ...neutralInput(), dropBomb: 'yes' as unknown as boolean }).dropBomb).toBe(false);
+  });
 });

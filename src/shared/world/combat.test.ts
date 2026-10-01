@@ -133,7 +133,7 @@ describe('World combat', () => {
     expect(shooter.alive).toBe(true);
     expect(shooter.hp).toBe(shooter.config.damage.hitPoints);
     const full = shooter.config.stores;
-    expect(shooter.stores).toEqual({ cannonRounds: full.cannonRounds, srm: full.srm, mrm: full.mrm, countermeasures: full.countermeasures });
+    expect(shooter.stores).toEqual({ cannonRounds: full.cannonRounds, srm: full.srm, mrm: full.mrm, countermeasures: full.countermeasures, bombs: 0 });
     expect(shooter.targetId).toBeNull();
   });
 
