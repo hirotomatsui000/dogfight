@@ -5,7 +5,8 @@ real aircraft over a fictional landscape inspired by Poland. This repository is 
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
 **Current milestone: M1d "Strike"** (after M1a "Fly" and M1b "Fight")
-- Two aircraft: the Kestrel (USA) and the Kobchik (Russia).
+- Two aircraft: the Kestrel (USA) and the Kobchik (Russia), drawn with the owner's 3D models (inspired by the F-35A
+  and the Su-57).
 - Dogfight an AI pilot (Rookie, Veteran or Ace) in Team Deathmatch: first to 15 kills, or the most after 10 minutes.
 - **Strike** mode: Russia bombs three fictional targets while the USA holds them for 8 minutes; 4 aircraft per team.
 - Weapons: a cannon with a lead marker, heat-seeking missiles that need a lock, and flares.
@@ -119,6 +120,15 @@ forest and the Tatra mountains (EOX, CC BY 4.0), tiled across the fictional map 
 2. Run `npm test`. The flight-model tests check the new aircraft against its own `performance` targets.
 
 The 3-D model is generated from the `visual` block, so no rendering code changes are needed.
+
+### Using your own 3D model for an aircraft
+
+1. Put the original `.glb` file in `models-src/` (ignored by git) and add an entry for it to `MODELS` in
+   `tools/prepare-models.ts`: the file name, and the turns that bring its nose to −z with the wings level.
+2. Run `node tools/prepare-models.ts`. It writes `src/client/assets/models/<aircraft id>.glb` (1 long, simplified,
+   1024 px WebP textures, meshopt-compressed).
+3. Import the file in `src/client/render/aircraft-meshes.ts` and add the nozzle positions to `IMPORTED_MODELS`.
+   The model is scaled to the aircraft's `visual.lengthM`.
 
 ## Content note
 

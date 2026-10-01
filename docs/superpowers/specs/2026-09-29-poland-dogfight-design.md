@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 6)
+# Contested Skies — Design Spec (revision 7)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -12,6 +12,8 @@
   - Revision 6 (2026-09-30) adds the owner's Strike mode: Russia bombs three ground targets while the USA defends
     them, with limited aircraft per team (§13.1). It brings an abstract free-fall bomb (§10.4), ground targets (§11),
     strike AI (§14), strike HUD and title-screen mission choice (§15), and milestone M1d (§20).
+  - Revision 7 (2026-10-01): the Kestrel and the Kobchik use the owner's own 3D models instead of the generated ones
+    (§9.1, §15.4, §22).
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -56,6 +58,7 @@ A browser-based, online multiplayer flight-combat simulator prototype.
 | Visibility | Distant aircraft and missiles keep a minimum apparent size; missiles get HUD markers, a motor flame and a thicker smoke trail | Owner feedback, 2026-09-30 |
 | Strike mode | A fifth mode: Russia must destroy two of three fictional ground targets; the USA must hold them for 8 minutes. Each team has 4 aircraft; losing the 4th loses the match. No draws | Owner request, 2026-09-30 |
 | Air-to-ground | Allowed only as the Strike mode's abstract free-fall bomb, which damages ground targets and never aircraft. The out-of-scope rule (§23) is narrowed accordingly | Owner request, 2026-09-30 |
+| Aircraft models | The owner's 3D models (generated with Tripo, inspired by the F-35A and the Su-57) replace the generated models of the Kestrel and the Kobchik. Names and specifications stay fictional; an aircraft without a model file keeps the generated model | Owner request, 2026-10-01 |
 
 ## 3. Goals and non-goals
 
@@ -298,6 +301,9 @@ Each aircraft is one `AircraftConfig` data object in `src/shared/data/aircraft/<
 
 - `validateAircraftConfig` checks ranges and consistency, and runs in the test suite for every registered aircraft.
 - The parametric model builder turns `visual` into a mesh, so a new aircraft needs no new code.
+- Revision 7: an aircraft can instead use an imported glTF model. `tools/prepare-models.ts` turns it into the body
+  frame (nose toward −z, 1 long), simplifies it and compresses it; the client scales it to `visual.lengthM` and adds
+  the afterburners at the nozzle points listed in `src/client/render/aircraft-meshes.ts`.
 
 ### 9.2 Roster
 
@@ -672,7 +678,8 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 ### 15.4 Graphics
 
 - **M1 prototype:**
-  - Procedural parametric aircraft models.
+  - Procedural parametric aircraft models; from revision 7 the Kestrel and the Kobchik use the owner's imported
+    models (about 25,000–32,000 triangles, 1024 px textures, about 0.4 MB each).
   - A photographed sky that also lights the scene, satellite-photo terrain, an animated sea and distance haze
     (`2026-09-29-realistic-graphics-design.md`).
   - Simple effects: afterburner, tracers, missile trails, flares, explosions, smoke.
@@ -829,6 +836,8 @@ brief (§11 of the brief: steps 1–11).
 
 - **Fictional content:** aircraft, weapons, the country, cities, villages and airfields are fictional.
   - Aircraft are only "inspired by" real types; no real designations or real specifications are shown.
+  - Revision 7: at the owner's request the Kestrel and the Kobchik look like the F-35A and the Su-57, using the
+    owner's own models (some textures carry markings). Their names and specifications stay fictional.
   - No real-world military installations are reproduced.
   - Strike targets are fictional facilities in open country (a supply depot, a radar site, a fuel depot). Towns,
     villages and people are never targets, and no casualties are shown.

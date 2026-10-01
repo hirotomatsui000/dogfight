@@ -22,6 +22,7 @@ import { describeDeath, KillFeed } from './hud/kill-feed.ts';
 import { releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
 import { ControlMapper, type ControlMode } from './input/control-mapper.ts';
 import { DomInput } from './input/dom-input.ts';
+import { type AircraftMeshes, aircraftModelFor } from './render/aircraft-meshes.ts';
 import type { SceneryTextures } from './render/assets.ts';
 import { Effects } from './render/effects/effects.ts';
 import { GroundTargetModels } from './render/ground-target-models.ts';
@@ -81,14 +82,15 @@ function deathText(cause: DeathCause, killer: string | null): string {
 }
 
 /**
- * Builds a local game in `root` once the scenery photos are loaded. `scenery` is usually already loaded by the
- * title screen. Resolves to a cleanup function.
+ * Builds a local game in `root` once the scenery photos and jet models are loaded. Both are usually already loaded by
+ * the title screen. Resolves to a cleanup function.
  */
 export async function startGame(
   root: HTMLElement,
   options: StartOptions,
   handlers: GameHandlers,
   scenery: Promise<SceneryTextures>,
+  aircraftMeshes: Promise<AircraftMeshes>,
 ): Promise<() => void> {
   // Created before the first await: browsers only let sound start from a click.
   let soundOn = loadSetting('sound', true);
@@ -105,6 +107,8 @@ export async function startGame(
     loading.remove();
     throw new Error(`Could not load the scenery photos: ${err instanceof Error ? err.message : String(err)}`);
   }
+  // Never rejects: a jet whose model fails to load uses its generated model.
+  const meshes = await aircraftMeshes;
   const map = createTestRange(1);
   const terrain = buildTerrain(map);
   const mode = createMode(options);
@@ -123,7 +127,7 @@ export async function startGame(
   const sea = new Sea(textures.waterNormals);
   renderer.scene.add(sea.mesh);
   loading.remove();
-  const sceneSync = new SceneSync(renderer.scene);
+  const sceneSync = new SceneSync(renderer.scene, (config) => aircraftModelFor(config, meshes));
   const targetModels = new GroundTargetModels(renderer.scene);
   const targetAlerts = new TargetAlerts();
   const strikeTeams = session.modeStatus().strike ?? null;

@@ -16,6 +16,7 @@ import {
   Shape,
   SphereGeometry,
   Vector2,
+  Vector3,
 } from 'three';
 import type { AircraftVisual } from '../../shared/data/aircraft/types.ts';
 import { DEG, lerp } from '../../shared/math/units.ts';
@@ -148,17 +149,7 @@ export function buildAircraftModel(v: AircraftVisual): AircraftModel {
   intake.position.set(0, -R * 0.75, -L / 2 + L * 0.42);
   root.add(intake);
 
-  const nozzles: Object3D[] = [];
-  const afterburners: Mesh[] = [];
   const nozzleRadius = v.engines === 2 ? R * 0.45 : R * 0.62;
-  const flameMaterial = new MeshBasicMaterial({
-    color: 0xffa24a,
-    transparent: true,
-    opacity: 0.85,
-    blending: AdditiveBlending,
-    depthWrite: false,
-    side: DoubleSide,
-  });
   const xs = v.engines === 2 ? [-R * 0.5, R * 0.5] : [0];
   for (const x of xs) {
     const nozzleGeometry = new CylinderGeometry(nozzleRadius, nozzleRadius * 1.1, 1.4, 14, 1, true);
@@ -167,15 +158,35 @@ export function buildAircraftModel(v: AircraftVisual): AircraftModel {
     nozzle.name = 'nozzle';
     nozzle.position.set(x, 0, L / 2 - 0.3);
     root.add(nozzle);
+  }
+  const engines = addEngines(root, xs.map((x) => new Vector3(x, 0, L / 2 + 0.4)), nozzleRadius);
+  return { root, ...engines };
+}
 
+/**
+ * Adds a nozzle exit at each point (body metres) with an afterburner flame pointing aft. The flames start hidden;
+ * SceneSync shows them and scales their length with throttle.
+ */
+export function addEngines(root: Object3D, exits: readonly Vector3[], nozzleRadiusM: number): Pick<AircraftModel, 'nozzles' | 'afterburners'> {
+  const nozzles: Object3D[] = [];
+  const afterburners: Mesh[] = [];
+  const flameMaterial = new MeshBasicMaterial({
+    color: 0xffa24a,
+    transparent: true,
+    opacity: 0.85,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    side: DoubleSide,
+  });
+  for (const point of exits) {
     const exit = new Object3D();
     exit.name = 'nozzle-exit';
-    exit.position.set(x, 0, L / 2 + 0.4);
+    exit.position.copy(point);
     root.add(exit);
     nozzles.push(exit);
 
-    // Cone pointing aft (+z) from the nozzle exit; SceneSync scales it with throttle.
-    const flameGeometry = new ConeGeometry(nozzleRadius * 0.9, 1, 12, 1, true);
+    // Cone pointing aft (+z) from the nozzle exit, 1 m long until scaled.
+    const flameGeometry = new ConeGeometry(nozzleRadiusM * 0.9, 1, 12, 1, true);
     flameGeometry.rotateX(Math.PI / 2);
     flameGeometry.translate(0, 0, 0.5);
     const flame = new Mesh(flameGeometry, flameMaterial);
@@ -184,6 +195,5 @@ export function buildAircraftModel(v: AircraftVisual): AircraftModel {
     exit.add(flame);
     afterburners.push(flame);
   }
-
-  return { root, nozzles, afterburners };
+  return { nozzles, afterburners };
 }

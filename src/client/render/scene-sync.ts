@@ -1,4 +1,5 @@
 import type { Scene, Vector3 } from 'three';
+import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import { DEG } from '../../shared/math/units.ts';
 import type { AircraftView } from '../session/game-session.ts';
 import { type AircraftModel, buildAircraftModel } from './aircraft-model.ts';
@@ -17,10 +18,13 @@ const MAX_VISIBILITY_SCALE = 8;
 /** Keeps one 3-D model per aircraft view in the scene. */
 export class SceneSync {
   private readonly scene: Scene;
+  private readonly build: (config: AircraftConfig) => AircraftModel;
   private readonly entries = new Map<number, Entry>();
 
-  constructor(scene: Scene) {
+  /** `build` makes each jet's model; by default the model generated from its data. */
+  constructor(scene: Scene, build: (config: AircraftConfig) => AircraftModel = (c) => buildAircraftModel(c.visual)) {
     this.scene = scene;
+    this.build = build;
   }
 
   update(views: Iterable<AircraftView>, timeS: number, cameraPos: Vector3): void {
@@ -30,7 +34,7 @@ export class SceneSync {
       let entry = this.entries.get(v.id);
       if (!entry || entry.configId !== v.config.id) {
         if (entry) this.scene.remove(entry.model.root);
-        entry = { model: buildAircraftModel(v.config.visual), configId: v.config.id };
+        entry = { model: this.build(v.config), configId: v.config.id };
         this.entries.set(v.id, entry);
         this.scene.add(entry.model.root);
       }

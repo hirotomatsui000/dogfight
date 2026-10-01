@@ -3,7 +3,8 @@ import { getAircraft } from '../../shared/data/aircraft/registry.ts';
 import { buildTerrain } from '../../shared/data/maps/map-definition.ts';
 import { createTestRange } from '../../shared/data/maps/test-range.ts';
 import { DEG, G0 } from '../../shared/math/units.ts';
-import { type AircraftModel, buildAircraftModel } from './aircraft-model.ts';
+import { type AircraftMeshes, aircraftModelFor } from './aircraft-meshes.ts';
+import type { AircraftModel } from './aircraft-model.ts';
 import type { SceneryTextures } from './assets.ts';
 import { Renderer } from './renderer.ts';
 import { Sea } from './sea.ts';
@@ -84,6 +85,8 @@ export class Showcase {
   private readonly pose: Pose = { position: new Vector3(), quaternion: new Quaternion() };
   private model: AircraftModel | null = null;
   private aircraftId: string | null = null;
+  /** null until the jet models have loaded, so the generated model never flashes up first */
+  private meshes: AircraftMeshes | null = null;
   private sea: Sea | null = null;
   private running = true;
   private rafId = 0;
@@ -91,7 +94,7 @@ export class Showcase {
   private readonly still: boolean;
 
   /** `still`: the system asks for reduced motion, so show one fixed shot. */
-  constructor(root: HTMLElement, scenery: Promise<SceneryTextures>, still: boolean) {
+  constructor(root: HTMLElement, scenery: Promise<SceneryTextures>, aircraftMeshes: Promise<AircraftMeshes>, still: boolean) {
     this.still = still;
     this.renderer = new Renderer(root);
     this.renderer.webgl.domElement.classList.add('showcase');
@@ -103,13 +106,22 @@ export class Showcase {
       },
       (err: unknown) => console.error('The title-screen scenery could not load; the menu still works.', err),
     );
+    void aircraftMeshes.then((meshes) => {
+      this.meshes = meshes;
+      this.showAircraft();
+    });
   }
 
   setAircraft(id: string): void {
     if (id === this.aircraftId) return;
     this.aircraftId = id;
+    this.showAircraft();
+  }
+
+  private showAircraft(): void {
+    if (!this.running || !this.meshes || this.aircraftId === null) return;
     if (this.model) this.renderer.scene.remove(this.model.root);
-    this.model = buildAircraftModel(getAircraft(id).visual);
+    this.model = aircraftModelFor(getAircraft(this.aircraftId), this.meshes);
     this.renderer.scene.add(this.model.root);
   }
 
