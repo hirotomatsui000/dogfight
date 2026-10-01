@@ -16,7 +16,7 @@ import { leadDirection } from '../shared/weapons/lead.ts';
 import type { DeathCause, GameEvent } from '../shared/world/events.ts';
 import { DT } from '../shared/world/world.ts';
 import { AudioEngine } from './audio/audio-engine.ts';
-import { explosionGain, missileTone } from './audio/sound-mix.ts';
+import { explosionGain, missileTone, nearestSources } from './audio/sound-mix.ts';
 import { CameraRig, type CameraTarget } from './camera/camera-rig.ts';
 import { DeathCam, killcamFov, killcamPosition } from './camera/death-cam.ts';
 import { Hud } from './hud/hud.ts';
@@ -362,6 +362,11 @@ export async function startGame(
   const watchAim = new Vector3();
   const killcamAt = new Vector3();
   let nextJet: string | null = null;
+  let lastGear = 0;
+  const listenerVel = new Vector3();
+  const lastListener = new Vector3();
+  const forward = new Vector3();
+  const upward = new Vector3();
   const canChangeJet = options.mission !== 'training';
 
   const pause = new PauseMenu(root, {
@@ -413,7 +418,7 @@ export async function startGame(
         const local = victim.isLocal || (killer?.isLocal ?? false);
         killFeed.add(describeDeath(victim.callsign, killer?.callsign ?? null, e.cause), killer?.team ?? victim.team, local);
         const d = victim.position.distanceTo(camPos);
-        audio?.explosion(explosionGain(d));
+        audio?.explosionAt(victim.position, explosionGain(d));
         if (d < EXPLOSION_SHAKE_RANGE_M) cameraRig.addTrauma(0.6 * (1 - d / EXPLOSION_SHAKE_RANGE_M));
       }
       const me = session.localView();
@@ -426,8 +431,10 @@ export async function startGame(
         }
       } else if (victim?.config.support && me) {
         showBanner(sentinelDownText(victim.team, me.team), nowS);
+        audio?.sentinelDown(victim.team === me.team);
       } else if (killer?.isLocal) {
         showBanner('TARGET DESTROYED', nowS);
+        audio?.killConfirmed();
       }
     } else if (e.type === 'hit') {
       if (e.attackerId === session.localId) {
@@ -443,7 +450,7 @@ export async function startGame(
       if (e.shooterId === session.localId) audio?.launch();
     } else if (e.type === 'missileDetonated') {
       const d = camPos.distanceTo(burst.set(e.x, e.y, e.z));
-      audio?.explosion(explosionGain(d) * 0.6);
+      audio?.explosionAt(burst, explosionGain(d) * 0.6);
       if (d < EXPLOSION_SHAKE_RANGE_M) cameraRig.addTrauma(0.4 * (1 - d / EXPLOSION_SHAKE_RANGE_M));
     } else if (e.type === 'missileDecoyed') {
       if (e.targetId === session.localId) showBanner('MISSILE DECOYED', nowS);
@@ -453,7 +460,7 @@ export async function startGame(
       if (e.aircraftId === session.localId) audio?.bombRelease();
     } else if (e.type === 'bombImpact') {
       const d = camPos.distanceTo(burst.set(e.x, e.y, e.z));
-      audio?.explosion(explosionGain(d) * 0.8);
+      audio?.explosionAt(burst, explosionGain(d) * 0.8);
       if (d < EXPLOSION_SHAKE_RANGE_M) cameraRig.addTrauma(0.4 * (1 - d / EXPLOSION_SHAKE_RANGE_M));
     } else if (e.type === 'targetHit') {
       if (e.attackerId === session.localId) hitMarkerUntil = nowS + HIT_MARKER_S;
@@ -467,6 +474,7 @@ export async function startGame(
       const me = session.localView();
       if (me) {
         showBanner(zoneEventText(e.zoneId, e.owner, e.previous, me.team), nowS);
+        audio?.zoneChanged(e.owner === me.team || (e.owner === null && e.previous !== me.team));
         killFeed.add(zoneFeedText(e.zoneId, e.owner, e.previous), e.owner ?? e.previous ?? me.team, false);
       }
     } else if (e.type === 'targetDestroyed') {
@@ -492,7 +500,9 @@ export async function startGame(
       .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
     const training = options.mission === 'training';
     if (training) settings.update({ trainingDone: true });
-    const result = matchResult(session.modeStatus(), me ? me.team : 'usa', destroyed);
+    const final = session.modeStatus();
+    const result = matchResult(final, me ? me.team : 'usa', destroyed);
+    audio?.matchEnd(training || (me && final.winner === me.team) ? 'win' : final.winner === 'draw' ? 'draw' : 'loss');
     if (online) result.note = [result.note, 'The next match in this room starts in a few seconds.'].filter(Boolean).join(' ');
     closeEndScreen = showEndScreen(root, result, rows, {
       againLabel: online ? 'Stay for the next match' : training ? 'Fly a dogfight' : undefined,
@@ -560,8 +570,12 @@ export async function startGame(
         deathMessage = null;
         deathCam.stop();
         nextJet = null;
+        audio?.respawn();
         if (me.flight.onGround) showBanner('CLEARED FOR TAKE-OFF', nowS);
       }
+      // The gear motor runs as the wheels start to come up.
+      if (me && me.alive && me.flight.gear < 1 && lastGear >= 1) audio?.gearMotor();
+      lastGear = me?.flight.gear ?? 0;
       // Online the jet keeps flying while the menu is open: hold the throttle, centre the stick.
       if (!active && me) idle.throttle = me.flight.throttle;
       const controls = active ? mapper.map(snap, me && me.alive ? me.flight : null, dt, padFrame) : idle;
@@ -655,7 +669,7 @@ export async function startGame(
     renderer.webgl.getDrawingBufferSize(bufferSize);
     particleFrame.pixelScale = bufferSize.y / (2 * Math.tan((renderer.camera.fov * DEG) / 2));
     effects.update(active ? dt : 0, session, particleFrame, renderer.camera.position, 1 - 0.85 * environment.night);
-    for (const p of effects.drainImpacts()) audio?.explosion(explosionGain(p.distanceTo(renderer.camera.position)) * 0.7);
+    for (const p of effects.drainImpacts()) audio?.explosionAt(p, explosionGain(p.distanceTo(renderer.camera.position)) * 0.7);
     sea.update(nowS);
     renderer.render();
 
@@ -688,6 +702,8 @@ export async function startGame(
       const targets = session.groundTargets();
       const status = session.modeStatus();
       const bombImpact = local.alive && local.stores.bombs > 0 ? predictImpact(f.pos, f.vel, BOMB_ANVIL, terrain, DT, impactPoint) : null;
+      // Not on the take-off run: the gear is down until the jet is well clear of the runway.
+      const pullUp = local.alive && f.gear === 0 && timeToImpact(f, terrain) !== null;
       hud.draw({
         view: local,
         weapon: mapper.selectedWeapon,
@@ -699,8 +715,7 @@ export async function startGame(
         aimDirection: aim,
         status,
         radarAltitudeM: f.pos.y - terrain.surfaceAt(f.pos.x, f.pos.z),
-        // Not on the take-off run: the gear is down until the jet is well clear of the runway.
-        pullUp: local.alive && f.gear === 0 && timeToImpact(f, terrain) !== null,
+        pullUp,
         message,
         deathInfo,
         banner: nowS < bannerUntil ? banner : null,
@@ -720,6 +735,10 @@ export async function startGame(
         localTime: formatTimeOfDay(session.hour()),
       });
       if (audio && active) {
+        const cam = renderer.camera;
+        if (dt > 0) listenerVel.subVectors(cam.position, lastListener).divideScalar(dt);
+        lastListener.copy(cam.position);
+        const near = (pos: Vector3, vel: Vector3, throttle: number, id: number) => ({ id, pos, vel, throttle });
         audio.update({
           alive: local.alive,
           throttle: f.throttle,
@@ -730,6 +749,23 @@ export async function startGame(
           firingCannon: local.firingCannon,
           cannonRateHz: CANNONS[local.config.stores.cannon].projectilesPerS,
           timeS: nowS,
+          stall: local.alive && !f.onGround && f.alpha > local.config.physics.alphaMaxDeg * DEG,
+          pullUp,
+          rollingMs: local.alive && f.onGround ? f.airspeed : 0,
+          rain: environment.raining,
+          listener: { pos: cam.position, forward: forward.set(0, 0, -1).applyQuaternion(cam.quaternion), up: upward.set(0, 1, 0).applyQuaternion(cam.quaternion), vel: listenerVel },
+          jets: nearestSources(
+            [...session.views()].filter((v) => v.alive && !v.isLocal).map((v) => near(v.position, v.flight.vel, v.flight.throttle, v.id)),
+            cam.position,
+            2,
+            2500,
+          ),
+          missiles: nearestSources(
+            [...session.missiles()].map((m) => near(m.position, m.velocity, 1, m.id)),
+            cam.position,
+            1,
+            700,
+          ),
         });
       }
     } else {

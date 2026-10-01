@@ -57,3 +57,43 @@ export function explosionGain(distanceM: number): number {
 export function beepOn(timeS: number, rateHz: number, duty = 0.5): boolean {
   return (timeS * rateHz) % 1 < duty;
 }
+
+/** Speed of sound for the Doppler shift of other jets, m/s. */
+const SOUND_SPEED_MS = 340;
+
+/**
+ * Pitch factor of a moving source heard by a moving listener (M5): above 1 while it approaches, below 1 after it
+ * passes. `rel` is the source position minus the listener's; clamped so a supersonic pass does not scream.
+ */
+export function dopplerFactor(rel: { x: number; y: number; z: number }, sourceVel: { x: number; y: number; z: number }, listenerVel: { x: number; y: number; z: number }): number {
+  const d = Math.hypot(rel.x, rel.y, rel.z);
+  if (d < 1) return 1;
+  // Speeds along the line from the listener to the source (+ = away from the listener).
+  const vs = (sourceVel.x * rel.x + sourceVel.y * rel.y + sourceVel.z * rel.z) / d;
+  const vl = (listenerVel.x * rel.x + listenerVel.y * rel.y + listenerVel.z * rel.z) / d;
+  return clamp((SOUND_SPEED_MS + vl) / Math.max(SOUND_SPEED_MS + vs, 60), 0.5, 2);
+}
+
+/** Loudness of another jet heard from `distanceM` away: full close by, gone past 2.5 km. */
+export function flybyGain(distanceM: number, throttle: number): number {
+  const k = clamp(1 - distanceM / 2500, 0, 1);
+  return k * k * (0.35 + 0.65 * clamp(throttle, 0, 1));
+}
+
+export interface SoundSource {
+  id: number;
+  pos: { x: number; y: number; z: number };
+}
+
+/** The `n` sources nearest the listener within `maxM`, nearest first. */
+export function nearestSources<T extends SoundSource>(sources: Iterable<T>, listener: { x: number; y: number; z: number }, n: number, maxM: number): T[] {
+  const near: [number, T][] = [];
+  for (const s of sources) {
+    const d = Math.hypot(s.pos.x - listener.x, s.pos.y - listener.y, s.pos.z - listener.z);
+    if (d <= maxM) near.push([d, s]);
+  }
+  return near
+    .sort((a, b) => a[0] - b[0])
+    .slice(0, n)
+    .map(([, s]) => s);
+}

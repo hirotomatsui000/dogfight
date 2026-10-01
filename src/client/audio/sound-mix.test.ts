@@ -37,3 +37,19 @@ describe('sound mix', () => {
     expect(beepOn(0.15, 5)).toBe(false);
   });
 });
+
+describe('positional sound (M5)', () => {
+  it('raises the pitch of an approaching jet and lowers it once it has passed', async () => {
+    const { dopplerFactor, flybyGain, nearestSources } = await import('./sound-mix.ts');
+    const still = { x: 0, y: 0, z: 0 };
+    // A jet 500 m north (−z) flying south toward us at 250 m/s.
+    expect(dopplerFactor({ x: 0, y: 0, z: -500 }, { x: 0, y: 0, z: 250 }, still)).toBeGreaterThan(1.5);
+    // The same jet past us, going away.
+    expect(dopplerFactor({ x: 0, y: 0, z: 500 }, { x: 0, y: 0, z: 250 }, still)).toBeLessThan(0.7);
+    expect(dopplerFactor({ x: 0, y: 0, z: -500 }, { x: 0, y: 0, z: 1000 }, still)).toBe(2);
+    expect(flybyGain(100, 1)).toBeGreaterThan(flybyGain(1000, 1));
+    expect(flybyGain(3000, 1)).toBe(0);
+    const near = nearestSources([{ id: 1, pos: { x: 900, y: 0, z: 0 } }, { id: 2, pos: { x: 100, y: 0, z: 0 } }, { id: 3, pos: { x: 5000, y: 0, z: 0 } }], still, 2, 2500);
+    expect(near.map((s) => s.id)).toEqual([2, 1]);
+  });
+});

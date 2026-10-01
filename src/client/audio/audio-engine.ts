@@ -1,4 +1,18 @@
-import { beepOn, engineMix, type SeekerTone } from './sound-mix.ts';
+import { beepOn, dopplerFactor, engineMix, flybyGain, type SeekerTone } from './sound-mix.ts';
+
+interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** Another jet or a missile near the listener (M5). */
+export interface NearbySound {
+  pos: Vec3;
+  vel: Vec3;
+  /** 0..1; missiles use 1 */
+  throttle: number;
+}
 
 export interface SoundFrame {
   alive: boolean;
@@ -12,14 +26,43 @@ export interface SoundFrame {
   /** cannon projectiles per second, for the "brrt" rhythm */
   cannonRateHz: number;
   timeS: number;
+  /** M5: the stall horn and the pull-up tone, with the HUD's STALL and PULL UP */
+  stall?: boolean;
+  pullUp?: boolean;
+  /** M5: speed rolling on the runway, m/s (0 in the air) */
+  rollingMs?: number;
+  /** M5: rain round the camera */
+  rain?: boolean;
+  /** M5: where the listener (the camera) is, which way it faces, and how fast it moves */
+  listener?: { pos: Vec3; forward: Vec3; up: Vec3; vel: Vec3 };
+  /** M5: the other jets nearest the listener, nearest first */
+  jets?: readonly NearbySound[];
+  /** M5: the missiles nearest the listener, nearest first */
+  missiles?: readonly NearbySound[];
 }
 
 const MASTER_GAIN = 0.7;
 const SMOOTH_S = 0.05;
+/** Positional voices for nearby jets and missiles. */
+const JET_VOICES = 2;
+const MISSILE_VOICES = 1;
+const MISSILE_HEAR_M = 700;
+
+interface Voice {
+  panner: PannerNode;
+  gain: GainNode;
+  /** pitch carriers the Doppler factor scales */
+  oscs: OscillatorNode[];
+  filter: BiquadFilterNode;
+  baseHz: number[];
+  filterHz: number;
+}
 
 /**
  * Synthesized cockpit sound (spec §15.5): engine, afterburner, wind, cannon, seeker growl and lock tone, radar-lock
- * beeps, missile and radar-lock (RWR) warnings, and one-shot launches, hits, flares and explosions. No audio files.
+ * beeps, missile and radar-lock (RWR) warnings, and one-shot launches, hits, flares and explosions. M5 adds positional
+ * sound (explosions, nearby jets with Doppler, missiles going past), the stall horn and pull-up tone, runway rumble,
+ * the gear motor, rain, and chimes for kills, zones, Sentinels and the end of a match. No audio files.
  */
 export class AudioEngine {
   private readonly ctx: AudioContext;
@@ -37,6 +80,13 @@ export class AudioEngine {
   private readonly lockGain: GainNode;
   private readonly warnGain: GainNode;
   private readonly rwrGain: GainNode;
+  private readonly stallGain: GainNode;
+  private readonly pullUpGain: GainNode;
+  private readonly pullUpOsc: OscillatorNode;
+  private readonly rumbleGain: GainNode;
+  private readonly rainGain: GainNode;
+  private readonly jetVoices: Voice[] = [];
+  private readonly missileVoices: Voice[] = [];
   private muted = false;
   /** master volume from the settings, 0..1 */
   private volume = 1;
@@ -92,6 +142,23 @@ export class AudioEngine {
     const rwr = this.osc('triangle', 620, this.rwrGain);
     const rwrSwing = this.gain(140, rwr.frequency);
     this.osc('square', 7, rwrSwing);
+
+    // Stall horn: a low, buzzy pulse.
+    this.stallGain = this.gain(0, this.master);
+    this.osc('square', 310, this.filter('lowpass', 1100, 0.7, this.stallGain));
+
+    // Pull-up: a high two-tone, switched between its notes each frame.
+    this.pullUpGain = this.gain(0, this.master);
+    this.pullUpOsc = this.osc('triangle', 900, this.pullUpGain);
+
+    // Runway rumble and rain.
+    this.rumbleGain = this.gain(0, this.master);
+    this.loopNoise(this.filter('lowpass', 140, 0.9, this.rumbleGain));
+    this.rainGain = this.gain(0, this.master);
+    this.loopNoise(this.filter('highpass', 2600, 0.5, this.rainGain));
+
+    for (let i = 0; i < JET_VOICES; i++) this.jetVoices.push(this.voice([85, 128], 'sawtooth', 'bandpass', 520));
+    for (let i = 0; i < MISSILE_VOICES; i++) this.missileVoices.push(this.voice([], 'sawtooth', 'highpass', 1400));
   }
 
   /** Browsers start audio suspended until a click; call this from input handlers. */
@@ -127,18 +194,36 @@ export class AudioEngine {
     this.set(this.lockGain.gain, f.alive && lockOn ? 0.06 : 0, 0.005);
     this.set(this.rwrGain.gain, f.alive && f.rwrLock && !f.missileWarning ? 0.045 : 0);
     this.set(this.warnGain.gain, f.alive && f.missileWarning && beepOn(f.timeS, 5) ? 0.05 : 0, 0.005);
+    this.set(this.stallGain.gain, f.alive && f.stall && !f.pullUp && beepOn(f.timeS, 2.5, 0.6) ? 0.05 : 0, 0.01);
+    this.set(this.pullUpGain.gain, f.alive && f.pullUp ? 0.05 : 0, 0.01);
+    this.set(this.pullUpOsc.frequency, beepOn(f.timeS, 4) ? 900 : 700, 0.005);
+    this.set(this.rumbleGain.gain, f.alive ? 0.3 * Math.min(1, (f.rollingMs ?? 0) / 70) : 0);
+    this.set(this.rainGain.gain, f.rain ? 0.035 : 0, 0.3);
+    if (f.listener) this.placeListener(f.listener);
+    this.updateVoices(this.jetVoices, f.jets ?? [], f.listener, (d, s) => flybyGain(d, s.throttle) * 0.6);
+    this.updateVoices(this.missileVoices, f.missiles ?? [], f.listener, (d) => {
+      const k = Math.max(0, 1 - d / MISSILE_HEAR_M);
+      return 0.35 * k * k;
+    });
   }
 
   /** Silences the loops (pause, match end) without muting one-shots already playing. */
   quiet(): void {
-    for (const g of [this.engineGain, this.abGain, this.windGain, this.cannonGain, this.cannonDepth, this.growlGain, this.lockGain, this.warnGain, this.rwrGain]) {
-      this.set(g.gain, 0);
-    }
+    const loops = [this.engineGain, this.abGain, this.windGain, this.cannonGain, this.cannonDepth, this.growlGain, this.lockGain, this.warnGain, this.rwrGain, this.stallGain, this.pullUpGain, this.rumbleGain, this.rainGain];
+    for (const g of [...loops, ...this.jetVoices.map((v) => v.gain), ...this.missileVoices.map((v) => v.gain)]) this.set(g.gain, 0);
   }
 
   explosion(gain: number): void {
     if (gain <= 0.01 || this.muted) return;
     this.burst(1.6, 'lowpass', 500, gain * 0.9);
+  }
+
+  /** An explosion heard from where it happened (M5): panned, and as loud as `gain` says. */
+  explosionAt(pos: Vec3, gain: number): void {
+    if (gain <= 0.01 || this.muted) return;
+    const panner = this.panner(this.master);
+    this.place(panner, pos);
+    this.burst(1.6, 'lowpass', 500, gain * 0.9, panner);
   }
 
   launch(): void {
@@ -158,8 +243,106 @@ export class AudioEngine {
     this.burst(0.15, 'highpass', 1800, 0.12);
   }
 
+  /** The gear motor as the wheels come up (M5). */
+  gearMotor(): void {
+    this.sweep('sawtooth', 160, 240, 1.2, 0.035, 900);
+  }
+
+  /** A soft whoosh for a new jet (M5). */
+  respawn(): void {
+    this.burst(0.7, 'bandpass', 900, 0.1);
+  }
+
+  /** Two rising notes for a confirmed kill (M5). */
+  killConfirmed(): void {
+    this.notes([880, 1320], 0.09, 'sine', 0.1);
+  }
+
+  /** Zones (M5): rising for one of ours, falling for one we lost. */
+  zoneChanged(good: boolean): void {
+    this.notes(good ? [523, 659, 784] : [784, 622, 494], 0.11, 'triangle', 0.09);
+  }
+
+  /** Sentinels (M5): an alarm when ours goes down, a bright chime for theirs. */
+  sentinelDown(ours: boolean): void {
+    if (ours) this.notes([700, 520, 700, 520], 0.16, 'square', 0.045);
+    else this.notes([660, 880, 1100], 0.1, 'sine', 0.1);
+  }
+
+  /** The end of a match (M5): a major chord for a win, minor for a loss, open for a draw. */
+  matchEnd(result: 'win' | 'loss' | 'draw'): void {
+    const chord = result === 'win' ? [392, 494, 587] : result === 'loss' ? [392, 466, 587] : [392, 587];
+    for (const hz of chord) this.tone('sine', hz, this.ctx.currentTime, 1.8, 0.06);
+  }
+
   dispose(): void {
     this.ctx.close().catch((err: unknown) => console.info('Sound shutdown failed:', err instanceof Error ? err.message : String(err)));
+  }
+
+  private updateVoices(voices: Voice[], sources: readonly NearbySound[], listener: SoundFrame['listener'], loudness: (distanceM: number, s: NearbySound) => number): void {
+    voices.forEach((v, i) => {
+      const s = sources[i];
+      if (!s || !listener) {
+        this.set(v.gain.gain, 0, 0.15);
+        return;
+      }
+      const rel = { x: s.pos.x - listener.pos.x, y: s.pos.y - listener.pos.y, z: s.pos.z - listener.pos.z };
+      const d = Math.hypot(rel.x, rel.y, rel.z);
+      const doppler = dopplerFactor(rel, s.vel, listener.vel);
+      this.place(v.panner, s.pos);
+      this.set(v.gain.gain, loudness(d, s), 0.08);
+      v.oscs.forEach((o, k) => this.set(o.frequency, v.baseHz[k] * doppler * (0.8 + 0.4 * s.throttle), 0.05));
+      this.set(v.filter.frequency, v.filterHz * doppler, 0.05);
+    });
+  }
+
+  private placeListener(l: NonNullable<SoundFrame['listener']>): void {
+    const a = this.ctx.listener;
+    const t = this.ctx.currentTime;
+    if (a.positionX) {
+      a.positionX.setValueAtTime(l.pos.x, t);
+      a.positionY.setValueAtTime(l.pos.y, t);
+      a.positionZ.setValueAtTime(l.pos.z, t);
+      a.forwardX.setValueAtTime(l.forward.x, t);
+      a.forwardY.setValueAtTime(l.forward.y, t);
+      a.forwardZ.setValueAtTime(l.forward.z, t);
+      a.upX.setValueAtTime(l.up.x, t);
+      a.upY.setValueAtTime(l.up.y, t);
+      a.upZ.setValueAtTime(l.up.z, t);
+    } else {
+      a.setPosition(l.pos.x, l.pos.y, l.pos.z);
+      a.setOrientation(l.forward.x, l.forward.y, l.forward.z, l.up.x, l.up.y, l.up.z);
+    }
+  }
+
+  private place(p: PannerNode, pos: Vec3): void {
+    const t = this.ctx.currentTime;
+    if (p.positionX) {
+      p.positionX.setValueAtTime(pos.x, t);
+      p.positionY.setValueAtTime(pos.y, t);
+      p.positionZ.setValueAtTime(pos.z, t);
+    } else {
+      p.setPosition(pos.x, pos.y, pos.z);
+    }
+  }
+
+  /** Direction only: the game sets each voice's loudness from the distance itself. */
+  private panner(to: AudioNode): PannerNode {
+    const p = this.ctx.createPanner();
+    p.panningModel = 'equalpower';
+    p.distanceModel = 'linear';
+    p.rolloffFactor = 0;
+    p.connect(to);
+    return p;
+  }
+
+  private voice(baseHz: number[], type: OscillatorType, filterType: BiquadFilterType, filterHz: number): Voice {
+    const panner = this.panner(this.master);
+    const gain = this.gain(0, panner);
+    const filter = this.filter(filterType, filterHz, 0.8, gain);
+    this.loopNoise(filter);
+    const oscs = baseHz.map((hz) => this.osc(type, hz, this.filter('lowpass', 900, 0.7, gain)));
+    return { panner, gain, oscs, filter, baseHz, filterHz };
   }
 
   private set(param: AudioParam, value: number, smoothS = SMOOTH_S): void {
@@ -197,22 +380,66 @@ export class AudioEngine {
     const src = this.ctx.createBufferSource();
     src.buffer = this.noise;
     src.loop = true;
+    // Each loop starts at its own point in the buffer, so voices sharing it do not sound alike.
     src.connect(to);
-    src.start();
+    src.start(0, Math.random() * this.noise.duration);
   }
 
   /** A short filtered noise burst with a fast attack and exponential decay. */
-  private burst(durationS: number, type: BiquadFilterType, hz: number, peak: number): void {
+  private burst(durationS: number, type: BiquadFilterType, hz: number, peak: number, to: AudioNode = this.master): void {
     const now = this.ctx.currentTime;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noise;
-    const g = this.gain(0, this.master);
+    const g = this.gain(0, to);
     src.connect(this.filter(type, hz, 0.8, g));
     g.gain.setValueAtTime(0, now);
     g.gain.linearRampToValueAtTime(peak, now + 0.01);
     g.gain.exponentialRampToValueAtTime(0.001, now + durationS);
     src.start(now);
     src.stop(now + durationS + 0.05);
-    src.onended = () => g.disconnect();
+    src.onended = () => {
+      g.disconnect();
+      if (to !== this.master) to.disconnect();
+    };
+  }
+
+  /** One enveloped oscillator note. */
+  private tone(type: OscillatorType, hz: number, at: number, durationS: number, peak: number): void {
+    if (this.muted) return;
+    const o = this.ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = hz;
+    const g = this.gain(0, this.master);
+    o.connect(g);
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(peak, at + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.001, at + durationS);
+    o.start(at);
+    o.stop(at + durationS + 0.05);
+    o.onended = () => g.disconnect();
+  }
+
+  private notes(freqs: readonly number[], stepS: number, type: OscillatorType, peak: number): void {
+    const now = this.ctx.currentTime;
+    freqs.forEach((hz, i) => this.tone(type, hz, now + i * stepS, stepS * 2.2, peak));
+  }
+
+  /** A pitch glide (the gear motor). */
+  private sweep(type: OscillatorType, fromHz: number, toHz: number, durationS: number, peak: number, lowpassHz: number): void {
+    if (this.muted) return;
+    const now = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(fromHz, now);
+    o.frequency.linearRampToValueAtTime(toHz, now + durationS);
+    const g = this.gain(0, this.master);
+    o.connect(this.filter('lowpass', lowpassHz, 0.7, g));
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(peak, now + 0.1);
+    g.gain.setValueAtTime(peak, now + durationS - 0.2);
+    g.gain.linearRampToValueAtTime(0, now + durationS);
+    o.start(now);
+    o.stop(now + durationS + 0.05);
+    o.onended = () => g.disconnect();
   }
 }
