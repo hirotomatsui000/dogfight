@@ -4,7 +4,7 @@ A browser-based flight-combat prototype. Two teams, **USA** and **Russia**, fly 
 real aircraft over a fictional landscape inspired by Poland. This repository is being built in milestones (see
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
-**Current milestone: M1b "Fight"**
+**Current milestone: M1d "Strike"** (after M1a "Fly" and M1b "Fight")
 - Two aircraft: the Kestrel (USA) and the Kobchik (Russia).
 - Dogfight an AI pilot (Rookie, Veteran or Ace) in Team Deathmatch: first to 15 kills, or the most after 10 minutes.
 - **Strike** mode: Russia bombs three fictional targets while the USA holds them for 8 minutes; 4 aircraft per team.
