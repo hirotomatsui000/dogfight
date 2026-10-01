@@ -17,6 +17,7 @@ import type { HudFrame } from './hud-frame.ts';
 import { AMBER, FONT, FONT_BIG, FONT_SMALL, GREEN, RED, SHADOW, WHITE } from './palette.ts';
 import { Projector, type ScreenPoint } from './projector.ts';
 import { drawRadarScope } from './radar-scope.ts';
+import { drawStrikeMarkers, drawStrikeStatus } from './strike-layer.ts';
 
 export type { HudFrame } from './hud-frame.ts';
 
@@ -87,9 +88,11 @@ export class Hud {
       if (f.status.modeId !== 'free-flight') {
         drawCombatLayer(ctx, this.projector, f, this.clock);
         drawRadarScope(ctx, 100 + SCOPE_RADIUS_PX, this.height - 40 - SCOPE_RADIUS_PX, SCOPE_RADIUS_PX, f);
+        if (f.status.strike) drawStrikeMarkers(ctx, this.projector, f, f.status.strike, this.clock);
       }
     }
     drawGameLayer(ctx, this.width, this.height, f);
+    if (f.status.strike) drawStrikeStatus(ctx, f, f.status.strike);
     this.drawModeAndHint(f);
     if (f.banner) this.drawCenterText(f.banner, this.height * 0.3, AMBER, FONT_BIG);
     if (f.message) this.drawCenterText(f.message, this.height * 0.38, WHITE, FONT_BIG);

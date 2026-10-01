@@ -1,12 +1,13 @@
 import { DIFFICULTIES, type DifficultyId } from '../../shared/ai/difficulty.ts';
 import { listAircraft, TEAM_NAMES } from '../../shared/data/aircraft/registry.ts';
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
+import { STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp } from './controls-help.ts';
 import { isTouchOnly } from './device.ts';
 import { loadSetting, saveSetting } from './storage.ts';
 
-export type MissionId = 'team-deathmatch' | 'free-flight';
+export type MissionId = 'team-deathmatch' | 'free-flight' | 'strike';
 
 export interface StartOptions {
   aircraftId: string;
@@ -23,6 +24,12 @@ export interface StartMenuHandlers {
 }
 
 const CONTROL_MODES: readonly ControlMode[] = ['mouse-aim', 'direct'];
+type FlyMission = Exclude<MissionId, 'free-flight'>;
+const MISSIONS: readonly { value: FlyMission; label: string }[] = [
+  { value: 'team-deathmatch', label: 'Dogfight' },
+  { value: 'strike', label: 'Strike' },
+];
+const DOGFIGHT_ROLE = 'Shoot down the enemy jet: first to 15 kills, or the most after 10 minutes';
 const CONTROL_LABELS: Record<ControlMode, string> = { 'mouse-aim': 'Mouse aim', direct: 'Keyboard' };
 
 export function sanitizeCallsign(s: string): string {
@@ -32,6 +39,13 @@ export function sanitizeCallsign(s: string): string {
 /** Saved settings can outlive the options they name (or be edited by hand). */
 export function pickValid<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return allowed.find((a) => a === value) ?? fallback;
+}
+
+/** What the selected jet does in a Strike match (spec §15.5). */
+export function strikeRole(c: AircraftConfig): string {
+  return c.team === STRIKE_DEFENDER
+    ? `${c.name} · ${TEAM_NAMES[c.team]}: hold all three targets for 8 minutes`
+    : `${c.name} · ${TEAM_NAMES[c.team]}: destroy two of the three targets`;
 }
 
 export function aircraftSummary(c: AircraftConfig): string {
@@ -141,6 +155,11 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers): (
   let aircraftId = pickValid(loadSetting<unknown>('aircraft', ids[0]), ids, ids[0]);
   let difficulty = pickValid(loadSetting<unknown>('difficulty', 'rookie'), Object.keys(DIFFICULTIES) as DifficultyId[], 'rookie');
   let controlMode = pickValid(loadSetting<unknown>('controlMode', 'mouse-aim'), CONTROL_MODES, 'mouse-aim');
+  let mission = pickValid(
+    loadSetting<unknown>('mission', 'team-deathmatch'),
+    MISSIONS.map((m) => m.value),
+    'team-deathmatch',
+  );
 
   const screen = el('div', 'start');
   const form = el('form', 'start-form');
@@ -180,11 +199,26 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers): (
       aircraftId = id;
       saveSetting('aircraft', id);
       showSummary();
+      showRole();
       handlers.onPreview(id);
     },
   );
   jets.appendChild(summary);
   showSummary();
+
+  const role = el('p', 'pick-note');
+  role.setAttribute('aria-live', 'polite');
+  function showRole(): void {
+    const a = aircraft.find((x) => x.id === aircraftId) ?? aircraft[0];
+    role.textContent = mission === 'strike' ? strikeRole(a) : DOGFIGHT_ROLE;
+  }
+  const missions = choiceGroup('mission', 'Mission', MISSIONS, mission, (m) => {
+    mission = m;
+    saveSetting('mission', m);
+    showRole();
+  });
+  missions.appendChild(role);
+  showRole();
 
   const skill = choiceGroup(
     'skill',
@@ -210,7 +244,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers): (
   links.append(freeFlight, controlsLink);
   launch.append(fly, links);
 
-  main.append(brand, jets, skill, launch);
+  main.append(brand, missions, jets, skill, launch);
   form.append(top, main, credits());
 
   const sheet = controlsSheet(controlMode, (m) => {
@@ -229,7 +263,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers): (
   };
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    start('team-deathmatch');
+    start(mission);
   });
   freeFlight.addEventListener('click', () => start('free-flight'));
   controlsLink.addEventListener('click', () => sheet.showModal());

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { kestrel } from '../../shared/data/aircraft/kestrel.ts';
+import { kobchik } from '../../shared/data/aircraft/kobchik.ts';
+import { STRIKE_DEFAULTS } from '../../shared/modes/strike.ts';
 import { controlsHelp } from './controls-help.ts';
-import { aircraftSummary, pickValid, sanitizeCallsign } from './menu.ts';
+import { aircraftSummary, pickValid, sanitizeCallsign, strikeRole } from './menu.ts';
 
 describe('start menu helpers', () => {
   it('cleans callsigns', () => {
@@ -36,6 +38,16 @@ describe('controls help', () => {
       const actions = controlsHelp(mode).map(([, a]) => a);
       for (const needed of ['Cannon', 'Flares', 'Pause']) expect(actions).toContain(needed);
       expect(actions.some((a) => a.startsWith('Missile'))).toBe(true);
+      expect(actions.some((a) => a.startsWith('Bomb'))).toBe(true);
     }
+  });
+});
+
+describe('strike role', () => {
+  it('tells each jet what it does in a Strike match', () => {
+    expect(strikeRole(kestrel)).toBe('Kestrel · USA: hold all three targets for 8 minutes');
+    expect(strikeRole(kobchik)).toBe('Kobchik · Russia: destroy two of the three targets');
+    // the words above are written out, so they must follow the rules
+    expect([STRIKE_DEFAULTS.timeLimitS, STRIKE_DEFAULTS.targetsToWin]).toEqual([480, 2]);
   });
 });

@@ -2,24 +2,29 @@ import { Color, FogExp2, Quaternion, Vector2, Vector3 } from 'three';
 import { DIFFICULTIES } from '../shared/ai/difficulty.ts';
 import { buildTerrain } from '../shared/data/maps/map-definition.ts';
 import { createTestRange } from '../shared/data/maps/test-range.ts';
-import { CANNONS } from '../shared/data/weapons.ts';
+import { BOMB_ANVIL, CANNONS } from '../shared/data/weapons.ts';
 import { timeToImpact } from '../shared/map/ground-proximity.ts';
 import { DEG } from '../shared/math/units.ts';
 import { FreeFlightMode } from '../shared/modes/free-flight.ts';
 import type { GameMode } from '../shared/modes/mode.ts';
+import { StrikeMode } from '../shared/modes/strike.ts';
 import { TeamDeathmatchMode } from '../shared/modes/team-deathmatch.ts';
 import { atmosphere } from '../shared/physics/atmosphere.ts';
+import { predictImpact } from '../shared/weapons/bomb.ts';
 import { leadDirection } from '../shared/weapons/lead.ts';
 import type { DeathCause, GameEvent } from '../shared/world/events.ts';
+import { DT } from '../shared/world/world.ts';
 import { AudioEngine } from './audio/audio-engine.ts';
 import { explosionGain, seekerTone } from './audio/sound-mix.ts';
 import { CameraRig, type CameraTarget } from './camera/camera-rig.ts';
 import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
+import { releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
 import { ControlMapper, type ControlMode } from './input/control-mapper.ts';
 import { DomInput } from './input/dom-input.ts';
 import type { SceneryTextures } from './render/assets.ts';
 import { Effects } from './render/effects/effects.ts';
+import { GroundTargetModels } from './render/ground-target-models.ts';
 import type { ParticleFrame } from './render/effects/particles.ts';
 import { Renderer } from './render/renderer.ts';
 import { SceneSync } from './render/scene-sync.ts';
@@ -64,6 +69,7 @@ function showLoading(root: HTMLElement, text: string): HTMLElement {
 }
 
 function createMode(options: StartOptions): GameMode {
+  if (options.mission === 'strike') return new StrikeMode();
   return options.mission === 'team-deathmatch' ? new TeamDeathmatchMode() : new FreeFlightMode();
 }
 
@@ -110,7 +116,7 @@ export async function startGame(
     callsign: options.callsign,
     // A fresh seed per match varies gunfire spread, flare luck and the bot's aim; the World stays deterministic.
     seed: Math.floor(Math.random() * 0x7fffffff),
-    opponents: options.mission === 'team-deathmatch' ? { count: 1, profile: DIFFICULTIES[options.difficulty] } : undefined,
+    opponents: options.mission === 'free-flight' ? undefined : { count: 1, profile: DIFFICULTIES[options.difficulty] },
   });
   new SkySystem(renderer.scene, renderer.webgl, textures.sky);
   renderer.scene.add(new TerrainMesh(terrain, map, createTerrainMaterial(textures)).group);
@@ -118,6 +124,10 @@ export async function startGame(
   renderer.scene.add(sea.mesh);
   loading.remove();
   const sceneSync = new SceneSync(renderer.scene);
+  const targetModels = new GroundTargetModels(renderer.scene);
+  const targetAlerts = new TargetAlerts();
+  const strikeTeams = session.modeStatus().strike ?? null;
+  const impactPoint = new Vector3();
   const effects = new Effects(renderer.scene);
   const cameraRig = new CameraRig(renderer.camera);
   cameraRig.reduceMotion = loadSetting('reduceMotion', false);
@@ -242,6 +252,23 @@ export async function startGame(
       if (e.targetId === session.localId) showBanner('MISSILE DECOYED', nowS);
     } else if (e.type === 'countermeasures') {
       if (e.aircraftId === session.localId) audio?.flare();
+    } else if (e.type === 'bombReleased') {
+      if (e.aircraftId === session.localId) audio?.bombRelease();
+    } else if (e.type === 'bombImpact') {
+      const d = camPos.distanceTo(burst.set(e.x, e.y, e.z));
+      audio?.explosion(explosionGain(d) * 0.8);
+      if (d < EXPLOSION_SHAKE_RANGE_M) cameraRig.addTrauma(0.4 * (1 - d / EXPLOSION_SHAKE_RANGE_M));
+    } else if (e.type === 'targetHit') {
+      if (e.attackerId === session.localId) hitMarkerUntil = nowS + HIT_MARKER_S;
+      const me = session.localView();
+      if (me && strikeTeams && me.team === strikeTeams.defender) {
+        const alert = targetAlerts.underAttack(e.targetId, nowS);
+        if (alert) showBanner(alert, nowS);
+      }
+    } else if (e.type === 'targetDestroyed') {
+      const text = targetDestroyedText(e.targetId);
+      showBanner(text, nowS);
+      if (strikeTeams) killFeed.add(text, strikeTeams.attacker, e.attackerId === session.localId);
     }
   };
 
@@ -250,10 +277,14 @@ export async function startGame(
     audio?.quiet();
     if (input.pointerLocked) document.exitPointerLock();
     const me = session.localView();
+    const destroyed = session
+      .groundTargets()
+      .filter((t) => t.destroyed)
+      .map((t) => `${t.id} (${t.label})`);
     const rows: ResultRow[] = [...session.views()]
       .map((v) => ({ callsign: v.callsign, aircraft: v.config.name, team: v.team, kills: v.kills, deaths: v.deaths, isLocal: v.isLocal }))
       .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
-    closeEndScreen = showEndScreen(root, matchResult(session.modeStatus(), me ? me.team : 'usa'), rows, {
+    closeEndScreen = showEndScreen(root, matchResult(session.modeStatus(), me ? me.team : 'usa', destroyed), rows, {
       onAgain: () => {
         cleanup();
         handlers.onRestart(options);
@@ -316,6 +347,7 @@ export async function startGame(
     const aim = mapper.settings.mode === 'mouse-aim' ? mapper.aimDirection : null;
     cameraRig.update(active ? dt : 0, local ? target : null, aim);
     sceneSync.update(session.views(), nowS, renderer.camera.position);
+    targetModels.update(session.groundTargets());
     renderer.webgl.getDrawingBufferSize(bufferSize);
     particleFrame.pixelScale = bufferSize.y / (2 * Math.tan((renderer.camera.fov * DEG) / 2));
     effects.update(active ? dt : 0, session, particleFrame, renderer.camera.position);
@@ -333,6 +365,8 @@ export async function startGame(
         leadDir = lead;
       }
       const message = paused || !deathMessage ? null : `${deathMessage} — RESPAWN IN ${Math.max(0, Math.ceil(respawnAt - nowS))}`;
+      const targets = session.groundTargets();
+      const bombImpact = local.alive && local.stores.bombs > 0 ? predictImpact(f.pos, f.vel, BOMB_ANVIL, terrain, DT, impactPoint) : null;
       hud.draw({
         view: local,
         views: [...session.views()],
@@ -346,11 +380,14 @@ export async function startGame(
         pullUp: local.alive && timeToImpact(f, terrain) !== null,
         message,
         banner: nowS < bannerUntil ? banner : null,
-        hint: HINTS[mapper.settings.mode],
+        hint: local.bombLoad > 0 ? `${HINTS[mapper.settings.mode]} · G bomb` : HINTS[mapper.settings.mode],
         killFeed: killFeed.lines,
         hitMarker: nowS < hitMarkerUntil,
         showScoreboard: snap.keys.has('Tab') && !paused,
         dt,
+        groundTargets: targets,
+        bombImpact,
+        releaseCue: releaseCue(bombImpact, targets),
       });
       if (audio && active) {
         audio.update({
@@ -383,6 +420,7 @@ export async function startGame(
     hud.dispose();
     effects.dispose();
     sceneSync.dispose();
+    targetModels.dispose();
     session.dispose();
     renderer.dispose();
     audio?.dispose();

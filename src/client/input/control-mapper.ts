@@ -127,6 +127,7 @@ export class ControlMapper {
     out.fireCannon = keys.has('Space') || snap.leftButton;
     out.fireMissile = snap.pressed.has('KeyF');
     out.countermeasures = snap.pressed.has('KeyX');
+    out.dropBomb = snap.pressed.has('KeyG');
     out.cycleTarget = snap.pressed.has('KeyR');
     out.weapon = this.weapon;
     out.helmetSight = this.freeLook;

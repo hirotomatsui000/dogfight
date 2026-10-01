@@ -19,6 +19,7 @@ const SHARED: readonly HelpRow[] = [
   ['Shift · Z · wheel', 'Throttle up · down (the top notch is afterburner)'],
   ['Space · left click', 'Cannon'],
   ['F', 'Missile, once the lock tone sounds'],
+  ['G', 'Bomb (Strike, Russian jets)'],
   ['X', 'Flares'],
   ['R', 'Next target'],
   ['C · right click', 'Look around (hold)'],

@@ -1,8 +1,8 @@
 import { Color, type Scene, Vector3 } from 'three';
 import { damageState } from '../../../shared/damage/damage.ts';
 import type { GameEvent } from '../../../shared/world/events.ts';
-import type { AircraftView, GameSession, MissileView } from '../../session/game-session.ts';
-import { MissileModels } from './missile-models.ts';
+import type { AircraftView, GameSession, GroundTargetView, MissileView } from '../../session/game-session.ts';
+import { BOMB_LOOK, MISSILE_LOOK, OrdnanceModels } from './ordnance-models.ts';
 import { type ParticleFrame, ParticleSystem } from './particles.ts';
 import { Tracers } from './tracers.ts';
 
@@ -12,6 +12,8 @@ const TRAIL_SPACING_M = 9;
 const FLARES_PER_SALVO = 2;
 const FLARE_BURN_S = 3;
 const DAMAGE_SMOKE_INTERVAL_S = 0.04;
+const TARGET_SMOKE_INTERVAL_S = 0.2;
+const TARGET_FIRE_INTERVAL_S = 0.08;
 
 const FIRE = [new Color(0xffd27a), new Color(0xff8a2a), new Color(0xff5a14)];
 const DARK_SMOKE = new Color(0x2a2a2a);
@@ -20,6 +22,7 @@ const TRAIL_SMOKE = new Color(0xd8d8d8);
 const MOTOR = new Color(0xffe2b0);
 const FLARE = new Color(0xfff4d0);
 const SPARK = new Color(0xffc977);
+const DUST = new Color(0x8b7d62);
 
 const rand = (a: number, b: number) => a + (b - a) * Math.random();
 
@@ -35,8 +38,10 @@ export class Effects {
   private readonly smoke = new ParticleSystem(SMOKE_CAPACITY, false);
   private readonly fire = new ParticleSystem(FIRE_CAPACITY, true);
   private readonly tracers = new Tracers();
-  private readonly missileModels: MissileModels;
+  private readonly missileModels: OrdnanceModels;
+  private readonly bombModels: OrdnanceModels;
   private readonly flares: Flare[] = [];
+  private readonly targetTimers = new Map<string, number>();
   private readonly trailFrom = new Map<number, Vector3>();
   private damageTimer = 0;
   private readonly tmp = new Vector3();
@@ -46,8 +51,14 @@ export class Effects {
 
   constructor(scene: Scene) {
     this.scene = scene;
-    this.missileModels = new MissileModels(scene);
+    this.missileModels = new OrdnanceModels(scene, MISSILE_LOOK);
+    this.bombModels = new OrdnanceModels(scene, BOMB_LOOK);
     scene.add(this.smoke.points, this.fire.points, this.tracers.lines, this.tracers.heads);
+  }
+
+  /** Live smoke and fire particles (tests and debugging). */
+  get particleCount(): number {
+    return this.smoke.liveCount + this.fire.liveCount;
   }
 
   onEvent(e: GameEvent, session: GameSession): void {
@@ -62,6 +73,8 @@ export class Effects {
     } else if (e.type === 'hit' && e.weapon === 'cannon') {
       const v = session.view(e.aircraftId);
       if (v) this.sparks(v.position, 8);
+    } else if (e.type === 'bombImpact') {
+      this.bombBlast(this.tmp.set(e.x, e.y, e.z));
     }
   }
 
@@ -78,8 +91,10 @@ export class Effects {
         if (emitDamage) this.damageSmoke(v);
         if (v.firingCannon) this.muzzleFlash(v);
       }
+      this.targetSmoke(dt, session.groundTargets());
     }
     this.missileModels.update(session.missiles(), cameraPos);
+    this.bombModels.update(session.bombs(), cameraPos);
     this.tracers.update(session.projectiles(), frame);
     this.smoke.update(dt, frame);
     this.fire.update(dt, frame);
@@ -91,6 +106,7 @@ export class Effects {
     this.fire.dispose();
     this.tracers.dispose();
     this.missileModels.dispose();
+    this.bombModels.dispose();
   }
 
   private hasMissile(session: GameSession, id: number): boolean {
@@ -139,6 +155,36 @@ export class Effects {
       });
     });
     this.sparks(at, 16 * scale);
+  }
+
+  /** A big blast and a ring of dust thrown out along the ground. */
+  private bombBlast(at: Vector3): void {
+    this.explosion(at, this.zero, 1.4);
+    for (let i = 0; i < 24; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = rand(15, 45);
+      this.smoke.spawn({ x: at.x, y: at.y + 2, z: at.z, vx: Math.cos(a) * s, vy: rand(4, 14), vz: Math.sin(a) * s, lifeS: rand(4, 8), size0: 8, size1: rand(30, 50), color: DUST, alpha: 0.7, lift: 1, drag: 0.9 });
+    }
+  }
+
+  /** Damaged targets smoke; destroyed ones burn. */
+  private targetSmoke(dt: number, targets: readonly GroundTargetView[]): void {
+    for (const t of targets) {
+      if (!t.destroyed && t.hp > 0.5 * t.maxHp) continue;
+      const due = (this.targetTimers.get(t.id) ?? 0) + dt;
+      if (due < (t.destroyed ? TARGET_FIRE_INTERVAL_S : TARGET_SMOKE_INTERVAL_S)) {
+        this.targetTimers.set(t.id, due);
+        continue;
+      }
+      this.targetTimers.set(t.id, 0);
+      const x = t.position.x + rand(-15, 15);
+      const y = t.position.y + 4;
+      const z = t.position.z + rand(-15, 15);
+      this.smoke.spawn({ x, y, z, vx: rand(-1, 1), vy: rand(6, 10), vz: rand(-1, 1), lifeS: rand(8, 12), size0: 8, size1: rand(40, 70), color: t.destroyed ? DARK_SMOKE : GREY_SMOKE, alpha: 0.75, lift: 2 });
+      if (t.destroyed) {
+        this.fire.spawn({ x, y, z, vx: 0, vy: rand(3, 6), vz: 0, lifeS: rand(0.6, 1.1), size0: rand(6, 10), size1: rand(14, 20), color: FIRE[Math.floor(Math.random() * FIRE.length)], alpha: 1, lift: 2 });
+      }
+    }
   }
 
   private sparks(at: Vector3, count: number): void {

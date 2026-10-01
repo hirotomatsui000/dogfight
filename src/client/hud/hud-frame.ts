@@ -1,6 +1,6 @@
 import type { PerspectiveCamera, Vector3 } from 'three';
 import type { ModeStatus } from '../../shared/modes/mode.ts';
-import type { AircraftView, MissileView } from '../session/game-session.ts';
+import type { AircraftView, GroundTargetView, MissileView } from '../session/game-session.ts';
 import type { KillFeedLine } from './kill-feed.ts';
 
 /** Everything the HUD draws in one frame. */
@@ -27,4 +27,10 @@ export interface HudFrame {
   hitMarker: boolean;
   showScoreboard: boolean;
   dt: number;
+  /** Strike targets (empty in other modes) */
+  groundTargets: readonly GroundTargetView[];
+  /** where a bomb released now would land, for an aircraft carrying bombs */
+  bombImpact: Vector3 | null;
+  /** the impact point is on a standing target */
+  releaseCue: boolean;
 }

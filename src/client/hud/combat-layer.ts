@@ -124,7 +124,7 @@ function drawTargetBox(ctx: CanvasRenderingContext2D, f: HudFrame, v: AircraftVi
 }
 
 /** An arrow at the screen edge pointing toward something off-screen, with a label. */
-function drawEdgeArrow(ctx: CanvasRenderingContext2D, p: Projector, f: HudFrame, worldPos: Vector3, text: string, color: string): void {
+export function drawEdgeArrow(ctx: CanvasRenderingContext2D, p: Projector, f: HudFrame, worldPos: Vector3, text: string, color: string): void {
   p.toCamera(f.camera, worldPos, cam);
   edgeMarker(cam.x, -cam.y, p.width, p.height, EDGE_MARGIN_PX, edge);
   ctx.save();
@@ -207,6 +207,7 @@ function drawWeaponsStatus(ctx: CanvasRenderingContext2D, p: Projector, f: HudFr
   ctx.fillText(`GUN ${me.stores.cannonRounds}`, x, y);
   ctx.fillText(`SRM ${me.stores.srm}`, x + 90, y);
   ctx.fillText(`FLR ${me.stores.countermeasures}`, x + 160, y);
+  if (me.bombLoad > 0) ctx.fillText(`BMB ${me.stores.bombs}`, x + 160, y + 22);
   const label = me.stores.srm > 0 ? SEEKER_LABEL[me.seeker.mode] : 'EMPTY';
   if (label) {
     ctx.fillStyle = me.seeker.mode === 'locked' ? RED : me.seeker.mode === 'track' ? AMBER : ctx.fillStyle;

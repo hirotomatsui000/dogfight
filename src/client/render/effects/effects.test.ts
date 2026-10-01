@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DIFFICULTIES } from '../../../shared/ai/difficulty.ts';
 import { buildTerrain } from '../../../shared/data/maps/map-definition.ts';
 import { createTestRange } from '../../../shared/data/maps/test-range.ts';
+import { StrikeMode } from '../../../shared/modes/strike.ts';
 import { TeamDeathmatchMode } from '../../../shared/modes/team-deathmatch.ts';
 import { neutralInput } from '../../../shared/physics/controls.ts';
 import { LocalSession } from '../../session/local-session.ts';
@@ -32,6 +33,16 @@ describe('Effects', () => {
     }
     const tracers = scene.children.find((o): o is LineSegments => o instanceof LineSegments);
     expect(tracers?.geometry.drawRange.count).toBeGreaterThan(0);
+    fx.dispose();
+  });
+
+  it('blasts dust and fire where a bomb lands', () => {
+    const scene = new Scene();
+    const fx = new Effects(scene);
+    const session = new LocalSession({ map, terrain, mode: new StrikeMode(), aircraftId: 'kobchik', callsign: 'P' });
+    const before = fx.particleCount;
+    fx.onEvent({ type: 'bombImpact', bombId: 1, x: 0, y: 100, z: 0 }, session);
+    expect(fx.particleCount).toBeGreaterThan(before + 30);
     fx.dispose();
   });
 });

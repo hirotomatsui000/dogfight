@@ -7,6 +7,7 @@ real aircraft over a fictional landscape inspired by Poland. This repository is 
 **Current milestone: M1b "Fight"**
 - Two aircraft: the Kestrel (USA) and the Kobchik (Russia).
 - Dogfight an AI pilot (Rookie, Veteran or Ace) in Team Deathmatch: first to 15 kills, or the most after 10 minutes.
+- **Strike** mode: Russia bombs three fictional targets while the USA holds them for 8 minutes; 4 aircraft per team.
 - Weapons: a cannon with a lead marker, heat-seeking missiles that need a lock, and flares.
 - Damage, kill credit and respawns; tracers, missile trails, flares, explosions and smoke; synthesized sound.
 - A combat HUD with target box, missile lock, missile warning, radar display, kill feed and scoreboard.
@@ -26,8 +27,8 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173, pick an aircraft and an opponent, and press **FLY** (or **Free flight** to fly without
-enemies). **Controls** on the title screen lists the keys and switches between mouse aim and keyboard steering.
+Open http://localhost:5173, pick a mission (Dogfight or Strike), an aircraft and an opponent, and press **FLY** (or
+**Free flight** to fly without enemies). **Controls** on the title screen lists the keys and switches between mouse aim and keyboard steering.
 Click the view to capture the mouse, then fly with the mouse.
 
 Other devices on the same network can open the "Network" URL that Vite prints.
@@ -42,6 +43,7 @@ Other devices on the same network can open the "Network" URL that Vite prints.
 | Airbrake | B (hold) |
 | Cannon | Space or left mouse (hold) |
 | Missile (needs the lock tone) | F |
+| Bomb (Strike, Russian jets) | G |
 | Flares | X |
 | Next target | R |
 | Look around (swings the camera round your jet) | C or right mouse (hold) |
@@ -57,6 +59,14 @@ In a fight:
   two seconds before impact, turn hard to put the missile on your wing. Breaking too early or too late does not
   work. Flares (X) help too, and work better off afterburner.
 - Distant jets and missiles are drawn a little larger than life so they never shrink to a single pixel.
+
+In Strike (choose **Strike** under Mission on the title screen):
+- The Kestrel defends for the USA: keep at least two of the three targets standing for 8 minutes, or shoot Russia's
+  jets down four times.
+- The Kobchik attacks for Russia with 8 bombs: destroy two targets, or shoot the USA's jets down four times.
+- Fly level about 1,500 m above a target. The circle on the ground shows where a bomb would land; press G as it
+  crosses the target (RELEASE flashes). Three good hits destroy a target.
+- Each side has 4 aircraft. Losing the fourth loses the match.
 
 The camera always follows from behind and above your jet (third person).
 

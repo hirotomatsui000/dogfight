@@ -127,6 +127,11 @@ export class AudioEngine {
     this.burst(1, 'bandpass', 700, 0.35);
   }
 
+  /** A short low thump as a bomb leaves the aircraft. */
+  bombRelease(): void {
+    this.burst(0.3, 'lowpass', 260, 0.35);
+  }
+
   hit(): void {
     this.burst(0.12, 'bandpass', 2200, 0.25);
   }
