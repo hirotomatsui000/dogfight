@@ -167,6 +167,11 @@ export class ControlMapper {
     return snap.pressed.has('Escape') || this.settings.bindings.pause.some((c) => snap.pressed.has(c)) || (pad !== null && pad.pressed.has('pause'));
   }
 
+  /** The map key was pressed this frame (M4): it opens and closes the map screen. */
+  mapToggled(snap: InputSnapshot): boolean {
+    return this.settings.bindings.map.some((c) => snap.pressed.has(c));
+  }
+
   scoresHeld(snap: InputSnapshot, pad: PadFrame | null): boolean {
     return this.settings.bindings.scores.some((c) => snap.keys.has(c)) || (pad !== null && pad.down.has('scores'));
   }

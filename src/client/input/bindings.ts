@@ -16,6 +16,7 @@ export const BINDABLE_ACTIONS = [
   'airbrake',
   'look',
   'scores',
+  'map',
   'pause',
   'weaponSrm',
   'weaponMrm',
@@ -43,6 +44,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   airbrake: ['KeyB'],
   look: ['KeyC'],
   scores: ['Tab'],
+  map: ['KeyM'],
   pause: ['KeyP'],
   weaponSrm: ['Digit1'],
   weaponMrm: ['Digit2'],
@@ -66,6 +68,7 @@ export const ACTION_LABELS: Readonly<Record<KeyAction, string>> = {
   airbrake: 'Airbrake (hold)',
   look: 'Look around (hold)',
   scores: 'Scores (hold)',
+  map: 'Map (press again to close)',
   pause: 'Pause',
   weaponSrm: 'Select short-range missile',
   weaponMrm: 'Select medium-range missile',
@@ -78,7 +81,7 @@ export function canBind(code: string): boolean {
 }
 
 /** Spare keys handed to an action whose stored keys all clashed (only after storage was edited by hand). */
-const SPARE_KEYS = ['KeyH', 'KeyJ', 'KeyK', 'KeyL', 'KeyU', 'KeyI', 'KeyO', 'KeyN', 'KeyM', 'KeyV', 'KeyT', 'KeyY'];
+const SPARE_KEYS = ['KeyH', 'KeyJ', 'KeyK', 'KeyL', 'KeyU', 'KeyI', 'KeyO', 'KeyN', 'KeyV', 'KeyT', 'KeyY'];
 
 /**
  * Binds `code` as the primary key of `action`. A key that another action uses moves over: if it was that action's

@@ -49,6 +49,7 @@ import type { GameSession } from './session/game-session.ts';
 import { LocalSession } from './session/local-session.ts';
 import type { NetworkSession } from './session/network-session.ts';
 import { matchResult, type ResultRow, showEndScreen } from './ui/end-screen.ts';
+import { MapScreen } from './ui/map-screen.ts';
 import { loadingText } from './ui/load-bar.ts';
 import type { StartOptions } from './ui/menu.ts';
 import { PauseMenu } from './ui/pause.ts';
@@ -245,6 +246,7 @@ export async function startGame(
   applyQuality(quality);
   const stopSettings = settings.subscribe(applySettings);
   const killFeed = new KillFeed();
+  const mapScreen = new MapScreen(root, map, terrain);
   const particleFrame: ParticleFrame = { pixelScale: 1000, fogColor: new Color(), fogDensity: 0 };
   const bufferSize = new Vector2();
   const lead = new Vector3();
@@ -490,6 +492,7 @@ export async function startGame(
         settings.update({ autoGraphics: lower });
       }
     }
+    if (!paused && !matchOver && !settingsOpen && mapper.mapToggled(snap)) mapScreen.toggle();
     if (!matchOver && !settingsOpen && !lineDown && mapper.pauseRequested(snap, padFrame)) {
       if (paused) {
         pause.hide();
@@ -635,6 +638,7 @@ export async function startGame(
     } else {
       hud.draw(null);
     }
+    mapScreen.draw(session.localView(), session.views(), session.groundTargets());
     rafId = requestAnimationFrame(frame);
   };
   rafId = requestAnimationFrame(frame);
@@ -655,6 +659,7 @@ export async function startGame(
     pause.dispose();
     closeEndScreen?.();
     hud.dispose();
+    mapScreen.dispose();
     effects.dispose();
     sceneSync.dispose();
     targetModels.dispose();

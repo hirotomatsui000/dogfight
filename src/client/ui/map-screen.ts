@@ -1,0 +1,227 @@
+import type { TeamId } from '../../shared/data/aircraft/types.ts';
+import type { MapDefinition } from '../../shared/data/maps/map-definition.ts';
+import { airfieldWorld } from '../../shared/map/features.ts';
+import type { LandCover } from '../../shared/map/land-cover.ts';
+import type { Terrain } from '../../shared/map/terrain.ts';
+import { headingRad } from '../../shared/physics/flight-model.ts';
+import type { AircraftView, GroundTargetView } from '../session/game-session.ts';
+
+/** Land-cover colours of the map screen, chart-like rather than photographic. */
+export const MAP_COLORS: Readonly<Record<LandCover, readonly [number, number, number]>> = {
+  sea: [38, 72, 112],
+  lake: [52, 98, 150],
+  river: [52, 98, 150],
+  beach: [214, 200, 150],
+  field: [182, 176, 120],
+  meadow: [146, 170, 104],
+  forest: [62, 104, 62],
+  rock: [128, 120, 110],
+  snow: [236, 238, 242],
+  marsh: [104, 122, 96],
+  urban: [150, 140, 136],
+  airfield: [170, 170, 160],
+};
+
+/** Map coordinates (metres, centred) to image pixels for a square image of `px` pixels. */
+export function mapToPixel(x: number, z: number, sizeM: number, px: number): { u: number; v: number } {
+  return { u: ((x + sizeM / 2) / sizeM) * px, v: ((z + sizeM / 2) / sizeM) * px };
+}
+
+/** A land-cover colour, shaded by a hill-shade factor (1 = flat). */
+export function shadedColor(cover: LandCover, shade: number): [number, number, number] {
+  const c = MAP_COLORS[cover];
+  const water = cover === 'sea' || cover === 'lake' || cover === 'river';
+  const s = water ? 1 : Math.max(0.55, Math.min(1.35, shade));
+  return [Math.min(255, Math.round(c[0] * s)), Math.min(255, Math.round(c[1] * s)), Math.min(255, Math.round(c[2] * s))];
+}
+
+const IMAGE_PX = 1024;
+const TEAM_COLORS: Record<TeamId, string> = { usa: '#5aa7ff', russia: '#ff5a4f' };
+
+/** The map image: land cover with hill shading, roads, towns and airfields. Drawn once per map (about 0.2 s). */
+function drawBase(def: MapDefinition, terrain: Terrain): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = IMAGE_PX;
+  canvas.height = IMAGE_PX;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  const img = ctx.createImageData(IMAGE_PX, IMAGE_PX);
+  const step = def.sizeM / IMAGE_PX;
+  const half = def.sizeM / 2;
+  for (let j = 0; j < IMAGE_PX; j++) {
+    const z = -half + (j + 0.5) * step;
+    for (let i = 0; i < IMAGE_PX; i++) {
+      const x = -half + (i + 0.5) * step;
+      const h = terrain.heightAt(x, z);
+      // Light from the north-west.
+      const dx = terrain.heightAt(x + step, z) - h;
+      const dz = terrain.heightAt(x, z + step) - h;
+      const shade = 1 + (-dx - dz) * (6 / step);
+      const [r, g, b] = shadedColor(def.landCover(x, z, h, 0), shade);
+      const k = (j * IMAGE_PX + i) * 4;
+      img.data[k] = r;
+      img.data[k + 1] = g;
+      img.data[k + 2] = b;
+      img.data[k + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const f = def.features;
+  if (!f) return canvas;
+  const at = (x: number, z: number) => mapToPixel(x, z, def.sizeM, IMAGE_PX);
+  for (const road of f.roads) {
+    ctx.beginPath();
+    for (let p = 0; p < road.points.length; p += 2) {
+      const { u, v } = at(road.points[p], road.points[p + 1]);
+      if (p === 0) ctx.moveTo(u, v);
+      else ctx.lineTo(u, v);
+    }
+    ctx.strokeStyle = road.kind === 'highway' ? '#f2c14e' : 'rgba(90,70,50,0.7)';
+    ctx.lineWidth = road.kind === 'highway' ? 2.2 : 1;
+    ctx.stroke();
+  }
+  for (const a of f.airfields) {
+    const p0 = airfieldWorld(a, -a.lengthM / 2, 0);
+    const p1 = airfieldWorld(a, a.lengthM / 2, 0);
+    const u0 = at(p0.x, p0.z);
+    const u1 = at(p1.x, p1.z);
+    ctx.strokeStyle = '#1b1d20';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(u0.u, u0.v);
+    ctx.lineTo(u1.u, u1.v);
+    ctx.stroke();
+  }
+  return canvas;
+}
+
+/**
+ * The map screen (M, spec §15.3): the whole map with towns, roads and airfields, the combat area, and live markers
+ * for the player, teammates, known enemies and Strike targets. The match keeps running behind it.
+ */
+export class MapScreen {
+  private readonly overlay: HTMLDivElement;
+  private readonly canvas: HTMLCanvasElement;
+  private readonly def: MapDefinition;
+  private readonly terrain: Terrain;
+  private base: HTMLCanvasElement | null = null;
+  open = false;
+
+  constructor(root: HTMLElement, def: MapDefinition, terrain: Terrain) {
+    this.def = def;
+    this.terrain = terrain;
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'map-screen';
+    this.overlay.hidden = true;
+    this.overlay.setAttribute('role', 'img');
+    this.overlay.setAttribute('aria-label', `Map of ${def.name}`);
+    this.canvas = document.createElement('canvas');
+    this.overlay.appendChild(this.canvas);
+    root.appendChild(this.overlay);
+  }
+
+  toggle(): void {
+    this.open = !this.open;
+    this.overlay.hidden = !this.open;
+    if (this.open && !this.base) this.base = drawBase(this.def, this.terrain);
+  }
+
+  draw(me: AircraftView | null, views: Iterable<AircraftView>, targets: readonly GroundTargetView[]): void {
+    if (!this.open || !this.base) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const css = Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.86);
+    if (this.canvas.width !== Math.round(css * dpr)) {
+      this.canvas.width = this.canvas.height = Math.round(css * dpr);
+      this.canvas.style.width = this.canvas.style.height = `${css}px`;
+    }
+    const ctx = this.canvas.getContext('2d');
+    if (!ctx) return;
+    const px = this.canvas.width;
+    const s = px / IMAGE_PX;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(this.base, 0, 0, px, px);
+    const at = (x: number, z: number) => mapToPixel(x, z, this.def.sizeM, px);
+    const def = this.def;
+    // Combat area.
+    const c = at(def.combatArea.x, def.combatArea.z);
+    ctx.setLineDash([8 * s, 6 * s]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 1.5 * s;
+    ctx.beginPath();
+    ctx.arc(c.u, c.v, (def.combatArea.radiusM / def.sizeM) * px, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const label = (text: string, u: number, v: number, font: string, color = '#fff') => {
+      ctx.font = font;
+      ctx.textAlign = 'center';
+      ctx.lineWidth = 3 * s;
+      ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+      ctx.strokeText(text, u, v);
+      ctx.fillStyle = color;
+      ctx.fillText(text, u, v);
+    };
+    const f = def.features;
+    if (f) {
+      for (const t of f.settlements) {
+        const p = at(t.x, t.z);
+        ctx.fillStyle = t.kind === 'city' ? '#2b2b2b' : 'rgba(40,40,40,0.8)';
+        ctx.beginPath();
+        ctx.arc(p.u, p.v, (t.kind === 'city' ? 4 : 2) * s, 0, Math.PI * 2);
+        ctx.fill();
+        if (t.kind === 'city') label(t.name, p.u, p.v - 8 * s, `700 ${Math.round((t.capital ? 17 : 14) * s)}px system-ui, sans-serif`);
+      }
+      for (const a of f.airfields) {
+        const p = at(a.x, a.z);
+        const color = a.team ? TEAM_COLORS[a.team] : '#e8e8e8';
+        label(`✈ ${a.name}`, p.u, p.v + 16 * s, `600 ${Math.round(11 * s)}px system-ui, sans-serif`, color);
+      }
+      for (const r of f.rivers) {
+        // A third of the way from the source keeps the name clear of the capital in the middle.
+        const k = Math.floor(r.points.length / 6) * 2;
+        const p = at(r.points[k], r.points[k + 1]);
+        label(r.name, p.u + 18 * s, p.v, `italic 600 ${Math.round(12 * s)}px system-ui, sans-serif`, '#bfe0ff');
+      }
+    }
+    for (const t of targets) {
+      const p = at(t.position.x, t.position.z);
+      label(t.destroyed ? `✕${t.id}` : t.id, p.u, p.v + 5 * s, `700 ${Math.round(14 * s)}px system-ui, sans-serif`, t.destroyed ? '#999' : '#ffc14d');
+    }
+    // Aircraft: teammates always (datalink), enemies only while they are contacts.
+    const known = new Set(me ? me.contacts.map((k) => k.id) : []);
+    for (const v of views) {
+      if (!v.alive || (me && v.id === me.id)) continue;
+      if (me && v.team !== me.team && !known.has(v.id)) continue;
+      this.marker(ctx, at(v.position.x, v.position.z), headingRad(v.flight), TEAM_COLORS[v.team], 6 * s, false);
+    }
+    if (me && me.alive) this.marker(ctx, at(me.position.x, me.position.z), headingRad(me.flight), '#63ff95', 9 * s, true);
+    // North and the scale.
+    label('N ↑', 24 * s, 28 * s, `700 ${Math.round(14 * s)}px system-ui, sans-serif`);
+    const km = def.sizeM > 100000 ? 20 : 5;
+    const len = ((km * 1000) / def.sizeM) * px;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(px - len - 20 * s, px - 22 * s, len, 3 * s);
+    label(`${km} km`, px - len / 2 - 20 * s, px - 28 * s, `600 ${Math.round(12 * s)}px system-ui, sans-serif`);
+  }
+
+  dispose(): void {
+    this.overlay.remove();
+  }
+
+  private marker(ctx: CanvasRenderingContext2D, p: { u: number; v: number }, heading: number, color: string, size: number, me: boolean): void {
+    ctx.save();
+    ctx.translate(p.u, p.v);
+    ctx.rotate(heading);
+    ctx.beginPath();
+    ctx.moveTo(0, -size);
+    ctx.lineTo(size * 0.7, size * 0.8);
+    ctx.lineTo(0, size * 0.4);
+    ctx.lineTo(-size * 0.7, size * 0.8);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = me ? 2 : 1;
+    ctx.strokeStyle = '#000';
+    ctx.stroke();
+    ctx.restore();
+  }
+}

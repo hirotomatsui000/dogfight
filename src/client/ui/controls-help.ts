@@ -28,8 +28,9 @@ export function controlsHelp(mode: ControlMode, bindings: Bindings = DEFAULT_BIN
     [k('flares'), 'Flares and chaff'],
     [k('nextTarget'), 'Next target'],
     [`${k('look')} · right click`, 'Look around (hold)'],
-    [k('airbrake'), 'Airbrake (hold)'],
+    [k('airbrake'), 'Airbrake (hold); wheel brakes on the runway'],
     [k('scores'), 'Scores (hold)'],
+    [k('map'), 'Map'],
     [`${k('pause')} · Esc`, 'Pause'],
   ];
 }
