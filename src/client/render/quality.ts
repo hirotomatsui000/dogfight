@@ -12,12 +12,14 @@ export interface QualityPreset {
   anisotropy: number;
   /** terrain detail: a ground chunk splits when nearer than this many chunk widths (M4) */
   terrainDetail: number;
+  /** cumulus clouds are drawn within this range, metres (M4) */
+  cloudRangeM: number;
 }
 
 export const QUALITY_PRESETS: Readonly<Record<QualityLevel, QualityPreset>> = {
-  low: { pixelRatio: 0.75, antialias: false, particles: 0.5, anisotropy: 2, terrainDetail: 1.1 },
-  medium: { pixelRatio: 1, antialias: true, particles: 0.75, anisotropy: 4, terrainDetail: 1.4 },
-  high: { pixelRatio: 2, antialias: true, particles: 1, anisotropy: 8, terrainDetail: 1.8 },
+  low: { pixelRatio: 0.75, antialias: false, particles: 0.5, anisotropy: 2, terrainDetail: 1.1, cloudRangeM: 20000 },
+  medium: { pixelRatio: 1, antialias: true, particles: 0.75, anisotropy: 4, terrainDetail: 1.4, cloudRangeM: 30000 },
+  high: { pixelRatio: 2, antialias: true, particles: 1, anisotropy: 8, terrainDetail: 1.8, cloudRangeM: 40000 },
 };
 
 /** Screens larger than this many device pixels start Auto on Medium (a Retina laptop panel stays on High; 4K drops). */

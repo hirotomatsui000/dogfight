@@ -91,6 +91,14 @@ export class LocalSession implements GameSession {
     this.pendingEvents.push(...this.world.drainEvents());
   }
 
+  get environment(): EnvironmentSettings {
+    return this.world.environment;
+  }
+
+  hour(): number {
+    return this.world.hour();
+  }
+
   update(frameDtS: number, input: ControlInput): void {
     const l = this.latched;
     l.cycleTarget ||= input.cycleTarget;

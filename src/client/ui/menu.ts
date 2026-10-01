@@ -3,6 +3,8 @@ import { listAircraft, TEAM_NAMES } from '../../shared/data/aircraft/registry.ts
 import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import type { MapId } from '../../shared/data/maps/registry.ts';
 import { SPAWN_STARTS, type SpawnStart } from '../../shared/world/spawns.ts';
+import { type EnvironmentSettings, START_HOURS, TIME_OF_DAY_IDS } from '../../shared/world/time-of-day.ts';
+import { WEATHER_IDS } from '../../shared/world/weather.ts';
 import { STRIKE_DEFAULTS, STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
@@ -26,6 +28,8 @@ export interface StartOptions {
   map?: MapId;
   /** in the air or on the runway (M4) */
   start?: SpawnStart;
+  /** weather and clock (M4) */
+  environment?: EnvironmentSettings;
 }
 
 export interface StartMenuHandlers {
@@ -143,7 +147,7 @@ function credits(): HTMLParagraphElement {
     'Satellite imagery: <a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless</a> ' +
     'by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2017), ' +
     '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> · ' +
-    'Sky and ground detail: <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0) · ' +
+    'Ground detail: <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0) · ' +
     'Water normals: three.js (MIT) · Rajdhani font: Indian Type Foundry (OFL)';
   return p;
 }
@@ -294,7 +298,12 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
 
   const start = (mission: MissionId, onlineRoom?: { room: string }) => {
     const start = pickValid(loadSetting<unknown>('start', 'air'), SPAWN_STARTS, 'air');
-    const options: StartOptions = { aircraftId, callsign: sanitizeCallsign(callsign.value), controlMode: settings.current.controlMode, mission, difficulty, online: onlineRoom, start };
+    const environment: EnvironmentSettings = {
+      weather: pickValid(loadSetting<unknown>('weather', 'scattered'), WEATHER_IDS, 'scattered'),
+      startHour: START_HOURS[pickValid(loadSetting<unknown>('timeOfDay', 'day'), TIME_OF_DAY_IDS, 'day')],
+      clockRunning: loadSetting<unknown>('clock', true) !== false,
+    };
+    const options: StartOptions = { aircraftId, callsign: sanitizeCallsign(callsign.value), controlMode: settings.current.controlMode, mission, difficulty, online: onlineRoom, start, environment };
     saveSetting('aircraft', options.aircraftId);
     saveSetting('callsign', options.callsign);
     saveSetting('difficulty', options.difficulty);

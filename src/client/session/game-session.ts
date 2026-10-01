@@ -10,6 +10,7 @@ import type { SeekerState } from '../../shared/targeting/ir-seeker.ts';
 import type { RadarLockState } from '../../shared/targeting/radar-lock.ts';
 import type { Contact } from '../../shared/targeting/sensors.ts';
 import type { MissileWarning } from '../../shared/targeting/warnings.ts';
+import type { EnvironmentSettings } from '../../shared/world/time-of-day.ts';
 import type { StoresState } from '../../shared/world/entities.ts';
 import type { GameEvent } from '../../shared/world/events.ts';
 
@@ -92,6 +93,10 @@ export interface GameSession {
   readonly map: MapDefinition;
   readonly terrain: Terrain;
   readonly localId: number | null;
+  /** weather and clock of this match (M4) */
+  readonly environment: EnvironmentSettings;
+  /** the local hour now (M4) */
+  hour(): number;
   update(frameDtS: number, input: ControlInput): void;
   views(): Iterable<AircraftView>;
   localView(): AircraftView | null;

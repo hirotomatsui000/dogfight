@@ -7,10 +7,11 @@ import type { SceneryTextures } from './assets.ts';
 import type { QualityPreset } from './quality.ts';
 import { Renderer } from './renderer.ts';
 import { Sea } from './sea.ts';
-import { SkySystem } from './sky.ts';
 import type { LoadedMap } from './terrain/map-loader.ts';
 import { TerrainLod } from './terrain/terrain-lod.ts';
 import { WorldFeatures } from './world/world-features.ts';
+import { Environment } from './environment/environment.ts';
+import type { EnvironmentSettings } from '../../shared/world/time-of-day.ts';
 import { createTerrainMaterial } from './terrain-material.ts';
 
 export interface Pose {
@@ -90,12 +91,17 @@ export class Showcase {
   private meshes: AircraftMeshes | null = null;
   private sea: Sea | null = null;
   private ground: TerrainLod | null = null;
+  private environment: Environment | null = null;
+  private map: LoadedMap | null = null;
+  private settings: EnvironmentSettings = { weather: 'scattered', startHour: 12, clockRunning: false };
+  private lastFrameMs = 0;
   private features: WorldFeatures | null = null;
   private running = true;
   private rafId = 0;
   private startMs = 0;
   private readonly still: boolean;
   private readonly detail: number;
+  private readonly cloudRangeM: number;
 
   /** `still`: the system asks for reduced motion, so show one fixed shot. */
   constructor(root: HTMLElement, scenery: Promise<SceneryTextures>, world: Promise<LoadedMap>, aircraftMeshes: Promise<AircraftMeshes>, still: boolean, quality?: QualityPreset) {
@@ -105,6 +111,7 @@ export class Showcase {
     this.renderer.camera.fov = SHOWCASE_FOV;
     this.renderer.camera.updateProjectionMatrix();
     this.detail = quality?.terrainDetail ?? 1.6;
+    this.cloudRangeM = quality?.cloudRangeM ?? 30000;
     Promise.all([scenery, world]).then(
       ([textures, map]) => {
         if (this.running) void this.build(textures, map);
@@ -115,6 +122,12 @@ export class Showcase {
       this.meshes = meshes;
       this.showAircraft();
     });
+  }
+
+  /** Shows the chosen weather and time of day behind the menu. */
+  setEnvironment(settings: EnvironmentSettings): void {
+    this.settings = { ...settings };
+    if (this.map) this.buildEnvironment(this.map);
   }
 
   setAircraft(id: string): void {
@@ -135,16 +148,27 @@ export class Showcase {
     cancelAnimationFrame(this.rafId);
     this.ground?.dispose();
     this.features?.dispose();
+    this.environment?.dispose();
     this.renderer.dispose();
+  }
+
+  private buildEnvironment(map: LoadedMap): void {
+    this.environment?.dispose();
+    this.environment = new Environment(this.renderer.scene, this.renderer.webgl, this.settings, map.def.seed, {
+      cloudRangeM: this.cloudRangeM,
+      pixelRatio: this.renderer.webgl.getPixelRatio(),
+      lights: this.features ? { city: this.features.cityLights, runway: this.features.runwayLights } : undefined,
+    });
   }
 
   private async build(textures: SceneryTextures, map: LoadedMap): Promise<void> {
     const scene = this.renderer.scene;
-    new SkySystem(scene, this.renderer.webgl, textures.sky);
+    this.map = map;
     this.ground = new TerrainLod(map, createTerrainMaterial(textures), this.detail);
     scene.add(this.ground.group);
     this.features = new WorldFeatures(map.def, map.terrain);
     scene.add(this.features.group);
+    this.buildEnvironment(map);
     this.sea = new Sea(textures.waterNormals);
     scene.add(this.sea.mesh);
     // The ground under the first shot, before the scene fades in.
@@ -172,6 +196,9 @@ export class Showcase {
     camera.lookAt(this.pose.position);
     this.ground?.update(camera.position);
     this.features?.update(camera.position);
+    const frameS = this.lastFrameMs === 0 ? 0 : Math.min(0.1, (now - this.lastFrameMs) / 1000);
+    this.lastFrameMs = now;
+    this.environment?.update(this.settings.startHour, camera, this.still ? 0 : frameS);
     const w = window.innerWidth;
     const h = window.innerHeight;
     if (w >= WIDE_LAYOUT_PX) camera.setViewOffset(w, h, -w * FRAME_SHIFT, 0, w, h);

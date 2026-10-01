@@ -3,6 +3,7 @@ import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import { DEG } from '../../shared/math/units.ts';
 import type { AircraftView } from '../session/game-session.ts';
 import { type AircraftModel, parametricModel } from './aircraft-model.ts';
+import { navLights } from './environment/night-lights.ts';
 import { visibilityScale } from './visibility.ts';
 
 interface Entry {
@@ -35,6 +36,7 @@ export class SceneSync {
       if (!entry || entry.configId !== v.config.id) {
         if (entry) this.scene.remove(entry.model.root);
         entry = { model: this.build(v.config), configId: v.config.id };
+        entry.model.root.add(navLights(v.config.visual));
         this.entries.set(v.id, entry);
         this.scene.add(entry.model.root);
       }

@@ -5,6 +5,7 @@ import type { MapDefinition } from '../../shared/data/maps/map-definition.ts';
 import { CANNONS, MRM_LANCE } from '../../shared/data/weapons.ts';
 import { damageFlightEnv, damageState } from '../../shared/damage/damage.ts';
 import { airfieldGroundHeight } from '../../shared/map/features.ts';
+import { CALM_NOON, type EnvironmentSettings, hourAt } from '../../shared/world/time-of-day.ts';
 import type { Terrain } from '../../shared/map/terrain.ts';
 import { Rng } from '../../shared/math/rng.ts';
 import type { GameMode, ModeStatus } from '../../shared/modes/mode.ts';
@@ -271,6 +272,13 @@ export class NetworkSession implements GameSession {
     };
     transport.onClose = (clean) => this.markClosed(clean ? 'Left the room' : 'Connection lost', clean);
     this.ping();
+  }
+
+  /** Weather and clock of the room (M4). */
+  readonly environment: EnvironmentSettings = CALM_NOON;
+
+  hour(): number {
+    return hourAt(this.environment.startHour, this.environment.clockRunning, this.serverTickNow() / TICK_RATE);
   }
 
   /** The server tick it is now, by the synced clock (fractional). */

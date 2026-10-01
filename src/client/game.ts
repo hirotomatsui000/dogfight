@@ -1,4 +1,4 @@
-import { Color, FogExp2, Quaternion, Vector2, Vector3 } from 'three';
+import { Color, Quaternion, Vector2, Vector3 } from 'three';
 import { DIFFICULTIES } from '../shared/ai/difficulty.ts';
 import type { MapId } from '../shared/data/maps/registry.ts';
 import { BOMB_ANVIL, CANNONS } from '../shared/data/weapons.ts';
@@ -37,10 +37,10 @@ import type { ParticleFrame } from './render/effects/particles.ts';
 import { Renderer } from './render/renderer.ts';
 import { SceneSync } from './render/scene-sync.ts';
 import { Sea } from './render/sea.ts';
-import { SkySystem } from './render/sky.ts';
 import { loadMap } from './render/terrain/map-loader.ts';
 import { TerrainLod } from './render/terrain/terrain-lod.ts';
 import { WorldFeatures } from './render/world/world-features.ts';
+import { Environment } from './render/environment/environment.ts';
 import { createTerrainMaterial } from './render/terrain-material.ts';
 import { TrainingRings } from './render/training-rings.ts';
 import { CHAT_KEYS, ConnectionOverlay, connectOnline, DebugOverlay, isOutdated, RECONNECT_DELAYS_MS, reportErrors, showUpdateNotice } from './online-play.ts';
@@ -177,13 +177,19 @@ export async function startGame(
       // Training brings its own drones.
       opponents: options.mission === 'free-flight' || options.mission === 'training' ? undefined : { count: 1, profile: DIFFICULTIES[options.difficulty] },
       start: options.start,
+      // Training flies a calm noon.
+      environment: options.mission === 'training' ? undefined : options.environment,
     });
   }
-  new SkySystem(renderer.scene, renderer.webgl, textures.sky);
   const ground = new TerrainLod(loadedMap, createTerrainMaterial(textures), QUALITY_PRESETS[quality].terrainDetail);
   renderer.scene.add(ground.group);
   const worldFeatures = new WorldFeatures(map, terrain);
   renderer.scene.add(worldFeatures.group);
+  const environment = new Environment(renderer.scene, renderer.webgl, session.environment, map.seed, {
+    cloudRangeM: QUALITY_PRESETS[quality].cloudRangeM,
+    pixelRatio: renderer.webgl.getPixelRatio(),
+    lights: { city: worldFeatures.cityLights, runway: worldFeatures.runwayLights },
+  });
   const sea = new Sea(textures.waterNormals);
   renderer.scene.add(sea.mesh);
   // Build the ground around the start before the first frame.
@@ -214,6 +220,7 @@ export async function startGame(
     effects.setParticleDensity(preset.particles);
     setSceneryAnisotropy(textures, preset.anisotropy);
     ground.splitFactor = preset.terrainDetail;
+    environment.cloudRangeM = preset.cloudRangeM;
   };
   /** Settings changed (or the match starts): apply everything that can change live. */
   const applySettings = (s: Readonly<Settings>) => {
@@ -237,9 +244,7 @@ export async function startGame(
   applyQuality(quality);
   const stopSettings = settings.subscribe(applySettings);
   const killFeed = new KillFeed();
-  const fog = renderer.scene.fog instanceof FogExp2 ? renderer.scene.fog : null;
-  const particleFrame: ParticleFrame = { pixelScale: 1000, fogColor: new Color(), fogDensity: fog ? fog.density : 0 };
-  if (fog) particleFrame.fogColor.copy(fog.color);
+  const particleFrame: ParticleFrame = { pixelScale: 1000, fogColor: new Color(), fogDensity: 0 };
   const bufferSize = new Vector2();
   const lead = new Vector3();
   const burst = new Vector3();
@@ -556,6 +561,10 @@ export async function startGame(
     cameraRig.update(active ? dt : 0, local ? target : null, aim);
     ground.update(renderer.camera.position);
     worldFeatures.update(renderer.camera.position);
+    environment.update(session.hour(), renderer.camera, active ? dt : 0);
+    particleFrame.fogColor.copy(environment.fog.color);
+    particleFrame.fogDensity = environment.fog.density;
+    hud.setNight(environment.night);
     sceneSync.update(session.views(), nowS, renderer.camera.position);
     targetModels.update(session.groundTargets());
     trainingRings.update(session.modeStatus().training?.ring, renderer.camera.position);
@@ -647,6 +656,7 @@ export async function startGame(
     trainingRings.dispose();
     ground.dispose();
     worldFeatures.dispose();
+    environment.dispose();
     session.dispose();
     renderer.dispose();
     audio?.dispose();

@@ -62,6 +62,12 @@ export class Hud {
     this.resize();
   }
 
+  /** Dims the HUD at night so it does not dazzle (spec §12.3): 0 day … 1 night. */
+  setNight(night: number): void {
+    const brightness = (1 - 0.35 * Math.max(0, Math.min(1, night))).toFixed(2);
+    if (this.canvas.style.opacity !== brightness) this.canvas.style.opacity = brightness;
+  }
+
   dispose(): void {
     window.removeEventListener('resize', this.onResize);
     this.canvas.remove();

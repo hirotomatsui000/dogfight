@@ -1,16 +1,13 @@
 /**
  * One-time asset pipeline for the realistic scenery (see docs/superpowers/specs/2026-09-29-realistic-graphics-design.md).
- * Downloads the approved free-license sources into .asset-cache/, processes them with macOS `sips`, and writes the
- * results to src/client/assets/. The processed files are committed, so normal builds never need this script.
+ * Downloads the approved free-license sources into .asset-cache/ and copies them to src/client/assets/. The processed files are committed, so normal builds never need this script.
+ * (Until M4 it also fetched a photographed sky; the sky is now drawn from the time of day and the weather.)
  *
  * Run: node tools/fetch-assets.ts
  */
-import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { decodeBmp } from './lib/bmp.ts';
 import { type BBox, squareBBox } from './lib/geo-bbox.ts';
-import { findSun, horizonColor } from './lib/sky-analysis.ts';
 
 const root = process.cwd();
 const cache = join(root, '.asset-cache');
@@ -28,10 +25,6 @@ const wmsUrl = (layer: string, b: BBox, size: number) =>
 const SATELLITE_LAYER = 's2cloudless-2017'; // CC BY 4.0 (2018+ editions are NC-SA: do not use)
 
 const sources: { name: string; url: string }[] = [
-  {
-    name: 'sky-source.jpg',
-    url: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/extra/Tonemapped%20JPG/kloofendal_48d_partly_cloudy_puresky.jpg',
-  },
   { name: 'sat-farmland.jpg', url: wmsUrl(SATELLITE_LAYER, squareBBox(50.8, 23.7, 9), 2048) },
   { name: 'sat-forest.jpg', url: wmsUrl(SATELLITE_LAYER, squareBBox(52.785, 16.25, 6), 2048) },
   { name: 'sat-mountain.jpg', url: wmsUrl(SATELLITE_LAYER, squareBBox(49.2, 20.05, 7), 2048) },
@@ -59,7 +52,6 @@ async function download(url: string, target: string): Promise<void> {
   }
 }
 
-const sips = (...args: string[]) => execFileSync('sips', args, { stdio: 'pipe' });
 const mb = (path: string) => `${(statSync(path).size / 1e6).toFixed(2)} MB`;
 
 for (const s of sources) {
@@ -67,26 +59,10 @@ for (const s of sources) {
   console.log(`cached ${s.name} (${mb(join(cache, s.name))})`);
 }
 
-// Sky: 4096×2048 JPEG for the background and lighting.
-sips('-Z', '4096', '-s', 'format', 'jpeg', '-s', 'formatOptions', '82', join(cache, 'sky-source.jpg'), '--out', join(out, 'sky.jpg'));
-
-// Sun direction and haze color from a small copy of the sky.
-const analysisBmp = join(cache, 'sky-analysis.bmp');
-sips('-Z', '1024', '-s', 'format', 'bmp', join(out, 'sky.jpg'), '--out', analysisBmp);
-const skyImage = decodeBmp(readFileSync(analysisBmp));
-const sun = findSun(skyImage);
-const meta = {
-  source: 'Poly Haven: kloofendal_48d_partly_cloudy_puresky (CC0)',
-  sunDirection: sun.direction.map((v) => Number(v.toFixed(4))),
-  horizonColor: horizonColor(skyImage, sun),
-};
-writeFileSync(join(out, 'sky-meta.json'), `${JSON.stringify(meta, null, 2)}\n`);
-
 for (const name of ['sat-farmland.jpg', 'sat-forest.jpg', 'sat-mountain.jpg', 'waternormals.jpg', 'detail-grass-rock.jpg']) {
   copyFileSync(join(cache, name), join(out, name));
 }
 
-for (const name of ['sky.jpg', 'sat-farmland.jpg', 'sat-forest.jpg', 'sat-mountain.jpg', 'waternormals.jpg', 'detail-grass-rock.jpg']) {
+for (const name of ['sat-farmland.jpg', 'sat-forest.jpg', 'sat-mountain.jpg', 'waternormals.jpg', 'detail-grass-rock.jpg']) {
   console.log(`asset ${name}: ${mb(join(out, name))}`);
 }
-console.log('sky-meta.json:', JSON.stringify(meta));
