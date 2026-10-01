@@ -17,7 +17,13 @@ export function landClassWeights(cover: LandCover): LandClassWeights {
   switch (cover) {
     case 'field':
     case 'meadow':
+    case 'airfield':
+    case 'urban':
       w.farm = 1;
+      break;
+    case 'marsh':
+      w.farm = 0.6;
+      w.forest = 0.4;
       break;
     case 'forest':
       w.forest = 1;

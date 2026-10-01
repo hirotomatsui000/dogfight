@@ -1,3 +1,4 @@
+import type { MapFeatures } from '../../map/features.ts';
 import type { LandCover } from '../../map/land-cover.ts';
 import { GridTerrain } from '../../map/terrain.ts';
 import type { TeamId } from '../aircraft/types.ts';
@@ -37,12 +38,28 @@ export interface MapDefinition {
   spawns: Record<TeamId, SpawnSpec>;
   /** present on maps that host the Strike mode */
   strike?: StrikeLayout;
-  /** height generator used to build the grid (not for runtime sampling — use Terrain) */
-  height(x: number, z: number): number;
+  /** settlements, roads, rivers and airfields (Lechovia, M4) */
+  features?: MapFeatures;
+  /**
+   * The height grid: resolution² samples, row by row from the north-west corner (index j·resolution + i is
+   * x = −size/2 + i·cell, z = −size/2 + j·cell). For runtime sampling use the Terrain built from it.
+   */
+  buildHeights(): Float32Array;
   /** slope = 1 - normal.y (0 = flat) */
   landCover(x: number, z: number, height: number, slope: number): LandCover;
 }
 
+/** Samples a height function on a map's grid. */
+export function sampleHeights(resolution: number, sizeM: number, height: (x: number, z: number) => number): Float32Array {
+  const heights = new Float32Array(resolution * resolution);
+  const cell = sizeM / (resolution - 1);
+  const origin = -sizeM / 2;
+  for (let j = 0; j < resolution; j++) {
+    for (let i = 0; i < resolution; i++) heights[j * resolution + i] = height(origin + i * cell, origin + j * cell);
+  }
+  return heights;
+}
+
 export function buildTerrain(def: MapDefinition): GridTerrain {
-  return GridTerrain.fromFunction(def.resolution, def.sizeM, (x, z) => def.height(x, z));
+  return new GridTerrain(def.resolution, def.sizeM, def.buildHeights());
 }

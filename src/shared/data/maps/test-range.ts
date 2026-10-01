@@ -1,7 +1,7 @@
 import type { LandCover } from '../../map/land-cover.ts';
 import { createNoise2D, fbm2D } from '../../math/noise.ts';
 import { lerp, smoothstep } from '../../math/units.ts';
-import type { MapDefinition } from './map-definition.ts';
+import { type MapDefinition, sampleHeights } from './map-definition.ts';
 
 /**
  * 60 x 60 km procedural test range: rolling farmland, a lake, a river valley running north to the sea,
@@ -96,7 +96,7 @@ export function createTestRange(seed = 1): MapDefinition {
         russia: { x: 18000, z: 0, headingRad: (3 * Math.PI) / 2, altitudeM: 5000 },
       },
     },
-    height,
+    buildHeights: () => sampleHeights(513, 60000, height),
     landCover,
   };
 }
