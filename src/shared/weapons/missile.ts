@@ -11,6 +11,11 @@ export interface Missile {
   team: TeamId;
   /** null once the missile has lost its target; it then flies ballistic */
   targetId: number | null;
+  /**
+   * true while the missile's own seeker guides it: an infrared missile from launch, a radar missile once it is inside
+   * its active range. Until then the launcher's radar guides a radar missile.
+   */
+  active: boolean;
   pos: Vector3;
   prevPos: Vector3;
   vel: Vector3;
@@ -42,6 +47,7 @@ export function launchMissile(id: number, launcher: MissileLauncher, targetId: n
     ownerId: launcher.id,
     team: launcher.team,
     targetId,
+    active: spec.guidance === 'ir',
     pos: f.pos.clone(),
     prevPos: f.pos.clone(),
     vel,
@@ -97,6 +103,11 @@ export function stepMissile(m: Missile, target: GuidanceTarget | null, density: 
 export function withinGimbal(m: Missile, targetPos: Vector3): boolean {
   r.subVectors(targetPos, m.pos);
   return r.angleTo(m.vel) <= m.spec.gimbalLimitDeg * DEG;
+}
+
+/** Range at which a radar missile starts guiding itself against a target of this stealth (spec §10.2). */
+export function activeRangeM(m: Pick<Missile, 'spec'>, targetStealth: number): number {
+  return m.spec.activeRangeM * (1 - 0.5 * targetStealth);
 }
 
 export function isArmed(m: Missile): boolean {

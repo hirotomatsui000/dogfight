@@ -4,6 +4,7 @@ import { clearCredit, type CreditRecord } from '../damage/damage.ts';
 import { type ControlInput, neutralInput } from '../physics/controls.ts';
 import type { FlightState } from '../physics/flight-model.ts';
 import { createSeeker, resetSeeker, type SeekerState } from '../targeting/ir-seeker.ts';
+import { createRadarLock, type RadarLockState, resetRadarLock } from '../targeting/radar-lock.ts';
 import type { Contact } from '../targeting/sensors.ts';
 import { TRIGGER_AT_REST } from '../weapons/cannon.ts';
 import { MotionHistory } from './history.ts';
@@ -43,7 +44,10 @@ export interface AircraftEntity extends CreditRecord {
   readonly stores: StoresState;
   cannonAccumulator: number;
   firingCannon: boolean;
+  /** last short-range (Dart) launch */
   lastMissileTick: number;
+  /** last medium-range (Lance) launch */
+  lastMrmTick: number;
   lastCountermeasureTick: number;
   lastBombTick: number;
   /** bombs every new aircraft of this one carries in this mode (Strike attackers) */
@@ -53,6 +57,10 @@ export interface AircraftEntity extends CreditRecord {
   /** designated target */
   targetId: number | null;
   readonly seeker: SeekerState;
+  /** radar lock for the Lance (spec §10.3) */
+  readonly radarLock: RadarLockState;
+  /** RWR: an enemy radar lock, or a Lance its launcher still guides, is on this aircraft (spec §10.3) */
+  lockedByRadar: boolean;
   readonly history: MotionHistory;
   /** online: how many ticks behind this pilot sees the others; cannon hit tests rewind by it (spec §7) */
   viewDelayTicks: number;
@@ -91,12 +99,15 @@ export function createAircraftEntity(n: NewAircraft): AircraftEntity {
     cannonAccumulator: TRIGGER_AT_REST,
     firingCannon: false,
     lastMissileTick: NEVER,
+    lastMrmTick: NEVER,
     lastCountermeasureTick: NEVER,
     lastBombTick: NEVER,
     bombLoad: n.bombLoad,
     contacts: [],
     targetId: null,
     seeker: createSeeker(),
+    radarLock: createRadarLock(),
+    lockedByRadar: false,
     history: new MotionHistory(),
     viewDelayTicks: 0,
     lastDamagedBy: null,
@@ -120,11 +131,14 @@ export function resetForSpawn(a: AircraftEntity): void {
   a.cannonAccumulator = TRIGGER_AT_REST;
   a.firingCannon = false;
   a.lastMissileTick = NEVER;
+  a.lastMrmTick = NEVER;
   a.lastCountermeasureTick = NEVER;
   a.lastBombTick = NEVER;
   a.contacts.length = 0;
   a.targetId = null;
   resetSeeker(a.seeker, 'off');
+  resetRadarLock(a.radarLock, 'off');
+  a.lockedByRadar = false;
   a.history.reset();
   a.prevPos.copy(a.flight.pos);
   clearCredit(a);

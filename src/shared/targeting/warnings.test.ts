@@ -13,6 +13,7 @@ const missile = (id: number, targetId: number | null, x: number, z: number, vel 
   ownerId: 9,
   team: 'russia',
   targetId,
+  active: true,
   pos: new Vector3(x, 3000, z),
   prevPos: new Vector3(x, 3000, z),
   vel,

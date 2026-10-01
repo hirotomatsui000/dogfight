@@ -1,17 +1,18 @@
 import { Vector3 } from 'three';
 import { blastDamage } from '../damage/damage.ts';
-import { AFTERBURNER_THROTTLE, BOMB_ANVIL, CANNONS, COUNTERMEASURES, SRM_DART } from '../data/weapons.ts';
+import { AFTERBURNER_THROTTLE, BOMB_ANVIL, CANNONS, COUNTERMEASURES, MRM_LANCE, SRM_DART } from '../data/weapons.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { type Approach, closestApproach } from '../math/closest-approach.ts';
 import type { Rng } from '../math/rng.ts';
 import { type AirData, atmosphere } from '../physics/atmosphere.ts';
 import { autoDesignate, cycleDesignation, isContact } from '../targeting/designation.ts';
 import { resetSeeker, updateSeeker } from '../targeting/ir-seeker.ts';
+import { resetRadarLock, updateRadarLock } from '../targeting/radar-lock.ts';
 import { detectContacts, RADAR_SCAN_INTERVAL_S } from '../targeting/sensors.ts';
 import { advanceProjectile, createProjectile, type Projectile, pullTrigger, TRIGGER_AT_REST } from '../weapons/cannon.ts';
 import { decoyChance, rollDecoy } from '../weapons/countermeasures.ts';
 import { type Bomb, bombDamage, hasLanded, releaseBomb, stepBomb, surfaceCrossing } from '../weapons/bomb.ts';
-import { isArmed, isSpent, launchMissile, type Missile, stepMissile, withinGimbal } from '../weapons/missile.ts';
+import { activeRangeM, isArmed, isSpent, launchMissile, type Missile, stepMissile, withinGimbal } from '../weapons/missile.ts';
 import type { AircraftEntity } from './entities.ts';
 import type { GameEvent, WeaponKind } from './events.ts';
 import type { GroundTarget } from './ground-targets.ts';
@@ -75,16 +76,18 @@ export class Combat {
       this.releaseCountermeasures(a);
       this.fireCannon(a, dt);
       this.updateSeeker(a, dt);
+      this.updateRadarLock(a, dt);
       this.launchMissile(a);
       this.dropBomb(a);
     }
+    this.updateWarnings();
   }
 
   /** A missile fired at `targetId` without a lock or launch checks (scripted training shots). */
   launchAt(shooter: AircraftEntity, targetId: number): Missile {
     const m = launchMissile(this.nextMissileId++, shooter, targetId, SRM_DART);
     this.missiles.push(m);
-    this.host.emit({ type: 'missileLaunched', missileId: m.id, shooterId: shooter.id, targetId });
+    this.host.emit({ type: 'missileLaunched', missileId: m.id, shooterId: shooter.id, targetId, kind: m.spec.id });
     return m;
   }
 
@@ -95,6 +98,7 @@ export class Combat {
       const i = a.contacts.findIndex((c) => c.id === id);
       if (i >= 0) a.contacts.splice(i, 1);
       if (a.seeker.targetId === id) resetSeeker(a.seeker, 'search');
+      if (a.radarLock.targetId === id) resetRadarLock(a.radarLock, 'search');
     }
     for (const m of this.missiles) if (m.targetId === id) m.targetId = null;
   }
@@ -118,7 +122,8 @@ export class Combat {
     host.emit({ type: 'countermeasures', aircraftId: a.id });
     const afterburner = a.flight.throttle > AFTERBURNER_THROTTLE;
     for (const m of this.missiles) {
-      if (m.targetId !== a.id || !rollDecoy(host.rng, decoyChance(m.spec, afterburner))) continue;
+      // Each missile rolls against its own countermeasure: flares for a Dart, chaff for a Lance.
+      if (m.targetId !== a.id || !rollDecoy(host.rng, decoyChance(m.spec, afterburner, a.config.sensors.stealth))) continue;
       m.targetId = null;
       host.emit({ type: 'missileDecoyed', missileId: m.id, targetId: a.id });
     }
@@ -145,7 +150,8 @@ export class Combat {
 
   private updateSeeker(a: AircraftEntity, dt: number): void {
     const host = this.host;
-    if (a.stores.srm <= 0) {
+    // The infrared seeker only runs while the Dart is selected.
+    if (a.stores.srm <= 0 || a.input.weapon !== 'srm') {
       if (a.seeker.mode !== 'off') resetSeeker(a.seeker, 'off');
       return;
     }
@@ -159,16 +165,74 @@ export class Combat {
     }
   }
 
+  /** The Lance's radar lock builds while it is selected (spec §10.3); a lock also counts toward kill credit. */
+  private updateRadarLock(a: AircraftEntity, dt: number): void {
+    const host = this.host;
+    updateRadarLock(a.radarLock, a.config, a.input.weapon === 'mrm' && a.stores.mrm > 0, a.targetId, a.contacts, MRM_LANCE, dt);
+    if (a.radarLock.mode !== 'locked' || a.radarLock.targetId === null) return;
+    const target = host.getAircraft(a.radarLock.targetId);
+    if (target) {
+      target.lastLockedBy = a.id;
+      target.lastLockedTick = host.tick;
+    }
+  }
+
+  /** One press fires the selected missile, and only with a lock: the seeker's for a Dart, the radar's for a Lance. */
   private launchMissile(a: AircraftEntity): void {
     const host = this.host;
+    if (!a.input.fireMissile) return;
+    if (a.input.weapon === 'mrm') {
+      const lock = a.radarLock;
+      if (lock.mode !== 'locked' || lock.targetId === null || a.stores.mrm <= 0) return;
+      if (host.tick - a.lastMrmTick < MRM_LANCE.minLaunchIntervalS * host.tickRate) return;
+      const m = launchMissile(this.nextMissileId++, a, lock.targetId, MRM_LANCE);
+      this.missiles.push(m);
+      a.stores.mrm--;
+      a.lastMrmTick = host.tick;
+      host.emit({ type: 'missileLaunched', missileId: m.id, shooterId: a.id, targetId: lock.targetId, kind: 'lance' });
+      return;
+    }
     const s = a.seeker;
-    if (!a.input.fireMissile || s.mode !== 'locked' || s.targetId === null || a.stores.srm <= 0) return;
+    if (s.mode !== 'locked' || s.targetId === null || a.stores.srm <= 0) return;
     if (host.tick - a.lastMissileTick < SRM_DART.minLaunchIntervalS * host.tickRate) return;
     const m = launchMissile(this.nextMissileId++, a, s.targetId, SRM_DART);
     this.missiles.push(m);
     a.stores.srm--;
     a.lastMissileTick = host.tick;
-    host.emit({ type: 'missileLaunched', missileId: m.id, shooterId: a.id, targetId: s.targetId });
+    host.emit({ type: 'missileLaunched', missileId: m.id, shooterId: a.id, targetId: s.targetId, kind: 'dart' });
+  }
+
+  /** RWR (spec §10.3): an enemy radar lock, or a Lance its launcher still guides, sets `lockedByRadar`. */
+  private updateWarnings(): void {
+    const host = this.host;
+    for (const a of host.aircraftList()) a.lockedByRadar = false;
+    for (const a of host.aircraftList()) {
+      if (!a.alive || a.radarLock.mode !== 'locked' || a.radarLock.targetId === null) continue;
+      const t = host.getAircraft(a.radarLock.targetId);
+      if (t) t.lockedByRadar = true;
+    }
+    for (const m of this.missiles) {
+      if (m.active || m.targetId === null) continue;
+      const t = host.getAircraft(m.targetId);
+      if (t) t.lockedByRadar = true;
+    }
+  }
+
+  /**
+   * Whether a missile still has its target this tick. A radar missile in mid-course needs its launcher alive with the
+   * target on radar (inside the cone), and goes active within its active range; an active seeker needs the target
+   * inside its gimbal limit with a clear line of sight.
+   */
+  private keepsTarget(m: Missile, target: AircraftEntity | undefined): target is AircraftEntity {
+    if (!target || !target.alive) return false;
+    if (!m.active) {
+      const launcher = this.host.getAircraft(m.ownerId);
+      const supported = launcher !== undefined && launcher.alive && launcher.contacts.some((c) => c.id === target.id && c.radar);
+      if (!supported) return false;
+      if (m.pos.distanceTo(target.flight.pos) > activeRangeM(m, target.config.sensors.stealth)) return true;
+      m.active = true;
+    }
+    return withinGimbal(m, target.flight.pos) && this.host.terrain.lineOfSight(m.pos, target.flight.pos);
   }
 
   private dropBomb(a: AircraftEntity): void {
@@ -248,7 +312,7 @@ export class Combat {
     for (let i = list.length - 1; i >= 0; i--) {
       const m = list[i];
       let target = m.targetId === null ? undefined : host.getAircraft(m.targetId);
-      if (m.targetId !== null && (!target || !target.alive || !withinGimbal(m, target.flight.pos) || !host.terrain.lineOfSight(m.pos, target.flight.pos))) {
+      if (m.targetId !== null && !this.keepsTarget(m, target)) {
         m.targetId = null;
         target = undefined;
       }

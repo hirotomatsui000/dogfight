@@ -98,6 +98,90 @@ describe('World combat', () => {
     expect(decoyed).toBeLessThan(12);
   });
 
+  it('locks on radar with the Lance selected, warns the target, and kills it from 15 km', () => {
+    const { world, shooter, target } = duel();
+    place(shooter, 0, 3000, 15000);
+    place(target, 0, 3000, 0, 180);
+    const mrm = (over: Partial<ControlInput> = {}) => hold(shooter.id, { weapon: 'mrm', ...over });
+    run(world, 30, () => mrm());
+    expect(shooter.targetId).toBe(target.id);
+    expect(shooter.radarLock.mode).toBe('tracking');
+    expect(target.lockedByRadar).toBe(false);
+    expect(shooter.seeker.mode).toBe('off');
+    run(world, 75, () => mrm());
+    expect(shooter.radarLock).toMatchObject({ mode: 'locked', targetId: target.id });
+    expect(target.lockedByRadar).toBe(true);
+
+    const events = run(world, 1, () => mrm({ fireMissile: true }));
+    expect(events).toContainEqual(expect.objectContaining({ type: 'missileLaunched', shooterId: shooter.id, targetId: target.id, kind: 'lance' }));
+    expect(shooter.stores.mrm).toBe(shooter.config.stores.mrm - 1);
+    const lance = world.missileList()[0];
+    expect(lance.active).toBe(false);
+    // Back on the Dart: the radar lock drops, but the launcher still guides its Lance, so the RWR stays on.
+    run(world, 30, () => hold(shooter.id, { weapon: 'srm' }));
+    expect(shooter.radarLock.mode).toBe('off');
+    expect(target.lockedByRadar).toBe(true);
+
+    let wentActiveAtM = 0;
+    const later: GameEvent[] = [];
+    for (let i = 0; i < 20 * TICK_RATE && target.alive; i++) {
+      world.step(new Map());
+      later.push(...world.drainEvents());
+      if (lance.active && wentActiveAtM === 0) wentActiveAtM = lance.pos.distanceTo(target.flight.pos);
+    }
+    const activeRange = 10000 * (1 - 0.5 * target.config.sensors.stealth);
+    expect(wentActiveAtM).toBeGreaterThan(activeRange - 1000);
+    expect(wentActiveAtM).toBeLessThanOrEqual(activeRange);
+    expect(later).toContainEqual({ type: 'destroyed', aircraftId: target.id, cause: 'missile', killerId: shooter.id });
+  });
+
+  it('loses a Lance whose launcher turns the target out of its radar cone before it goes active', () => {
+    const { world, shooter, target } = duel();
+    place(shooter, 0, 3000, 25000);
+    place(target, 0, 3000, 0, 180);
+    run(world, 120, () => hold(shooter.id, { weapon: 'mrm' }));
+    expect(shooter.radarLock.mode).toBe('locked');
+    run(world, 1, () => hold(shooter.id, { weapon: 'mrm', fireMissile: true }));
+    const lance = world.missileList()[0];
+    expect(lance.targetId).toBe(target.id);
+    place(shooter, 0, 3000, 25000, 180);
+    run(world, 30);
+    expect(lance.active).toBe(false);
+    expect(lance.targetId).toBeNull();
+    expect(target.lockedByRadar).toBe(false);
+  });
+
+  it('needs a radar lock for a Lance, and keeps 2 s between launches', () => {
+    const { world, shooter, target } = duel();
+    place(shooter, 0, 3000, 15000);
+    place(target, 0, 3000, 0, 180);
+    let events = run(world, 30, () => hold(shooter.id, { weapon: 'mrm', fireMissile: true }));
+    expect(events.some((e) => e.type === 'missileLaunched')).toBe(false);
+    events = run(world, 3 * TICK_RATE, () => hold(shooter.id, { weapon: 'mrm', fireMissile: true }));
+    const launches = events.filter((e) => e.type === 'missileLaunched');
+    expect(launches).toHaveLength(2);
+  });
+
+  it('lets chaff break Lances some of the time', () => {
+    let decoyed = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const { world, shooter, target } = duel(new TeamDeathmatchMode(), seed);
+      place(shooter, 0, 3000, 15000);
+      place(target, 0, 3000, 0, 180);
+      run(world, 120, () => hold(shooter.id, { weapon: 'mrm' }));
+      const events = run(world, 4 * TICK_RATE, (t) =>
+        new Map([
+          [shooter.id, { ...neutralInput(0.8), weapon: 'mrm' as const, fireMissile: t === 0 }],
+          [target.id, { ...neutralInput(0.8), countermeasures: t === 60 }],
+        ]),
+      );
+      expect(events.filter((e) => e.type === 'countermeasures')).toHaveLength(1);
+      if (events.some((e) => e.type === 'missileDecoyed')) decoyed++;
+    }
+    expect(decoyed).toBeGreaterThan(0);
+    expect(decoyed).toBeLessThan(12);
+  });
+
   it('acts on a button press once, even when no new input follows', () => {
     const { world, target } = duel();
     run(world, 60, (t) => (t === 0 ? hold(target.id, { countermeasures: true }) : new Map()));
