@@ -5,3 +5,4 @@ coverage/
 *.log
 dist-single/
 .asset-cache/
+models-src/
