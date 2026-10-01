@@ -11,7 +11,7 @@ import { airfieldGroundHeight } from '../map/features.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { type Approach, closestApproach } from '../math/closest-approach.ts';
 import { Rng } from '../math/rng.ts';
-import type { DroneSpec, GameMode, ModeDirector, SupportSpec } from '../modes/mode.ts';
+import type { BotGoal, DroneSpec, GameMode, ModeDirector, SupportSpec } from '../modes/mode.ts';
 import { trimAlpha } from '../physics/aero.ts';
 import { atmosphere } from '../physics/atmosphere.ts';
 import { type ControlInput, neutralInput, sanitizeInput } from '../physics/controls.ts';
@@ -103,6 +103,11 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     this.groundTargets = opts.mode.groundTargets(opts.map).map((spec) => createGroundTarget(spec, opts.terrain));
     this.combat = new Combat(this);
     for (const spec of opts.mode.supportAircraft?.(opts.map) ?? []) this.addSupport(spec);
+  }
+
+  /** Where the mode wants a bot when it has nothing near to fight (M5). */
+  botGoal(bot: AircraftEntity): BotGoal | null {
+    return this.mode.botGoal?.(this, bot) ?? null;
   }
 
   /** False while the mode has cut a team's datalink (Team Objective, M5). */

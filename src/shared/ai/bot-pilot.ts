@@ -12,6 +12,7 @@ import { incomingMissileWarning, type MissileWarning } from '../targeting/warnin
 import { predictImpact } from '../weapons/bomb.ts';
 import { leadDirection } from '../weapons/lead.ts';
 import type { Missile } from '../weapons/missile.ts';
+import type { BotGoal } from '../modes/mode.ts';
 import type { AircraftEntity } from '../world/entities.ts';
 import { type GroundTarget, hitsToDestroy } from '../world/ground-targets.ts';
 import type { DifficultyProfile } from './difficulty.ts';
@@ -27,6 +28,8 @@ export interface BotWorld {
   getAircraft(id: number): AircraftEntity | undefined;
   missileList(): Iterable<Missile>;
   groundTargetList(): readonly GroundTarget[];
+  /** where the mode wants this bot when it has nothing near to fight (M5); null or absent = patrol */
+  botGoal?(bot: AircraftEntity): BotGoal | null;
 }
 
 const GROUND_HORIZON_S = 5;
@@ -82,6 +85,13 @@ const CHASER_TAIL_COS = Math.cos(60 * DEG);
 const DEFENDED_RADIUS_M = 15000;
 const ORBIT_RADIUS_M = 5000;
 const ORBIT_ALTITUDE_M = 4000;
+/** With a mode goal (M5) a bot fights only enemies this close and otherwise heads for its goal. */
+const GOAL_ENGAGE_RANGE_M = 12000;
+/** ...but takes on an enemy support aircraft (a Sentinel) out to Lance range. */
+const SUPPORT_ENGAGE_RANGE_M = MRM_MAX_RANGE_M;
+/** Enemy fighters this far beyond the goal's radius are left alone, unless they sit on the bot's tail. */
+const GOAL_FIGHT_MARGIN_M = 4000;
+const TAIL_THREAT_RANGE_M = 2500;
 const UP = new Vector3(0, 1, 0);
 
 /** Bot seed per aircraft, so bots differ but stay deterministic for a World seed. */
@@ -123,6 +133,8 @@ export class BotPilot {
   private readonly right = new Vector3();
   private readonly upAxis = new Vector3();
   private lastSpawnGen = -1;
+  /** a support aircraft the bot wants designated: it presses "next target" next tick */
+  private cycleTo: number | null = null;
   private runTargetId: string | null = null;
   private stickBombs = 0;
   /** a stick has gone; the next one waits until the jet has come around for a new pass */
@@ -155,6 +167,12 @@ export class BotPilot {
     out.helmetSight = false;
     out.lookYaw = 0;
     out.lookPitch = 0;
+    // Stepping the designation toward a chosen Sentinel, one press per tick until it lands.
+    if (this.cycleTo !== null) {
+      const want = this.cycleTo;
+      this.cycleTo = null;
+      if (self.targetId !== want && self.contacts.some((c) => c.id === want)) out.cycleTarget = true;
+    }
     if (self.spawnGen !== this.lastSpawnGen) {
       // A new aircraft starts a fresh bombing run.
       this.lastSpawnGen = self.spawnGen;
@@ -182,10 +200,66 @@ export class BotPilot {
         return out;
       }
     }
+    const goal = world.botGoal?.(self) ?? null;
+    if (goal) {
+      const target = this.goalTarget(world, self, goal, reactionTicks);
+      if (target) this.engage(world, self, target, out);
+      else this.holdGoal(self, goal, out);
+      return out;
+    }
     const target = this.perceiveTarget(world, self, reactionTicks);
     if (target) this.engage(world, self, target, out);
     else this.patrol(world, self, reactionTicks, out);
     return out;
+  }
+
+  /**
+   * With a mode goal (M5): an enemy Sentinel on our contacts within Lance range comes first; then the nearest enemy
+   * fighter that is near the goal (or right on our tail), so fights happen in the zone or round the escorted Sentinel
+   * instead of dragging the bot away. The bot steps its designation onto a chosen Sentinel, so its missiles lock the
+   * Sentinel rather than whatever is nearest the nose.
+   */
+  private goalTarget(world: BotWorld, self: AircraftEntity, goal: BotGoal, reactionTicks: number): AircraftEntity | null {
+    const f = self.flight;
+    this.track.copy(f.vel).normalize();
+    let target: AircraftEntity | null = null;
+    let best = Infinity;
+    for (const c of self.contacts) {
+      const t = world.getAircraft(c.id);
+      if (!t || !t.alive || t.team === self.team) continue;
+      let score = Infinity;
+      if (t.support) {
+        // A Sentinel ranks ahead of every fighter: its range counts as a quarter.
+        if (c.rangeM <= SUPPORT_ENGAGE_RANGE_M) score = c.rangeM / 4;
+      } else if (c.rangeM <= GOAL_ENGAGE_RANGE_M) {
+        const p = t.flight.pos;
+        const nearGoal = Math.hypot(p.x - goal.x, p.z - goal.z) <= goal.radiusM + GOAL_FIGHT_MARGIN_M;
+        this.rel.subVectors(p, f.pos);
+        const onTail = c.rangeM <= TAIL_THREAT_RANGE_M && -this.rel.dot(this.track) / Math.max(c.rangeM, 1) >= CHASER_TAIL_COS;
+        if (nearGoal || onTail) score = c.rangeM;
+      }
+      if (score < best) {
+        best = score;
+        target = t;
+      }
+    }
+    if (!target || !target.history.perceive(reactionTicks, 1 / world.tickRate, this.tPos, this.tVel)) return null;
+    if (target.support && self.targetId !== target.id) this.cycleTo = target.id;
+    return target;
+  }
+
+  /** Flies to the goal and circles there, at the goal's height. */
+  private holdGoal(self: AircraftEntity, goal: BotGoal, out: ControlInput): void {
+    const f = self.flight;
+    this.goal.set(goal.x, goal.altitudeM, goal.z);
+    const d = Math.hypot(goal.x - f.pos.x, goal.z - f.pos.z);
+    if (d > goal.radiusM * 1.2) {
+      this.desired.set(goal.x - f.pos.x, 0, goal.z - f.pos.z).normalize();
+      this.desired.setY(clamp((goal.altitudeM - f.pos.y) / 3000, -0.35, 0.35)).normalize();
+      this.fly(f, this.desired, Math.min(this.profile.maxPull, 0.6), 0.9, out);
+      return;
+    }
+    this.circle(f, this.goal, goal.radiusM * 0.8, goal.altitudeM, out);
   }
 
   private fly(f: FlightState, dir: Vector3, maxPull: number, throttle: number, out: ControlInput): void {
@@ -509,11 +583,16 @@ export class BotPilot {
       n++;
     }
     this.goal.divideScalar(Math.max(n, 1));
-    this.rel.subVectors(f.pos, this.goal).setY(0);
+    this.circle(f, this.goal, ORBIT_RADIUS_M, ORBIT_ALTITUDE_M, out);
+  }
+
+  /** A right-hand circle of `radiusM` round `center` at `altitudeM`. */
+  private circle(f: FlightState, center: Vector3, radiusM: number, altitudeM: number, out: ControlInput): void {
+    this.rel.subVectors(f.pos, center).setY(0);
     const r = Math.max(this.rel.length(), 1);
-    const lean = clamp((r - ORBIT_RADIUS_M) / ORBIT_RADIUS_M, -1, 1);
+    const lean = clamp((r - radiusM) / radiusM, -1, 1);
     this.desired.set(-this.rel.z / r, 0, this.rel.x / r).addScaledVector(this.rel, -lean / r).normalize();
-    this.desired.setY(clamp((ORBIT_ALTITUDE_M - f.pos.y) / 3000, -0.35, 0.35)).normalize();
+    this.desired.setY(clamp((altitudeM - f.pos.y) / 3000, -0.35, 0.35)).normalize();
     this.fly(f, this.desired, Math.min(this.profile.maxPull, 0.6), 0.85, out);
   }
 
