@@ -1,7 +1,8 @@
 # Realistic Graphics (Photo Sky + Satellite Land-Class Ground) — Design
 
 - **Date:** 2026-09-29
-- **Status:** Approved in chat (approach 1, full quality, downloads approved)
+- **Status:** Approved in chat (approach 1, full quality, downloads approved). Since M4 (main spec revision 11) the
+  sky photo is retired: a computed sky follows the time of day and the weather; the satellite-photo ground stays.
 - **Parent spec:** `2026-09-29-poland-dogfight-design.md` (§15.4 Graphics)
 
 ## Goal

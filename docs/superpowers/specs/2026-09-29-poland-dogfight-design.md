@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 10)
+# Contested Skies — Design Spec (revision 11)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -25,6 +25,11 @@
     owner's models move to the jets they depict (F-35A → Shade, Su-57 → Prizrak); the balance pass changes some
     numbers in §9.3; the tournament runs 100 seeds; Strike lasts 9 minutes now that defenders carry Lances. Plan:
     `docs/superpowers/plans/2026-10-01-m3-roster-weapons.md`.
+  - Revision 11 (2026-10-01): milestone M4 "World" as built (§2, §8, §10.3, §12.3, §13, §15, §18, §19, §20). Dogfight
+    and Free Flight fly over Lechovia; Strike and Training keep the Test Range. The photographed sky gives way to a
+    computed sky that follows the time of day and the weather. Runway starts are the player's choice; bots start in
+    the air; there is still no landing. Protocol 3 carries the room's map, weather and clock. Plan:
+    `docs/superpowers/plans/2026-10-01-m4-world.md`.
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -73,6 +78,9 @@ A browser-based, online multiplayer flight-combat simulator prototype.
 | Graphics presets | Low/Medium/High set the pixel ratio, antialiasing, particle share and ground-photo anisotropy. Auto starts on High (Medium above 6 M device pixels), steps down one level after 3 s under 45 fps in a match, never steps up within a session, and remembers the level | M1c, 2026-10-01 |
 | Key remapping | Every keyboard action except Esc is rebindable; taking another action's primary key swaps the two, so no action is left unbound | M1c, 2026-10-01 |
 | Aircraft models | The owner's 3D models (generated with Tripo, inspired by the F-35A and the Su-57) replace the generated models of the Kestrel and the Kobchik. Names and specifications stay fictional; an aircraft without a model file keeps the generated model | Owner request, 2026-10-01 |
+| Maps per mode | Dogfight and Free Flight fly over Lechovia by default (the Test Range stays selectable); Strike and Training keep the Test Range they were laid out and balanced on | M4, 2026-10-01 |
+| Sky | A computed (Preetham) sky, sun, moon and stars replace the sky photo, which could show only one hour in one weather; the satellite-photo ground stays | M4, 2026-10-01 |
+| Runway starts | A per-pilot choice (title screen: Air or Runway start); bots always start in the air; the gear retracts by itself and touching the ground with it up is a crash (no landing, §23) | M4, 2026-10-01 |
 
 ## 3. Goals and non-goals
 
@@ -297,8 +305,16 @@ State: `{pos, vel, quat, angVel, throttle, airbrake}`, plus derived `alpha, beta
 - **Derived outputs** for HUD and effects: `gLoad = ((F_aero + F_thrust)/m · up_b)/g`, Mach, α, β.
 - **Visual effects tied to the model:** camera shake and effects use G-load, the transonic buffet band (M 0.95–1.05),
   afterburner and speed.
-- **Ground handling (M4, runway spawns):** gear contact springs, rolling/brake friction, nose-wheel steering; takeoff
-  when lift exceeds weight.
+- **Ground handling (M4, runway spawns), as built:**
+  - `FlightState` has `gear` (1 down … 0 up) and `onGround`. On the wheels a separate step runs: gear springs
+    (natural frequency 9 rad/s, damping 0.8; the reference point rests about 2.4 m above the runway), rolling friction
+    0.025 and wheel brakes 0.35 (the airbrake key), no side slip, nose-wheel steering from the roll and rudder inputs
+    (25 °/s slow, 4 °/s fast), and rotation up to 14° nose up once the dynamic pressure gives the elevator authority
+    (full at 4 kPa, about 155 kt). The jet leaves the ground when lift exceeds weight.
+  - Wheels touch only inside an airfield's flattened ground (the runway plus 400 m beyond each end, ±450 m across);
+    rolling off it is a crash. A gentle touchdown with the gear still fully down (a bounce on the take-off run) rolls on.
+  - The gear retracts over 4 s once the jet is 30 m above the airfield or has left it, and adds drag (CD +0.02) while
+    out. Every jet lifts off within the runway at military power (190–230 kt, 15–24 s) and at full afterburner.
 - **Not modeled:** fuel burn, spins/departures, wind, landing gear damage.
 
 ## 9. Aircraft roster (fictional, data-driven)
@@ -451,6 +467,9 @@ then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
   its radar (inside the cone), or the missile loses the target and flies ballistic. Inside the active range its own
   seeker takes over (gimbal limit and terrain masking as for the Dart). The IR seeker runs only while the Dart is
   selected.
+- **Clouds (M4):** a cloud between two points hides each from the other's eyes and from infrared seekers (search,
+  track and lock) and breaks an infrared missile's guidance; radar and an active Lance see through. The cloud field is
+  shared by the server, the simulation and the renderer.
 - **Warnings:**
   - `LOCK` when an enemy radar lock is on you, or a Lance its launcher still guides (HUD "RADAR LOCK", a warble).
   - `MISSILE` (with bearing, range and time to impact) from the moment a missile guides on you. When the time to
@@ -521,7 +540,40 @@ The "Anvil" is an abstract, unguided free-fall bomb for the Strike mode (§13.1)
 
 ### 12.3 Lechovia (M4)
 
-200 × 200 km, grid 2048² (~98 m cells), rendered with quadtree LOD chunks built in a Web Worker.
+200 × 200 km, grid 2049² (~98 m cells), rendered with quadtree LOD chunks built in a Web Worker.
+
+**As built (revision 11):**
+- Generated in about 3 s from a seed (`src/shared/data/maps/lechovia/`): base noise heights, then rivers, lakes, the
+  lagoon and airfields are carved or flattened into the grid, and a land-cover grid is painted (sea, lake, river,
+  beach, field, meadow, forest, rock, snow, marsh, urban, airfield). The page generates it in an inline Web Worker
+  while the title screen is up; the server generates every map once at start.
+- Rivers: the Lechna (source in the southern range, through the capital Lechów, out to sea west of the lagoon) and the
+  Odrawa in the west. Their water level only falls toward the sea and stays below the banks; valleys slope down to
+  them over 1.5 km. About 40 glacial lakes in the north-east lake district and a few elsewhere.
+- Cities: Lechów (capital), Morzysko (port), Odrzyn, Skalnik (foothills), Pojezierz (lake district). Sixty villages
+  named from Polish-like syllables, never a real major city.
+- Roads: A* over a 500 m grid (climbing and bridges cost extra, lakes and the sea are impassable), smoothed; highways
+  join the cities, a local road joins every village and airfield to the network.
+- Airfields: Wilkowo Air Base (USA, west, runway 09), Sokolica Air Base (Russia, east, runway 27), Morzysko and Skalnik
+  (neutral). 3,000 m (2,500–2,600 m neutral) by 45 m runways, flattened ground ±450 m, a parallel taxiway, an apron,
+  four arched hangars and a tower.
+- Combat area: 85 km radius around the centre. Airborne spawn lines 15 km either side of the capital at 5,000 m.
+- Rendering: 64-cell chunks at six levels, chosen by distance (graphics preset: split at 1.1, 1.4 or 1.8 chunk
+  widths), skirts against cracks, parents shown until all children are built, an outer ring that stretches the map's
+  edges to the horizon. Towns get instanced houses and blocks on their urban ground (about 12,000 in all), roads are
+  ribbons that bridge rivers, and the terrain shader tints towns and marshes.
+- Sky: the Preetham model scaled to the scene's brightness (brighter while the sun is low), lighting the scene through
+  an environment map rebuilt whenever the sun has moved 1.5°; haze takes the sky's horizon colour; stars, a full moon
+  opposite the sun, moonlight and a dim night ambient; exposure rises at night.
+- Weather (cloud base and top): Clear; Scattered 25% (1,600–2,700 m); Broken 60% (1,300–3,200 m); Overcast, a deck
+  1,100–2,300 m; Rain, a deck 800–2,600 m with rain streaks below it. Cumulus are soft billboards placed in 1.6 km cells
+  where the shared cloud field has cloud, sorted back to front, drawn within 20, 30 or 40 km (graphics preset);
+  inside a cloud the haze closes to a whiteout.
+- Time: 52° N at the equinox (sunrise 06:00, noon sun 38° up in the south, sunset 18:00). Start times Dawn 06:30, Day
+  12:00, Dusk 17:30, Night 23:00; the clock runs one game hour per real minute unless held. The HUD shows the local
+  time and dims at night.
+- Night: town and street lights, runway edge (white), threshold (green) and end (red) lights, and red, green and
+  white navigation lights with strobes on every jet.
 
 - **Geography inspired by Poland:**
   - **North:** a sea coast with beaches, a sand spit and a lagoon.
@@ -564,6 +616,9 @@ All modes implement `GameMode`: setup, per-tick update, scoring on events, spawn
 
 **Spawning:** airborne at the team's spawn line (5,000 m, 250 m/s, facing the front) or, from M4, at the team's airfield
 on the runway, as the player chooses. Strike uses its own spawn points (§12.2).
+- Runway starts (M4) are offered in Team Deathmatch and Free Flight on maps with a team airfield: two lanes 12 m
+  either side of the centre line, rows 300 m apart from 150 m past the threshold, at full military power. Bots and
+  Strike always start in the air.
 
 ### 13.1 Strike (M1d)
 
@@ -730,7 +785,7 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 | B | Airbrake (hold) |
 | C or right mouse | Look around (hold); also aims the helmet sight |
 | Tab | Scoreboard (hold) |
-| M | Map (M4) |
+| M | Map (M4): the whole map with towns, roads and airfields, the combat area, you, teammates and known enemies |
 | P / Esc | Pause |
 
 ### 15.4 Graphics
@@ -774,7 +829,10 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 - **Mission choice (M1d):** the title screen offers DOGFIGHT (Team Deathmatch) or STRIKE. With STRIKE selected, one
   line states the selected jet's role: "Kestrel · USA: hold all three targets for 9 minutes" or "Kobchik · Russia:
   destroy two of the three targets". Free Flight stays a link.
-- **Later menus:** map, time of day, weather and bots arrive with the features that need them (M2–M5).
+- **World row (M4):** map (Lechovia or the Test Range), Air or Runway start, time of day (Dawn, Day, Dusk, Night), a
+  "Clock runs" switch and the weather. The scene behind the menu shows the chosen time and weather. Strike and Training
+  fix the Test Range and an air start. Online, the pilot who opens a room fixes its map, time, clock and weather.
+- **Later menus:** bot counts and the remaining modes arrive with the features that need them (M5).
 - **Other screens:** loading, pause/settings, death/respawn (killer, weapon, countdown, aircraft change), match end.
   - In Strike the match-end screen leads with the reason (`TARGETS HELD`, `TARGETS DESTROYED`, `RUSSIA OUT OF
     AIRCRAFT` or `USA OUT OF AIRCRAFT`) and lists the targets destroyed above the per-pilot table.
@@ -818,7 +876,7 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 | Area | Budget |
 |---|---|
 | Client frame | 60 fps at 1080p on a 2020+ laptop; < 400 draw calls; < 2 M triangles |
-| Terrain chunk build (worker, M4) | < 4 ms per chunk |
+| Terrain chunk build (worker, M4) | < 4 ms per chunk (measured 1.9 ms) |
 | World step | < 2 ms with 32 aircraft (server and local) |
 | Network per client | ≤ 50 KB/s down, ≤ 1 KB/s up |
 | Initial download | < 5 MB (maps are generated from seeds, not downloaded) |
@@ -849,7 +907,13 @@ pane at each stage.
 - **Damage:** state thresholds and effects; kill credit, including maneuver kills and collisions.
 - **Map:**
   - Terrain determinism and bilinear sampling; `surfaceAt` over the sea; line of sight.
-  - (M4) Feature placement: airfields flat, villages not in water, roads connected.
+  - (M4) Feature placement: airfields flat, villages not in water, roads connected; sea in the north, peaks of about
+    2,400 m in the south, rivers that never climb, dozens of lakes in the north-east, fictional unique names.
+- **Ground handling (M4):** every jet lifts off within the runway at military power and afterburner and climbs away
+  with the gear up; rolls straight with the stick centred; steers and brakes to a stop; holds still on the brakes;
+  rolling off the airfield crashes; runway starts only where the mode offers them.
+- **Weather and time (M4):** cloud cover per preset within ±8%; clouds block sight lines only inside the layer and hide
+  a jet from the eye and the infrared seeker but not radar; the sun's path at 52° N; the clock.
 - **Modes:** scoring, win conditions, zone capture math, Sentinel rules, spawn placement.
 - **Strike (M1d):**
   - Rules: time-out → USA; two targets destroyed → Russia; a team's 4th loss → the other team; the same-tick order of
@@ -892,7 +956,7 @@ brief (§11 of the brief: steps 1–11).
 | M1d | **Strike** (built before M1c, owner's priority) | — (owner request, 2026-09-30) | Strike mode vs 1 AI (§13.1): three ground targets, the Anvil bomb with impact prediction, 4 aircraft per team, attacker and defender AI, strike HUD, mission choice on the title screen, match-end reasons, sounds | A 1v1 Strike match is playable end to end from both sides; the Veteran-vs-Veteran attacker win rate is 35–65% |
 | M2 | **Multiplayer** | 10 | Node server, rooms, protocol and codecs, authoritative World, NetworkSession (prediction, reconciliation, interpolation, clock sync, lag compensation), lobby (team + aircraft), bots fill, LAN URLs, lag simulator; invite links and Quick play; preset quick-chat; callsign filter; page/server version check; error reporting and a health check; one browser smoke test; multi-file site build; Dockerfile for the owner's host | Two tabs plus a second LAN machine fight each other smoothly at `?lag=150`; integration tests green; `docker build`/`run` serves the game |
 | M3 | **Roster & weapons** | 11 | The remaining 6 aircraft (data + parametric models); upgraded model generator (smooth fuselage, canopy glass, panel lines, sky-reflecting paint, team paint schemes); radar/stealth model; MRM "Lance" + chaff; RWR `LOCK` warning; balance tournament | All 8 aircraft selectable; tournament win rates within 35–65% |
-| M4 | **World** | 11 | Lechovia map (terrain LOD in worker, geography, settlements, roads, airfields), runway spawns with ground handling, clouds and weather, day/night cycle | Take off from a fictional airfield and fight over recognizable Poland-inspired terrain at 60 fps, day and night |
+| M4 | **World** | 11 | Lechovia map (terrain LOD in worker, geography, settlements, roads, airfields), runway spawns with ground handling, clouds and weather, day/night cycle; map screen (revision 11) | Take off from a fictional airfield and fight over recognizable Poland-inspired terrain at 60 fps, day and night |
 | M5 | **Modes & polish** | 11 | Air Superiority, Team Objective, Free Flight extras; end-of-match summary; graphics upgrades (contrails, wingtip vapor, damage fire); kill cam, spectating while respawning, changing jets on respawn; full audio; remaining accessibility options; README | All four modes playable online |
 
 ## 21. Risks and mitigations

@@ -4,8 +4,18 @@ A browser-based flight-combat prototype. Two teams, **USA** and **Russia**, fly 
 real aircraft over a fictional landscape inspired by Poland. This repository is being built in milestones (see
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
-**Current milestone: M3 "Roster & weapons"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics"
-and M2 "Multiplayer")
+**Current milestone: M4 "World"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
+"Multiplayer" and M3 "Roster & weapons")
+- **Lechovia**, a fictional 200 × 200 km country inspired by Poland: a Baltic-style coast with a lagoon and a sand
+  spit, a lake district, two rivers falling from the southern mountains (peaks of about 2,400 m) to the sea, eastern
+  forests and marshes, five cities and some sixty villages with invented names, roads, and four air bases. The map is
+  generated in a background thread while the title screen is up and drawn in more detail near your jet.
+- **Take off from a runway** (choose *Runway start*): open the throttle, pull up at about 170 kt, and the gear
+  retracts by itself. There is no landing.
+- **Time of day and weather**: Dawn, Day, Dusk or Night, with a clock that runs one hour per minute (or holds), and
+  Clear, Scattered, Broken, Overcast or Rain. Clouds hide jets from your eyes and from heat-seeking missiles, not from
+  radar. At night towns, roads and runways light up and every jet shows navigation lights.
+- A **map screen** on M.
 - **Eight aircraft**, four per team: USA Shade, Tempest, Kestrel and Condor; Russia Prizrak, Yastreb, Sapsan and
   Kobchik, each with its own flight model, sensors, stores and strengths. The Shade and the Prizrak wear the owner's
   3D models (inspired by the F-35A and the Su-57); the others are generated with team paint schemes.
@@ -26,7 +36,8 @@ and M2 "Multiplayer")
 - Damage, kill credit and respawns; tracers, missile trails, flares, explosions and smoke; synthesized sound.
 - A combat HUD with target box, missile lock, missile warning, radar display, kill feed and scoreboard.
 - A third-person camera that follows your jet, and a title screen over a live 3D view of the jet you pick.
-- Sim-lite flight physics over a 60 × 60 km test range with photo scenery; Free Flight is still available.
+- Sim-lite flight physics over Lechovia, or the original 60 × 60 km test range (Strike and Training fly there);
+  satellite-photo scenery; Free Flight is still available.
 - Offline play runs entirely in the browser; online play needs the game server (below).
 
 ## Requirements
@@ -42,7 +53,8 @@ npm run dev
 ```
 
 Open http://localhost:5173. New pilots start with **Training**. Otherwise pick a mission (Dogfight or Strike), an
-aircraft and an opponent, and press **FLY** (or **Free flight** to fly without enemies). **Controls** lists the keys;
+aircraft and an opponent, the **World** (map, air or runway start, time of day, whether the clock runs, weather), and
+press **FLY** (or **Free flight** to fly without enemies). **Controls** lists the keys;
 **Settings** changes them, the mouse, the gamepad, the HUD, the graphics and the sound (also from the pause menu).
 Click the view to capture the mouse, then fly with the mouse.
 
@@ -58,7 +70,9 @@ npm start
 `npm start` runs the game server: it serves the built site from `dist/`, the game connection at `/ws`, and prints the
 addresses to open, one for this machine and one for each network (for friends on the same Wi-Fi). Open one, press
 **ONLINE** next to FLY, and **Join room** (or **Quick play**). Everyone in a room shares one sky; bots fly the empty
-seats. Your jet picks your team, and a new room plays the Mission chosen on the title screen. **Copy invite link** gives
+seats. Your jet picks your team, and a new room plays the Mission and the World chosen on the title screen by the
+pilot who opens it (map, time of day, clock and weather; Strike rooms fly on the test range). Each pilot still picks
+an air or runway start. **Copy invite link** gives
 a link like `http://192.168.1.20:8080/?room=friday` that drops a friend into the same room. Keys **7**, **8**, **9**
 and **0** send quick-chat lines. The match never pauses online: the pause menu only covers the screen.
 
@@ -66,7 +80,8 @@ While developing, run `npm run server` in one terminal and `npm run dev` in anot
 on to the server (set `GAME_SERVER=host:port` if it runs elsewhere).
 
 Testing aids, added to the page address: `?lag=150` delays every message by 150 ms each way (add `&jitter=30` for
-uneven delay), and `?debug=1` shows frames per second, round trip, input queue and prediction error.
+uneven delay), and `?debug=1` shows frames per second, round trip, input queue, prediction error, altitude, the
+landing gear and the time of day.
 
 Server settings, as environment variables or `--name=value` options:
 
@@ -110,6 +125,8 @@ test pilots who join a room, fly for 15 seconds, see each other and swap a chat 
 | Next target | R |
 | Look around (swings the camera round your jet) | C or right mouse (hold) |
 | Scoreboard | Tab (hold) |
+| Map | M |
+| Wheel brakes on the runway | B (hold) |
 | Pause / settings | P or Esc |
 
 Every key except Esc can be changed in **Settings → Keys**.
@@ -155,6 +172,12 @@ In Strike (choose **Strike** under Mission on the title screen):
   crosses the target (RELEASE flashes). Three good hits destroy a target.
 - Each side has 4 aircraft. Losing the fourth loses the match.
 
+On the runway (*Runway start*):
+- The jet rolls at full military power. Hold Shift for afterburner if you like.
+- At about 170 kt (310 km/h) pull up: move the mouse up, or hold S. The nose lifts and the jet flies off.
+- The gear folds away once you are 30 m up. Rolling off the airfield, or touching the ground again with the gear up,
+  is a crash.
+
 The camera always follows from behind and above your jet (third person).
 
 ## Test and build
@@ -183,7 +206,7 @@ npm run build:single
 ```
 
 This writes `dist-single/index.html`: the whole game, including the scenery photos and the jet models, in one
-self-contained file (about 6 MB), plus the social-preview image `og-image.jpg` and the icon `icon-180.png` that
+self-contained file (about 5.5 MB), plus the social-preview image `og-image.jpg` and the icon `icon-180.png` that
 other sites and phones fetch. For link previews on social sites, build with the site's address:
 `SITE_URL=https://your-site.netlify.app npm run build:single`.
 
@@ -196,11 +219,15 @@ Any static host works the same way, and the file also runs when opened directly 
 no game server, so it plays offline only: for online play, run the server ([Play online](#play-online)). Visitors need a
 desktop or laptop with a keyboard and mouse; phones and tablets see a notice.
 
-## Scenery photos
+## Scenery
 
-The sky is a real photo (Poly Haven, CC0). The ground uses real Sentinel-2 satellite imagery of Polish farmland,
-forest and the Tatra mountains (EOX, CC BY 4.0), tiled across the fictional map by land type. See `CREDITS.md`.
-`node tools/fetch-assets.ts` re-creates `src/client/assets/` from the original sources (macOS, needs `sips`).
+The ground uses real Sentinel-2 satellite imagery of Polish farmland, forest and the Tatra mountains (EOX, CC BY 4.0),
+tiled across the fictional map by land type, with a close-up detail photo (Poly Haven, CC0). See `CREDITS.md`.
+`node tools/fetch-assets.ts` re-creates the photos in `src/client/assets/` from the original sources. The sky, the
+clouds and the light are computed from the time of day and the weather (until M4 the sky was a photo).
+
+Lechovia itself is generated from a seed (`src/shared/data/maps/lechovia/`), the same way on every computer and on
+the game server, so nothing has to be downloaded.
 
 ## Project layout
 

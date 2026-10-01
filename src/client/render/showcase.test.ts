@@ -20,7 +20,8 @@ describe('title-screen jet', () => {
       expect(Math.max(Math.abs(p.position.x), Math.abs(p.position.z))).toBeLessThan(map.sizeM / 2 - 5000);
       expect(p.position.y - terrain.surfaceAt(p.position.x, p.position.z)).toBeGreaterThan(400);
     }
-  });
+    // Generating Lechovia takes a few seconds, more on a busy machine.
+  }, 30000);
 
   it('flies nose first and banks into its turn', () => {
     const a = pose();
