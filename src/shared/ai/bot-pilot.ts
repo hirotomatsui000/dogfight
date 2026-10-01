@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { CANNONS, COUNTERMEASURES } from '../data/weapons.ts';
+import { BOMB_ANVIL, CANNONS, COUNTERMEASURES } from '../data/weapons.ts';
 import { timeToImpact } from '../map/ground-proximity.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { Rng } from '../math/rng.ts';
@@ -9,9 +9,11 @@ import { type AirData, atmosphere } from '../physics/atmosphere.ts';
 import type { ControlInput } from '../physics/controls.ts';
 import type { FlightState } from '../physics/flight-model.ts';
 import { incomingMissileWarning, type MissileWarning } from '../targeting/warnings.ts';
+import { predictImpact } from '../weapons/bomb.ts';
 import { leadDirection } from '../weapons/lead.ts';
 import type { Missile } from '../weapons/missile.ts';
 import type { AircraftEntity } from '../world/entities.ts';
+import { type GroundTarget, hitsToDestroy } from '../world/ground-targets.ts';
 import type { DifficultyProfile } from './difficulty.ts';
 import { steerToward, type SteerOutput } from './steering.ts';
 
@@ -24,6 +26,7 @@ export interface BotWorld {
   aircraftList(): Iterable<AircraftEntity>;
   getAircraft(id: number): AircraftEntity | undefined;
   missileList(): Iterable<Missile>;
+  groundTargetList(): readonly GroundTarget[];
 }
 
 const GROUND_HORIZON_S = 5;
@@ -51,11 +54,32 @@ const MIN_IMPACT_JUDGEMENT = 0.3;
 /** Break away from a target this close that is still closing fast, instead of flying into it. */
 const COLLISION_BREAK_RANGE_M = 350;
 const COLLISION_BREAK_CLOSURE_MS = 100;
+/** Strike (spec §14): bombing runs fly this high above the target, just below afterburner. */
+const RUN_AGL_M = 1500;
+const RUN_THROTTLE = 0.88;
+/** The throw (how far ahead the bombs land) is re-predicted this often and carried along the track in between. */
+const THROW_REFRESH_S = 0.25;
+const THROW_PREDICT_DT_S = 1 / 20;
+/** Close to the release point the throw is re-predicted every tick, at the World's own step. */
+const FINE_THROW_ALONG_M = 1500;
+/** Sideways miss that gets the strongest correction on the final run. */
+const FINAL_RUN_CORRECTION_M = 500;
+/** After a pass, fly on this far beyond the throw before turning back, so the next run can line up. */
+const REATTACK_DISTANCE_M = 5000;
+const STICK_SIZE = 2;
+/** An attacker turns to fight a defender this close behind it. */
+const CHASER_RANGE_M = 3000;
+const CHASER_TAIL_COS = Math.cos(60 * DEG);
 const UP = new Vector3(0, 1, 0);
 
 /** Bot seed per aircraft, so bots differ but stay deterministic for a World seed. */
 export function botSeed(worldSeed: number, aircraftId: number): number {
   return (Math.imul(worldSeed, 0x9e3779b1) ^ Math.imul(aircraftId, 0x85ebca6b)) >>> 0;
+}
+
+function hasStandingTarget(world: BotWorld): boolean {
+  for (const t of world.groundTargetList()) if (!t.destroyed) return true;
+  return false;
 }
 
 /**
@@ -86,6 +110,19 @@ export class BotPilot {
   private readonly nose = new Vector3();
   private readonly right = new Vector3();
   private readonly upAxis = new Vector3();
+  private runTargetId: string | null = null;
+  private stickBombs = 0;
+  private stickTick = -1e9;
+  private throwAlong = 0;
+  private throwRefreshTick = 0;
+  /** the last tick with a fine throw prediction, and the target's along-track lead over the impact point then */
+  private fineTick = -1;
+  private fineAlong = 0;
+  /** this pilot's error for the current stick, horizontal meters */
+  private readonly bombAim = new Vector3();
+  private readonly impact = new Vector3();
+  private readonly miss = new Vector3();
+  private readonly track = new Vector3();
 
   constructor(profile: DifficultyProfile, seed: number) {
     this.profile = profile;
@@ -97,6 +134,7 @@ export class BotPilot {
     out.fireCannon = false;
     out.fireMissile = false;
     out.countermeasures = false;
+    out.dropBomb = false;
     out.cycleTarget = false;
     out.weapon = 'srm';
     out.helmetSight = false;
@@ -116,6 +154,7 @@ export class BotPilot {
     if (this.avoidGround(world, self.flight, out)) return out;
     if (this.returnToArea(world, self.flight, out)) return out;
     if (warning && impactS <= IDEAL_BREAK_S - this.profile.reactionS && this.defend(world, self.flight, warning, out)) return out;
+    if (hasStandingTarget(world) && self.bombLoad > 0 && this.attack(world, self, reactionTicks, out)) return out;
     const target = this.perceiveTarget(world, self, reactionTicks);
     if (target) this.engage(world, self, target, out);
     else this.patrol(world, self, reactionTicks, out);
@@ -242,6 +281,143 @@ export class BotPilot {
     if (last !== undefined && world.tick - last < MISSILES_PER_TARGET_INTERVAL_S * world.tickRate) return;
     out.fireMissile = true;
     this.lastLaunchTick.set(target.id, world.tick);
+  }
+
+  /** Strike attacker: fight a defender on our tail, otherwise bomb (spec §14). False when there is nothing to bomb with. */
+  private attack(world: BotWorld, self: AircraftEntity, reactionTicks: number, out: ControlInput): boolean {
+    const chaser = this.chaser(world, self, reactionTicks);
+    if (chaser) {
+      this.engage(world, self, chaser, out);
+      return true;
+    }
+    if (self.stores.bombs <= 0) return false;
+    const t = this.pickGroundTarget(world, self);
+    if (!t) return false;
+    this.bombRun(world, self, t, out);
+    return true;
+  }
+
+  /** An enemy within 3 km and 60° of our tail; leaves tPos/tVel on it for engage(). */
+  private chaser(world: BotWorld, self: AircraftEntity, reactionTicks: number): AircraftEntity | null {
+    const f = self.flight;
+    this.track.copy(f.vel).normalize();
+    for (const a of world.aircraftList()) {
+      if (!a.alive || a.team === self.team) continue;
+      if (!a.history.perceive(reactionTicks, 1 / world.tickRate, this.tPos, this.tVel)) continue;
+      this.rel.subVectors(this.tPos, f.pos);
+      const d = this.rel.length();
+      if (d < 1 || d > CHASER_RANGE_M) continue;
+      if (-this.rel.dot(this.track) / d >= CHASER_TAIL_COS) return a;
+    }
+    return null;
+  }
+
+  /** The standing target that needs the fewest more hits, nearest first. */
+  private pickGroundTarget(world: BotWorld, self: AircraftEntity): GroundTarget | null {
+    const p = self.flight.pos;
+    let best: GroundTarget | null = null;
+    let bestHits = Infinity;
+    let bestDistance = Infinity;
+    for (const t of world.groundTargetList()) {
+      if (t.destroyed) continue;
+      const hits = hitsToDestroy(t, BOMB_ANVIL.damage);
+      const d = Math.hypot(t.pos.x - p.x, t.pos.z - p.z);
+      if (hits < bestHits || (hits === bestHits && d < bestDistance)) {
+        best = t;
+        bestHits = hits;
+        bestDistance = d;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Steers so the predicted impact point runs across the target and drops a two-bomb stick that straddles it, then
+   * flies on and comes back for another pass (spec §14).
+   */
+  private bombRun(world: BotWorld, self: AircraftEntity, t: GroundTarget, out: ControlInput): void {
+    const f = self.flight;
+    if (t.id !== this.runTargetId) {
+      this.runTargetId = t.id;
+      this.newStick();
+    }
+    this.track.set(f.vel.x, 0, f.vel.z);
+    if (this.track.lengthSq() < 1) this.track.set(0, 0, -1).applyQuaternion(f.quat).setY(0);
+    this.track.normalize();
+    const r = BOMB_ANVIL.fullDamageRadiusM;
+    if (world.tick >= this.throwRefreshTick) this.updateThrow(world, f, false);
+    const interval = Math.ceil(BOMB_ANVIL.minReleaseIntervalS * world.tickRate);
+    let along = this.aimAt(t, f);
+    // How far apart the two bombs of a stick land: roughly the ground speed times the interval, or, close to the
+    // release point, how fast the predicted impact point itself sweeps forward (a slight climb stretches the stick).
+    let spacing = Math.hypot(f.vel.x, f.vel.z) * (interval / world.tickRate);
+    const finalRun = along < FINE_THROW_ALONG_M && along > -r;
+    if (finalRun) {
+      this.updateThrow(world, f, true);
+      along = this.aimAt(t, f);
+      if (this.fineTick === world.tick - 1) spacing = (this.fineAlong - along) * interval;
+      this.fineTick = world.tick;
+      this.fineAlong = along;
+    }
+    const ex = this.miss.x;
+    const ez = this.miss.z;
+    if (this.stickBombs > 0 && this.stickBombs < STICK_SIZE) {
+      if (world.tick - this.stickTick >= interval) this.releaseInStick(world, out);
+    } else if (this.stickBombs === 0) {
+      // Center the stick on the target: the first bomb half a spacing short, the second half a spacing beyond.
+      const cross = Math.abs(ex * this.track.z - ez * this.track.x);
+      if (cross <= r && along <= 0.5 * spacing && along > -r) this.releaseInStick(world, out);
+    }
+    const passed = along < -r;
+    if (passed && this.stickBombs >= STICK_SIZE) this.newStick();
+    const distance = Math.hypot(t.pos.x - f.pos.x, t.pos.z - f.pos.z);
+    const steady = finalRun || (this.stickBombs > 0 && this.stickBombs < STICK_SIZE);
+    if (passed && distance < this.throwAlong + REATTACK_DISTANCE_M) {
+      this.desired.copy(this.track);
+    } else if (steady) {
+      // On the final run keep the track and only ease sideways onto the target line: turning toward the target as the
+      // impact point crosses it would swing the jet around in the middle of the stick.
+      const cross = ex * -this.track.z + ez * this.track.x;
+      this.desired.set(-this.track.z, 0, this.track.x).multiplyScalar(clamp(cross / FINAL_RUN_CORRECTION_M, -0.2, 0.2)).add(this.track).normalize();
+    } else {
+      this.desired.set(ex, 0, ez);
+      if (this.desired.lengthSq() < 1) this.desired.copy(this.track);
+      this.desired.normalize();
+    }
+    // Hold level flight through the final run and the stick: any climb or dive there stretches or shortens the throw.
+    this.desired.setY(steady ? 0 : clamp((t.pos.y + RUN_AGL_M - f.pos.y) / 3000, -0.35, 0.35)).normalize();
+    this.fly(f, this.desired, Math.min(this.profile.maxPull, 0.6), RUN_THROTTLE, out);
+  }
+
+  /** Re-predicts how far ahead along the track a bomb released now would land. */
+  private updateThrow(world: BotWorld, f: FlightState, fine: boolean): void {
+    this.throwRefreshTick = world.tick + Math.round(THROW_REFRESH_S * world.tickRate);
+    const dt = fine ? 1 / world.tickRate : THROW_PREDICT_DT_S;
+    const landing = predictImpact(f.pos, f.vel, BOMB_ANVIL, world.terrain, dt, this.impact);
+    this.throwAlong = landing ? this.rel.subVectors(landing, f.pos).setY(0).dot(this.track) : 0;
+  }
+
+  /**
+   * Where this pilot believes the bombs would land now (the throw carried along the track, off by the pilot's
+   * error); leaves the horizontal miss to the target in `miss` and returns its along-track part (+ = target ahead).
+   */
+  private aimAt(t: GroundTarget, f: FlightState): number {
+    this.impact.copy(f.pos).addScaledVector(this.track, this.throwAlong).add(this.bombAim);
+    this.miss.set(t.pos.x - this.impact.x, 0, t.pos.z - this.impact.z);
+    return this.miss.dot(this.track);
+  }
+
+  private releaseInStick(world: BotWorld, out: ControlInput): void {
+    out.dropBomb = true;
+    this.stickBombs++;
+    this.stickTick = world.tick;
+  }
+
+  /** A fresh stick, with a new error drawn from this pilot's bomb accuracy (RMS split over two axes). */
+  private newStick(): void {
+    this.stickBombs = 0;
+    const sigma = this.profile.bombErrorM / Math.SQRT2;
+    this.bombAim.set(this.rng.gaussian() * sigma, 0, this.rng.gaussian() * sigma);
   }
 
   /** Heads for the nearest enemy (where it was last heard of) or the middle of the area. */
