@@ -35,7 +35,8 @@ function buildSentinel(config: AircraftConfig): Group {
   body.position.z = -L * 0.06;
   const nose = new Mesh(new SphereGeometry(R, 20, 12).scale(1, 0.95, 1.9), skin);
   nose.position.z = body.position.z - bodyLength / 2;
-  const tail = new Mesh(new CylinderGeometry(R * 0.35, R, L * 0.2, 20).rotateX(-Math.PI / 2), skin);
+  // Narrow end aft: rotating +90° about x turns the cylinder's top (+y) toward the tail (+z).
+  const tail = new Mesh(new CylinderGeometry(R * 0.35, R, L * 0.2, 20).rotateX(Math.PI / 2), skin);
   tail.position.set(0, R * 0.35, body.position.z + bodyLength / 2 + L * 0.1);
   const cockpit = new Mesh(new SphereGeometry(R * 0.75, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.55, 1.6), glass);
   cockpit.position.set(0, R * 0.55, nose.position.z + R * 0.6);
