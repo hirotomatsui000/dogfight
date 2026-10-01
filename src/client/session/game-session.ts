@@ -5,7 +5,9 @@ import type { Terrain } from '../../shared/map/terrain.ts';
 import type { ModeStatus } from '../../shared/modes/mode.ts';
 import type { ControlInput } from '../../shared/physics/controls.ts';
 import type { FlightState } from '../../shared/physics/flight-model.ts';
+import type { MissileKind } from '../../shared/data/weapons.ts';
 import type { SeekerState } from '../../shared/targeting/ir-seeker.ts';
+import type { RadarLockState } from '../../shared/targeting/radar-lock.ts';
 import type { Contact } from '../../shared/targeting/sensors.ts';
 import type { MissileWarning } from '../../shared/targeting/warnings.ts';
 import type { StoresState } from '../../shared/world/entities.ts';
@@ -39,12 +41,17 @@ export interface AircraftView {
   targetId: number | null;
   contacts: readonly Contact[];
   seeker: Readonly<SeekerState>;
+  /** the Lance's radar lock */
+  radarLock: Readonly<RadarLockState>;
+  /** RWR: an enemy radar lock, or a Lance its launcher still guides, is on this aircraft */
+  lockedByRadar: boolean;
   /** nearest missile guiding on this aircraft inside warning range */
   incoming: MissileWarning | null;
 }
 
 export interface MissileView {
   readonly id: number;
+  readonly kind: MissileKind;
   readonly team: TeamId;
   readonly ownerId: number;
   targetId: number | null;

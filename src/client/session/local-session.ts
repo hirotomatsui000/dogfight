@@ -193,6 +193,8 @@ export class LocalSession implements GameSession {
           targetId: null,
           contacts: a.contacts,
           seeker: a.seeker,
+          radarLock: a.radarLock,
+          lockedByRadar: false,
           incoming: null,
         };
         this.viewCache.set(a.id, view);
@@ -214,6 +216,7 @@ export class LocalSession implements GameSession {
       view.deaths = a.deaths;
       view.firingCannon = a.firingCannon;
       view.targetId = a.targetId;
+      view.lockedByRadar = a.lockedByRadar;
       view.incoming = a.alive ? incomingMissileWarning(a, this.world.missileList()) : null;
     }
     for (const id of this.viewCache.keys()) if (!seen.has(id)) this.viewCache.delete(id);
@@ -223,7 +226,7 @@ export class LocalSession implements GameSession {
       liveMissiles.add(m.id);
       let v = this.missileViews.get(m.id);
       if (!v) {
-        v = { id: m.id, team: m.team, ownerId: m.ownerId, targetId: m.targetId, position: new Vector3(), velocity: new Vector3(), motorBurning: true };
+        v = { id: m.id, kind: m.spec.id, team: m.team, ownerId: m.ownerId, targetId: m.targetId, position: new Vector3(), velocity: new Vector3(), motorBurning: true };
         this.missileViews.set(m.id, v);
       }
       v.targetId = m.targetId;

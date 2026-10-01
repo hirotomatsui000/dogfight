@@ -1,6 +1,8 @@
 import type { TeamId } from '../data/aircraft/types.ts';
+import type { MissileKind } from '../data/weapons.ts';
 import { type ControlInput, neutralInput, sanitizeInput } from '../physics/controls.ts';
 import type { SeekerMode } from '../targeting/ir-seeker.ts';
+import type { RadarLockMode } from '../targeting/radar-lock.ts';
 import { ProtocolError } from './protocol.ts';
 
 /** Binary message kinds (first byte). */
@@ -89,6 +91,7 @@ export interface SnapshotAircraft {
 
 export interface SnapshotMissile {
   id: number;
+  kind: MissileKind;
   ownerId: number;
   targetId: number | null;
   motorBurning: boolean;
@@ -135,6 +138,12 @@ export interface OwnState {
   seekerMode: SeekerMode;
   seekerTargetId: number | null;
   seekerAxis: V3;
+  radarLockMode: RadarLockMode;
+  radarLockTargetId: number | null;
+  /** 0..1, 1 = locked */
+  radarLockProgress: number;
+  /** RWR: an enemy radar lock or a supported Lance is on this jet */
+  lockedByRadar: boolean;
   targetId: number | null;
   outOfBoundsTicks: number;
   contacts: SnapshotContact[];
@@ -154,12 +163,13 @@ export interface Snapshot {
 }
 
 const SEEKER_MODES: readonly SeekerMode[] = ['off', 'search', 'track', 'locked'];
+const RADAR_LOCK_MODES: readonly RadarLockMode[] = ['off', 'search', 'tracking', 'locked'];
 const HEADER = 1 + 4 + 4 + 1;
 const AIRCRAFT_BYTES = 2 + 1 + 1 + 2 + 1 + 12 + 8 + 6;
 const MISSILE_BYTES = 2 + 2 + 2 + 1 + 12 + 6;
 const BOMB_BYTES = 2 + 1 + 12 + 6;
 const TARGET_BYTES = 2;
-const OWN_FIXED = 12 * 3 + 16 + 4 + 4 + 2 + 2 + 1 + 1 + 1 + 1 + 1 + 2 + 12 + 2 + 2 + 1;
+const OWN_FIXED = 12 * 3 + 16 + 4 + 4 + 2 + 2 + 1 + 1 + 1 + 1 + 1 + 2 + 12 + 1 + 2 + 1 + 1 + 2 + 2 + 1;
 const CONTACT_BYTES = 2 + 1 + 4 + 4;
 const MAX_LIST = 255;
 
@@ -231,7 +241,7 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     u16(m.id);
     u16(m.ownerId);
     id(m.targetId);
-    u8((m.motorBurning ? 1 : 0) | (teamByte(m.team) << 1));
+    u8((m.motorBurning ? 1 : 0) | (teamByte(m.team) << 1) | (m.kind === 'lance' ? 4 : 0));
     vec(m.pos);
     vel(m.vel);
   }
@@ -267,6 +277,10 @@ export function encodeSnapshot(s: Snapshot): ArrayBuffer {
     u8(Math.max(0, SEEKER_MODES.indexOf(w.seekerMode)));
     id(w.seekerTargetId);
     vec(w.seekerAxis);
+    u8(Math.max(0, RADAR_LOCK_MODES.indexOf(w.radarLockMode)));
+    id(w.radarLockTargetId);
+    u8(w.radarLockProgress * 255);
+    u8(w.lockedByRadar ? 1 : 0);
     id(w.targetId);
     u16(w.outOfBoundsTicks);
     const contacts = w.contacts.slice(0, MAX_LIST);
@@ -343,7 +357,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot {
     const ownerId = u16();
     const targetId = id();
     const flags = u8();
-    missiles.push({ id: idv, ownerId, targetId, motorBurning: (flags & 1) !== 0, team: byteTeam(flags >> 1), pos: vec(), vel: vel() });
+    missiles.push({ id: idv, kind: flags & 4 ? 'lance' : 'dart', ownerId, targetId, motorBurning: (flags & 1) !== 0, team: byteTeam((flags >> 1) & 1), pos: vec(), vel: vel() });
   }
   const bombs: SnapshotBomb[] = [];
   for (let n = u8(); n > 0; n--) bombs.push({ id: u16(), team: byteTeam(u8()), pos: vec(), vel: vel() });
@@ -366,6 +380,10 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot {
     const seekerMode = SEEKER_MODES[u8()] ?? 'off';
     const seekerTargetId = id();
     const seekerAxis = vec();
+    const radarLockMode = RADAR_LOCK_MODES[u8()] ?? 'off';
+    const radarLockTargetId = id();
+    const radarLockProgress = u8() / 255;
+    const lockedByRadar = (u8() & 1) !== 0;
     const targetId = id();
     const outOfBoundsTicks = u16();
     const contacts: SnapshotContact[] = [];
@@ -374,7 +392,7 @@ export function decodeSnapshot(buf: ArrayBuffer): Snapshot {
       const flags = u8();
       contacts.push({ id: cid, visual: (flags & 1) !== 0, radar: (flags & 2) !== 0, rangeM: f32(), offNoseRad: f32() });
     }
-    own = { pos, vel: velocity, angVel, quat: q, throttle, airbrake, hp, cannonRounds, srm, mrm, countermeasures, bombs: bombsLeft, seekerMode, seekerTargetId, seekerAxis, targetId, outOfBoundsTicks, contacts };
+    own = { pos, vel: velocity, angVel, quat: q, throttle, airbrake, hp, cannonRounds, srm, mrm, countermeasures, bombs: bombsLeft, seekerMode, seekerTargetId, seekerAxis, radarLockMode, radarLockTargetId, radarLockProgress, lockedByRadar, targetId, outOfBoundsTicks, contacts };
   }
   return { tick, ackSeq, queueDepth, aircraft, missiles, bombs, targets, own };
 }

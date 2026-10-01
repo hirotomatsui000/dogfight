@@ -1,4 +1,6 @@
+import { MRM_LANCE } from '../shared/data/weapons.ts';
 import type { OwnState, Snapshot } from '../shared/net/codec.ts';
+import { radarLockProgress } from '../shared/targeting/radar-lock.ts';
 import type { AircraftEntity } from '../shared/world/entities.ts';
 import type { World } from '../shared/world/world.ts';
 
@@ -22,6 +24,7 @@ export function sharedSnapshot(world: World): Omit<Snapshot, 'ackSeq' | 'queueDe
     })),
     missiles: world.missileList().map((m) => ({
       id: m.id,
+      kind: m.spec.id,
       ownerId: m.ownerId,
       targetId: m.targetId,
       motorBurning: m.ageS < m.spec.burnTimeS,
@@ -53,6 +56,10 @@ export function ownState(a: AircraftEntity): OwnState {
     seekerMode: a.seeker.mode,
     seekerTargetId: a.seeker.targetId,
     seekerAxis: v3(a.seeker.axis),
+    radarLockMode: a.radarLock.mode,
+    radarLockTargetId: a.radarLock.targetId,
+    radarLockProgress: radarLockProgress(a.radarLock, MRM_LANCE, a.config),
+    lockedByRadar: a.lockedByRadar,
     targetId: a.targetId,
     outOfBoundsTicks: a.outOfBoundsTicks,
     contacts: a.contacts.map((c) => ({ id: c.id, visual: c.visual, radar: c.radar, rangeM: c.rangeM, offNoseRad: c.offNoseRad })),

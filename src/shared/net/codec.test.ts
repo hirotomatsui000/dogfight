@@ -11,7 +11,10 @@ const snapshot = (): Snapshot => ({
     { id: 1, alive: true, firingCannon: true, spawnGen: 300, hp: 62.5, throttle: 0.95, pos: [-7512.25, 3012.5, 40.75], quat: [0.1, 0.7, -0.1, 0.7], vel: [251.3, -4.2, 0.05] },
     { id: 9, alive: false, firingCannon: false, spawnGen: 2, hp: 0, throttle: 0, pos: [0, 0, 0], quat: [0, 0, 0, 1], vel: [0, 0, 0] },
   ],
-  missiles: [{ id: 4, ownerId: 1, targetId: 9, motorBurning: true, team: 'usa', pos: [10, 20, 30], vel: [800, 0, -12.3] }],
+  missiles: [
+    { id: 4, kind: 'dart', ownerId: 1, targetId: 9, motorBurning: true, team: 'usa', pos: [10, 20, 30], vel: [800, 0, -12.3] },
+    { id: 5, kind: 'lance', ownerId: 9, targetId: 1, motorBurning: false, team: 'russia', pos: [10, 20, 30], vel: [900, 0, 0] },
+  ],
   bombs: [{ id: 2, team: 'russia', pos: [5, 1500, -5], vel: [200, -30, 0] }],
   targets: [
     { hpFraction: 1, destroyed: false },
@@ -33,6 +36,10 @@ const snapshot = (): Snapshot => ({
     seekerMode: 'track',
     seekerTargetId: 9,
     seekerAxis: [0, 0, -1],
+    radarLockMode: 'tracking',
+    radarLockTargetId: 9,
+    radarLockProgress: 0.4,
+    lockedByRadar: true,
     targetId: 9,
     outOfBoundsTicks: 0,
     contacts: [{ id: 9, visual: true, radar: false, rangeM: 3500.5, offNoseRad: 0.25 }],
@@ -97,7 +104,8 @@ describe('snapshot codec', () => {
     const qLen = Math.hypot(...a.quat);
     expect(qLen).toBeCloseTo(1, 4);
     expect(d.aircraft[1].alive).toBe(false);
-    expect(d.missiles[0]).toMatchObject({ id: 4, ownerId: 1, targetId: 9, motorBurning: true, team: 'usa' });
+    expect(d.missiles[0]).toMatchObject({ id: 4, kind: 'dart', ownerId: 1, targetId: 9, motorBurning: true, team: 'usa' });
+    expect(d.missiles[1]).toMatchObject({ id: 5, kind: 'lance', ownerId: 9, targetId: 1, motorBurning: false, team: 'russia' });
     expect(d.bombs[0]).toMatchObject({ id: 2, team: 'russia' });
     expect(d.targets[1]).toEqual({ hpFraction: 0, destroyed: true });
     const own = d.own;
@@ -107,6 +115,8 @@ describe('snapshot codec', () => {
     expect(own.cannonRounds).toBe(433);
     expect(own.contacts[0]).toMatchObject({ id: 9, visual: true, radar: false });
     expect(own.targetId).toBe(9);
+    expect(own).toMatchObject({ radarLockMode: 'tracking', radarLockTargetId: 9, lockedByRadar: true });
+    expect(own.radarLockProgress).toBeCloseTo(0.4, 2);
   });
 
   it('marks missing ids as null and works without the own section', () => {

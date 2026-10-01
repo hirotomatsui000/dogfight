@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { getAircraft } from '../../shared/data/aircraft/registry.ts';
 import type { TeamId } from '../../shared/data/aircraft/types.ts';
 import type { MapDefinition } from '../../shared/data/maps/map-definition.ts';
-import { CANNONS } from '../../shared/data/weapons.ts';
+import { CANNONS, MRM_LANCE } from '../../shared/data/weapons.ts';
 import { damageFlightEnv, damageState } from '../../shared/damage/damage.ts';
 import type { Terrain } from '../../shared/map/terrain.ts';
 import { Rng } from '../../shared/math/rng.ts';
@@ -20,6 +20,7 @@ import { atmosphere } from '../../shared/physics/atmosphere.ts';
 import { type ControlInput, neutralInput } from '../../shared/physics/controls.ts';
 import { createFlightState, type FlightEnv, type FlightState, stepFlight } from '../../shared/physics/flight-model.ts';
 import { createSeeker } from '../../shared/targeting/ir-seeker.ts';
+import { createRadarLock, radarLockTimeS } from '../../shared/targeting/radar-lock.ts';
 import type { Contact } from '../../shared/targeting/sensors.ts';
 import { incomingMissileWarning } from '../../shared/targeting/warnings.ts';
 import { advanceProjectile, createProjectile, type Projectile, projectileVelocity } from '../../shared/weapons/cannon.ts';
@@ -95,6 +96,8 @@ class NetAircraft implements AircraftView {
   targetId: number | null = null;
   contacts: Contact[] = [];
   seeker = createSeeker();
+  radarLock = createRadarLock();
+  lockedByRadar = false;
   incoming: AircraftView['incoming'] = null;
   readonly samples: Sample[] = [];
   /** tracer timing for the cosmetic cannon fire */
@@ -597,6 +600,10 @@ export class NetworkSession implements GameSession {
     me.seeker.mode = own.seekerMode;
     me.seeker.targetId = own.seekerTargetId;
     v3(me.seeker.axis, own.seekerAxis);
+    me.radarLock.mode = own.radarLockMode;
+    me.radarLock.targetId = own.radarLockTargetId;
+    me.radarLock.timerS = own.radarLockProgress * radarLockTimeS(MRM_LANCE, me.config);
+    me.lockedByRadar = own.lockedByRadar;
     me.boundarySecondsLeft = own.outOfBoundsTicks > 0 ? (BOUNDARY_GRACE_S * TICK_RATE - own.outOfBoundsTicks) / TICK_RATE : null;
     while (this.pending.length > 0 && this.pending[0].seq <= snap.ackSeq) this.pending.shift();
     if (!mine.alive) {
@@ -728,7 +735,7 @@ export class NetworkSession implements GameSession {
 
     blend(this.missileViews as unknown as Map<number, MovingView>, s0.missiles, s1?.missiles, (id) => {
       const m = s0.missiles.find((x) => x.id === id);
-      return { id, team: m?.team ?? 'usa', ownerId: m?.ownerId ?? 0, targetId: null, position: new Vector3(), velocity: new Vector3(), motorBurning: true, samplesFrom: s0.tick } as MissileView & { samplesFrom: number };
+      return { id, kind: m?.kind ?? 'dart', team: m?.team ?? 'usa', ownerId: m?.ownerId ?? 0, targetId: null, position: new Vector3(), velocity: new Vector3(), motorBurning: true, samplesFrom: s0.tick } as MissileView & { samplesFrom: number };
     });
     for (const m of s0.missiles) {
       const v = this.missileViews.get(m.id);

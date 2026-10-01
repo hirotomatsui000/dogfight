@@ -167,6 +167,18 @@ describe('NetworkSession', () => {
     expect(worst).toBeLessThan(1.5);
   });
 
+  it('shows the server radar lock on the own jet once the Lance is selected', async () => {
+    const h = new Harness(50);
+    const s = await join(h, 1);
+    fly(h, s, 1, () => neutralInput(0.8));
+    expect(s.localView()?.radarLock.mode).toBe('off');
+    fly(h, s, 3, () => ({ ...neutralInput(0.8), weapon: 'mrm' }));
+    const room = h.manager.room('net');
+    const server = room?.world.getAircraft(s.localId ?? -1);
+    expect(server?.radarLock.mode).not.toBe('off');
+    expect(s.localView()?.radarLock.mode).not.toBe('off');
+  });
+
   it('lets two clients see each other and tells them when the line drops', async () => {
     const h = new Harness(30);
     const a = await join(h, 1, 'kestrel');

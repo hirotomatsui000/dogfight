@@ -2,6 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { kestrel } from '../../shared/data/aircraft/kestrel.ts';
 import { createFlightState } from '../../shared/physics/flight-model.ts';
 import { createSeeker } from '../../shared/targeting/ir-seeker.ts';
+import { createRadarLock } from '../../shared/targeting/radar-lock.ts';
 import type { AircraftView } from '../session/game-session.ts';
 
 /** An aircraft view for client tests: level at 1 km, x = id × 100 m, heading north at 200 m/s. */
@@ -31,6 +32,8 @@ export function testView(id: number, over: Partial<AircraftView> = {}): Aircraft
     targetId: null,
     contacts: [],
     seeker: createSeeker(),
+    radarLock: createRadarLock(),
+    lockedByRadar: false,
     incoming: null,
     ...over,
   };

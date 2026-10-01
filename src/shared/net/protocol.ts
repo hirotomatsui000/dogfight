@@ -3,7 +3,7 @@ import type { ModeStatus } from '../modes/mode.ts';
 import type { GameEvent } from '../world/events.ts';
 
 /** Bumped whenever a message layout changes; client and server must agree (spec §7, M2). */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** The server sends a snapshot every this many ticks (30 Hz at 60 Hz ticks). */
 export const SNAPSHOT_EVERY_TICKS = 2;
