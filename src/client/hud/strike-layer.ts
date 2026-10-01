@@ -6,7 +6,7 @@ import { formatRange } from './format.ts';
 import type { HudFrame } from './hud-frame.ts';
 import { AMBER, FONT, FONT_SMALL, FOE, FRIEND, GREEN, WHITE } from './palette.ts';
 import type { Projector, ScreenPoint } from './projector.ts';
-import { strikeStatusParts } from './strike-hud.ts';
+import { strikeStatusLines } from './strike-hud.ts';
 
 const MARKER_PX = 11;
 const HP_BAR_PX = 28;
@@ -20,12 +20,14 @@ export function drawStrikeStatus(ctx: CanvasRenderingContext2D, f: HudFrame, s: 
   const standing = f.groundTargets.filter((t) => !t.destroyed).length;
   ctx.save();
   ctx.font = FONT;
-  let x = 16;
-  for (const [text, side] of strikeStatusParts(s, f.status.timeLeftS ?? 0, standing, f.groundTargets.length, f.view.team)) {
-    ctx.fillStyle = side === 'mine' ? FRIEND : side === 'theirs' ? FOE : WHITE;
-    ctx.fillText(text, x, 44);
-    x += ctx.measureText(text).width;
-  }
+  strikeStatusLines(s, f.status.timeLeftS ?? 0, standing, f.groundTargets.length, f.view.team).forEach((line, i) => {
+    let x = 16;
+    for (const [text, side] of line) {
+      ctx.fillStyle = side === 'mine' ? FRIEND : side === 'theirs' ? FOE : WHITE;
+      ctx.fillText(text, x, 44 + i * 20);
+      x += ctx.measureText(text).width;
+    }
+  });
   ctx.restore();
 }
 

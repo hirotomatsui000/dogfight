@@ -11,16 +11,23 @@ export type StrikeTextPart = readonly [text: string, side: 'mine' | 'theirs' | '
 /** A target's "UNDER ATTACK" banner repeats at most this often (spec §15.2). */
 export const UNDER_ATTACK_REPEAT_S = 3;
 
-/** The Strike status line: clock, targets standing, aircraft left per team (spec §15.2). */
-export function strikeStatusParts(s: StrikeStatus, timeLeftS: number, standing: number, total: number, localTeam: TeamId): StrikeTextPart[] {
+/**
+ * The Strike status (spec §15.2): the clock and targets standing, then aircraft left per team. Two short lines, so
+ * the status stays clear of the heading tape in windows narrower than about 1,250 px.
+ */
+export function strikeStatusLines(s: StrikeStatus, timeLeftS: number, standing: number, total: number, localTeam: TeamId): StrikeTextPart[][] {
   const other = localTeam === s.attacker ? s.defender : s.attacker;
   return [
-    [formatClock(timeLeftS), 'neutral'],
-    [`   TARGETS ${standing}/${total}`, 'neutral'],
-    ['   AIRCRAFT ', 'neutral'],
-    [`${TEAM_NAMES[localTeam].toUpperCase()} ${s.aircraftLeft[localTeam]}`, 'mine'],
-    ['  ', 'neutral'],
-    [`${TEAM_NAMES[other].toUpperCase()} ${s.aircraftLeft[other]}`, 'theirs'],
+    [
+      [formatClock(timeLeftS), 'neutral'],
+      [`   TARGETS ${standing}/${total}`, 'neutral'],
+    ],
+    [
+      ['AIRCRAFT ', 'neutral'],
+      [`${TEAM_NAMES[localTeam].toUpperCase()} ${s.aircraftLeft[localTeam]}`, 'mine'],
+      ['  ', 'neutral'],
+      [`${TEAM_NAMES[other].toUpperCase()} ${s.aircraftLeft[other]}`, 'theirs'],
+    ],
   ];
 }
 

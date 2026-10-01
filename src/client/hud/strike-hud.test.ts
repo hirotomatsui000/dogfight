@@ -2,22 +2,26 @@ import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { StrikeStatus } from '../../shared/modes/mode.ts';
 import type { GroundTargetView } from '../session/game-session.ts';
-import { releaseCue, strikeStatusParts, TargetAlerts, targetDestroyedText } from './strike-hud.ts';
+import { releaseCue, strikeStatusLines, TargetAlerts, targetDestroyedText } from './strike-hud.ts';
 
 const status: StrikeStatus = { attacker: 'russia', defender: 'usa', aircraftLeft: { usa: 4, russia: 3 }, targetsDestroyed: 1, targetsToWin: 2, reason: null };
 const target = (id: string, x: number, destroyed = false): GroundTargetView => ({ id, kind: 'radar', label: id, position: new Vector3(x, 100, 0), maxHp: 100, hp: destroyed ? 0 : 100, destroyed });
 
 describe('strike HUD', () => {
-  it('shows the clock, targets standing and aircraft left, own team first', () => {
-    expect(strikeStatusParts(status, 462, 2, 3, 'usa')).toEqual([
-      ['7:42', 'neutral'],
-      ['   TARGETS 2/3', 'neutral'],
-      ['   AIRCRAFT ', 'neutral'],
-      ['USA 4', 'mine'],
-      ['  ', 'neutral'],
-      ['RUSSIA 3', 'theirs'],
+  it('shows the clock and targets standing, then aircraft left with own team first', () => {
+    expect(strikeStatusLines(status, 462, 2, 3, 'usa')).toEqual([
+      [
+        ['7:42', 'neutral'],
+        ['   TARGETS 2/3', 'neutral'],
+      ],
+      [
+        ['AIRCRAFT ', 'neutral'],
+        ['USA 4', 'mine'],
+        ['  ', 'neutral'],
+        ['RUSSIA 3', 'theirs'],
+      ],
     ]);
-    expect(strikeStatusParts(status, 462, 2, 3, 'russia')[3]).toEqual(['RUSSIA 3', 'mine']);
+    expect(strikeStatusLines(status, 462, 2, 3, 'russia')[1][1]).toEqual(['RUSSIA 3', 'mine']);
   });
 
   it('cues the release while the impact point is within 30 m of a standing target', () => {
