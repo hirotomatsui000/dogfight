@@ -23,6 +23,7 @@ import { Hud } from './hud/hud.ts';
 import { describeDeath, KillFeed } from './hud/kill-feed.ts';
 import { setHudColor } from './hud/palette.ts';
 import { releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
+import { formatTimeOfDay } from './hud/format.ts';
 import { takeoffHint } from './hud/takeoff.ts';
 import { trainingPrompt } from './hud/training-prompts.ts';
 import { BASE_MOUSE_SENSITIVITY, ControlMapper, type ControlMode } from './input/control-mapper.ts';
@@ -631,6 +632,7 @@ export async function startGame(
         bombImpact,
         releaseCue: releaseCue(bombImpact, targets),
         training: status.training ? trainingPrompt(status.training, settings.current.keys, mapper.settings.mode, padFrame.active) : null,
+        localTime: formatTimeOfDay(session.hour()),
       });
       if (audio && active) {
         audio.update({

@@ -294,7 +294,7 @@ export class Hud {
   private drawModeAndHint(f: HudFrame): void {
     const ctx = this.ctx;
     ctx.font = FONT_SMALL;
-    ctx.fillText(`${f.status.label.toUpperCase()}  ·  ${f.view.callsign}`, 16, 22);
+    ctx.fillText(`${f.status.label.toUpperCase()}  ·  ${f.view.callsign}${f.localTime ? `  ·  ${f.localTime}` : ''}`, 16, 22);
     ctx.globalAlpha = 0.75;
     ctx.fillText(f.hint, this.width / 2 - ctx.measureText(f.hint).width / 2, this.height - 16);
     ctx.globalAlpha = 1;

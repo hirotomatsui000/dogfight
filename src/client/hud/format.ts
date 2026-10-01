@@ -44,3 +44,9 @@ export function formatClosure(ms: number, units: UnitSystem): string {
   const v = Math.round(speedValue(ms, units));
   return `${v >= 0 ? '+' : ''}${v} ${speedLabel(units)}`;
 }
+
+/** A local hour (0 … 24) as "07:05". */
+export function formatTimeOfDay(hour: number): string {
+  const minutes = Math.floor((((hour % 24) + 24) % 24) * 60);
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}

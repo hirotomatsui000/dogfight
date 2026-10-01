@@ -41,4 +41,6 @@ export interface HudFrame {
   releaseCue: boolean;
   /** the lesson panel in training, otherwise null */
   training: TrainingPrompt | null;
+  /** the time of day, "17:32" (M4) */
+  localTime?: string;
 }

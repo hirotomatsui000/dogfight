@@ -46,7 +46,7 @@ export class GroundLights {
 }
 
 /** Shared by every jet: steady red, green and white lights, and a white strobe that flashes. */
-const navMaterial = new PointsMaterial({ size: 4, sizeAttenuation: false, vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 });
+const navMaterial = new PointsMaterial({ size: 5, sizeAttenuation: false, vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 });
 const strobeMaterial = new PointsMaterial({ size: 6, sizeAttenuation: false, color: 0xffffff, blending: AdditiveBlending, transparent: true, depthWrite: false, opacity: 0 });
 const STROBE_PERIOD_S = 1.3;
 const STROBE_ON_S = 0.07;
@@ -56,10 +56,11 @@ const STROBE_ON_S = 0.07;
  * white strobes on both tips. Positions come from the jet's dimensions in its data file.
  */
 export function navLights(v: AircraftVisual): Group {
+  // Just outside the wingtips and the tail cone, so the airframe never hides them.
   const tipZ = (v.wingPositionFraction - 0.5) * v.lengthM + 0.35 * v.wingRootChordM;
-  const tipX = v.spanM * 0.49;
+  const tipX = v.spanM * 0.5 + 0.25;
   const steady = new BufferGeometry();
-  steady.setAttribute('position', new BufferAttribute(new Float32Array([-tipX, 0, tipZ, tipX, 0, tipZ, 0, v.tailHeightM * 0.15, v.lengthM * 0.48]), 3));
+  steady.setAttribute('position', new BufferAttribute(new Float32Array([-tipX, 0.05, tipZ, tipX, 0.05, tipZ, 0, v.tailHeightM * 0.15, v.lengthM * 0.5 + 0.3]), 3));
   steady.setAttribute('color', new BufferAttribute(new Float32Array([1, 0.12, 0.1, 0.15, 1, 0.3, 1, 1, 0.95]), 3));
   const strobes = new BufferGeometry();
   strobes.setAttribute('position', new BufferAttribute(new Float32Array([-tipX, 0, tipZ + 0.3, tipX, 0, tipZ + 0.3]), 3));
@@ -76,7 +77,7 @@ export function navLights(v: AircraftVisual): Group {
 export function updateNavLights(night: number, timeS: number, pixelRatio: number): void {
   const on = Math.max(0, Math.min(1, (night - 0.05) / 0.4));
   navMaterial.opacity = on;
-  navMaterial.size = 4 * pixelRatio;
+  navMaterial.size = 5 * pixelRatio;
   strobeMaterial.size = 6 * pixelRatio;
   strobeMaterial.opacity = on > 0 && timeS % STROBE_PERIOD_S < STROBE_ON_S ? on : 0;
 }

@@ -3,6 +3,7 @@ import {
   altitudeLabel,
   altitudeValue,
   formatClock,
+  formatTimeOfDay,
   formatClosure,
   formatMach,
   formatRange,
@@ -47,5 +48,13 @@ describe('HUD formatting', () => {
     expect(formatRange(1852 * 3.25, 'imperial')).toBe('3.3 NM');
     expect(formatClosure(100, 'metric')).toBe('+360 KM/H');
     expect(formatClosure(-50, 'imperial')).toBe('-97 KT');
+  });
+});
+
+describe('time of day (M4)', () => {
+  it('reads like a 24-hour clock', () => {
+    expect(formatTimeOfDay(6.5)).toBe('06:30');
+    expect(formatTimeOfDay(23.999)).toBe('23:59');
+    expect(formatTimeOfDay(24.25)).toBe('00:15');
   });
 });

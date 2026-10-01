@@ -32,7 +32,7 @@ const HAZE_DENSITY = 2.8e-5;
 /** Inside a cloud the world fades to white within a few hundred metres. */
 const WHITEOUT_DENSITY = 5e-3;
 const SUN_INTENSITY = 2.6;
-const MOON_INTENSITY = 0.35;
+const MOON_INTENSITY = 0.5;
 /** The environment map is rebuilt when the sun has moved this much. */
 const ENV_REBUILD_RAD = 1.5 * DEG;
 /**
@@ -89,7 +89,7 @@ export class Environment {
   private readonly sky: Sky;
   private readonly sun = new DirectionalLight(0xfff2e0, SUN_INTENSITY);
   private readonly moon = new DirectionalLight(0x9fb2f2, 0);
-  private readonly ambient = new HemisphereLight(0x2a3550, 0x0d0f12, 0);
+  private readonly ambient = new HemisphereLight(0x3a4a72, 0x101318, 0);
   private readonly cloudLayer: CloudLayer;
   private readonly nightSky: NightSky;
   private readonly rain: Rain;
