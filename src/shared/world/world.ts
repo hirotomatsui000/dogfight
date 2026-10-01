@@ -1,4 +1,6 @@
+import { Vector3 } from 'three';
 import { BotPilot, type BotWorld, botSeed } from '../ai/bot-pilot.ts';
+import { DronePilot } from '../ai/drone-pilot.ts';
 import type { DifficultyProfile } from '../ai/difficulty.ts';
 import { damageFlightEnv, damageState, maneuverKillCredit } from '../damage/damage.ts';
 import { getAircraft } from '../data/aircraft/registry.ts';
@@ -7,9 +9,11 @@ import type { MapDefinition } from '../data/maps/map-definition.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { type Approach, closestApproach } from '../math/closest-approach.ts';
 import { Rng } from '../math/rng.ts';
-import type { GameMode, ModeContext } from '../modes/mode.ts';
+import type { DroneSpec, GameMode, ModeDirector } from '../modes/mode.ts';
+import { trimAlpha } from '../physics/aero.ts';
+import { atmosphere } from '../physics/atmosphere.ts';
 import { type ControlInput, neutralInput, sanitizeInput } from '../physics/controls.ts';
-import { type FlightEnv, stepFlight } from '../physics/flight-model.ts';
+import { createFlightState, type FlightEnv, stepFlight } from '../physics/flight-model.ts';
 import type { Projectile } from '../weapons/cannon.ts';
 import type { Bomb } from '../weapons/bomb.ts';
 import type { Missile } from '../weapons/missile.ts';
@@ -40,8 +44,13 @@ export interface AddAircraftOptions {
   bot?: DifficultyProfile;
 }
 
+/** Anything that flies an aircraft from the World's state: bots and training drones. */
+interface Pilot {
+  think(world: BotWorld, self: AircraftEntity, out: ControlInput): ControlInput;
+}
+
 /** Authoritative simulation. Pure: no I/O, no clocks, randomness only from `rng`. */
-export class World implements ModeContext, CombatHost, BotWorld {
+export class World implements ModeDirector, CombatHost, BotWorld {
   readonly tickRate = TICK_RATE;
   readonly map: MapDefinition;
   readonly terrain: Terrain;
@@ -52,7 +61,7 @@ export class World implements ModeContext, CombatHost, BotWorld {
   private readonly seed: number;
   private readonly aircraft = new Map<number, AircraftEntity>();
   private readonly groundTargets: GroundTarget[];
-  private readonly bots = new Map<number, { pilot: BotPilot; input: ControlInput }>();
+  private readonly bots = new Map<number, { pilot: Pilot; input: ControlInput }>();
   private events: GameEvent[] = [];
   private nextId = 1;
   private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1 };
@@ -134,6 +143,49 @@ export class World implements ModeContext, CombatHost, BotWorld {
     return entity;
   }
 
+  /** A target drone on a level orbit (training): it never fires and does not count as a team's spawn slot. */
+  addDrone(spec: DroneSpec): AircraftEntity {
+    const config = getAircraft(spec.aircraftId);
+    if (config.team !== spec.team) throw new Error(`${config.name} does not fly for team ${spec.team}`);
+    const speed = spec.orbit.speedMs;
+    const flight = createFlightState({
+      position: new Vector3(spec.x, spec.altitudeM, spec.z),
+      headingRad: spec.headingRad,
+      speed,
+      throttle: 0.6,
+      alphaRad: trimAlpha(config.physics, speed, atmosphere(spec.altitudeM).density),
+    });
+    const entity = createAircraftEntity({
+      id: this.nextId++,
+      callsign: spec.callsign,
+      team: spec.team,
+      config,
+      isBot: true,
+      flight,
+      spawnSlot: -1,
+      bombLoad: 0,
+    });
+    this.aircraft.set(entity.id, entity);
+    // The orbit center lies one radius to the right of the start: (cos h, sin h) in x/z.
+    const r = spec.orbit.radiusM;
+    const orbit = { x: spec.x + Math.cos(spec.headingRad) * r, z: spec.z + Math.sin(spec.headingRad) * r, radiusM: r, altitudeM: spec.altitudeM, speedMs: speed };
+    this.bots.set(entity.id, { pilot: new DronePilot(orbit), input: neutralInput(0.6) });
+    this.emit({ type: 'spawned', aircraftId: entity.id, spawnGen: entity.spawnGen });
+    return entity;
+  }
+
+  launchMissileAt(shooterId: number, targetId: number): number | null {
+    const shooter = this.aircraft.get(shooterId);
+    const target = this.aircraft.get(targetId);
+    if (!shooter || !shooter.alive || !target || !target.alive) return null;
+    return this.combat.launchAt(shooter, targetId).id;
+  }
+
+  restock(id: number): void {
+    const a = this.aircraft.get(id);
+    if (a && a.alive) resetForSpawn(a);
+  }
+
   removeAircraft(id: number): boolean {
     if (!this.aircraft.delete(id)) return false;
     this.bots.delete(id);
@@ -182,6 +234,7 @@ export class World implements ModeContext, CombatHost, BotWorld {
       if (!a.alive && a.respawnAtTick >= 0 && this.tick >= a.respawnAtTick && this.mode.canRespawn(a.team)) this.respawn(a);
     }
     this.mode.update(this);
+    this.mode.direct?.(this);
     this.tick++;
   }
 

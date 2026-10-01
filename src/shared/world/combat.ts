@@ -75,6 +75,14 @@ export class Combat {
     }
   }
 
+  /** A missile fired at `targetId` without a lock or launch checks (scripted training shots). */
+  launchAt(shooter: AircraftEntity, targetId: number): Missile {
+    const m = launchMissile(this.nextMissileId++, shooter, targetId, SRM_DART);
+    this.missiles.push(m);
+    this.host.emit({ type: 'missileLaunched', missileId: m.id, shooterId: shooter.id, targetId });
+    return m;
+  }
+
   /** Drops every reference to an aircraft that was destroyed or removed. */
   forget(id: number): void {
     for (const a of this.host.aircraftList()) {
