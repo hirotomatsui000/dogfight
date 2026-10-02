@@ -22,7 +22,7 @@ describe('livery', () => {
     expect(camoPatches('splinter', 7, 20).every((p) => p.points.length >= 4 && p.points.length <= 6)).toBe(true);
   });
 
-  it('has no textures without a DOM, so tests and the server never need a canvas', () => {
+  it('has no textures without a DOM, so tests never need a canvas', () => {
     expect(liveryTextures('kestrel', 'usa', getAircraft('kestrel').visual, [])).toBeNull();
   });
 });

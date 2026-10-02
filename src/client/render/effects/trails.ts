@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Mesh, NormalBlending, ShaderMaterial, type Vector3 } from 'three';
+import { BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Mesh, NormalBlending, ShaderMaterial } from 'three';
 import type { ParticleFrame } from './particles.ts';
 
 /** How a family of trails looks and lasts. */
@@ -257,13 +257,4 @@ export class TrailRibbons {
     this.geometry.dispose();
     this.material.dispose();
   }
-}
-
-/** The jet's load factor from two velocity samples (for jets whose flight state is interpolated, online). */
-export function loadFactorFromVelocity(prev: Vector3, vel: Vector3, dt: number, upX: number, upY: number, upZ: number): number {
-  if (dt <= 0) return 1;
-  const ax = (vel.x - prev.x) / dt;
-  const ay = (vel.y - prev.y) / dt + 9.80665;
-  const az = (vel.z - prev.z) / dt;
-  return (ax * upX + ay * upY + az * upZ) / 9.80665;
 }

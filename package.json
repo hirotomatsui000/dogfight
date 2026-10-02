@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Browser flight-combat game with fictional aircraft over a Poland-inspired landscape: single player, training and online multiplayer.",
+  "description": "Browser flight-combat game with fictional aircraft over a Poland-inspired landscape: dogfights against AI pilots, objective modes and training.",
   "engines": {
     "node": ">=23.6"
   },
@@ -15,15 +15,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "server": "node src/server/main.ts",
-    "start": "node src/server/main.ts",
-    "smoke": "node tools/smoke-test.ts",
     "tournament": "node tools/tournament.ts"
   },
   "dependencies": {
     "@fontsource/rajdhani": "5.3.0",
-    "three": "0.186.1",
-    "ws": "8.22.0"
+    "three": "0.186.1"
   },
   "devDependencies": {
     "@gltf-transform/core": "4.5.1",
@@ -31,7 +27,6 @@
     "@gltf-transform/functions": "4.5.1",
     "@types/node": "26.6.3",
     "@types/three": "0.186.0",
-    "@types/ws": "8.18.2",
     "meshoptimizer": "1.2.0",
     "sharp": "0.35.5",
     "typescript": "7.0.2",

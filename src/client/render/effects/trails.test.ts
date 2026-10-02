@@ -1,6 +1,6 @@
-import { Color, Vector3 } from 'three';
+import { Color } from 'three';
 import { describe, expect, it } from 'vitest';
-import { loadFactorFromVelocity, TrailRibbons, TrailStore } from './trails.ts';
+import { TrailRibbons, TrailStore } from './trails.ts';
 
 const look = { lifeS: 10, sampleS: 0.5, width0: 1, width1: 10, alpha: 0.8, fadeInS: 0.1, maxPoints: 30, color: new Color(1, 1, 1) };
 
@@ -42,12 +42,5 @@ describe('trail bookkeeping (M5)', () => {
     r.update(4, { pixelScale: 1000, fogColor: new Color(), fogDensity: 0 }, 1);
     expect(r.mesh.geometry.drawRange.count).toBe(18);
     r.dispose();
-  });
-
-  it('estimates the load factor from the velocity change', () => {
-    // Level flight: 1 G.
-    expect(loadFactorFromVelocity(new Vector3(200, 0, 0), new Vector3(200, 0, 0), 0.1, 0, 1, 0)).toBeCloseTo(1, 6);
-    // Pulling up at 5 G-worth of upward acceleration.
-    expect(loadFactorFromVelocity(new Vector3(200, 0, 0), new Vector3(200, 4 * 9.80665 * 0.1, 0), 0.1, 0, 1, 0)).toBeCloseTo(5, 6);
   });
 });

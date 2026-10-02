@@ -146,7 +146,7 @@ export class AirSuperiorityMode implements GameMode {
       scores: { ...this.scores },
       timeLeftS: this.timeLeftS(ctx),
       winner: this.winner,
-      // Progress in hundredths: enough for the bars, and the online status only changes when it moves visibly.
+      // Progress in hundredths: enough for the bars.
       zones: (this.zones ?? []).map((z) => ({ ...z, progress: Math.round(z.progress * 100) / 100, inside: { ...z.inside } })),
     };
   }

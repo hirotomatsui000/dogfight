@@ -7,7 +7,7 @@ import type { AircraftView, GameSession, GroundTargetView, MissileView } from '.
 import { BOMB_LOOK, LANCE_LOOK, MISSILE_LOOK, OrdnanceModels } from './ordnance-models.ts';
 import { type ParticleFrame, ParticleSystem } from './particles.ts';
 import { Tracers } from './tracers.ts';
-import { loadFactorFromVelocity, TrailRibbons, type TrailLook } from './trails.ts';
+import { TrailRibbons, type TrailLook } from './trails.ts';
 
 const SMOKE_CAPACITY = 9000;
 const FIRE_CAPACITY = 3000;
@@ -85,7 +85,8 @@ export class Effects {
   private damageTimer = 0;
   private readonly contrails = new TrailRibbons(CONTRAIL_LOOK, 4000);
   private readonly vapor = new TrailRibbons(VAPOR_LOOK, 1500);
-  private readonly loads = new Map<number, { vel: Vector3; g: number }>();
+  /** each jet's smoothed load factor, for the vapour */
+  private readonly loads = new Map<number, number>();
   private readonly wrecks: Wreck[] = [];
   private readonly options: EffectsOptions;
   /** effect time: stands still while the game is paused */
@@ -192,16 +193,9 @@ export class Effects {
       this.loads.delete(v.id);
       return;
     }
-    let load = this.loads.get(v.id);
-    if (!load) {
-      load = { vel: v.flight.vel.clone(), g: 1 };
-      this.loads.set(v.id, load);
-    }
-    this.dir.set(0, 1, 0).applyQuaternion(v.quaternion);
-    // Interpolated jets (online) carry no load factor: estimate it from how their velocity turns.
-    const raw = v.isLocal ? v.flight.gLoad : loadFactorFromVelocity(load.vel, v.flight.vel, dt, this.dir.x, this.dir.y, this.dir.z);
-    load.g += (raw - load.g) * Math.min(1, dt / 0.15);
-    load.vel.copy(v.flight.vel);
+    const was = this.loads.get(v.id) ?? 1;
+    const g = was + (v.flight.gLoad - was) * Math.min(1, dt / 0.15);
+    this.loads.set(v.id, g);
     const contrail = smoothstep(CONTRAIL_FROM_M, CONTRAIL_FULL_M, v.position.y) * (0.5 + 0.5 * Math.min(1, v.flight.throttle / 0.9));
     const engines = vis.engines === 2 ? [-1, 1] : [0];
     const spacing = vis.engineSpacingM ?? 1.25 * vis.fuselageRadiusM;
@@ -209,7 +203,7 @@ export class Effects {
       this.emitAt.set((side * spacing) / 2, 0, L / 2 + 2).applyQuaternion(v.quaternion).add(v.position);
       this.contrails.store.emit(`${v.id}:${v.spawnGen}:e${i}`, this.emitAt, contrail, t);
     }
-    const vapor = smoothstep(VAPOR_FROM_G, VAPOR_FULL_G, load.g);
+    const vapor = smoothstep(VAPOR_FROM_G, VAPOR_FULL_G, g);
     const sweep = Math.tan((vis.wingSweepDeg * Math.PI) / 180) * (vis.spanM / 2);
     const tipZ = (vis.wingPositionFraction - 0.5) * L + sweep + vis.wingTipChordM;
     for (const side of [-1, 1]) {

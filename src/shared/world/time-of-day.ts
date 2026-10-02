@@ -47,7 +47,7 @@ export function daylight(sunElevationRad: number): number {
   return t * t * (3 - 2 * t);
 }
 
-/** Weather and clock of a match: a room setting online, the title screen's choice offline (spec §12.3). */
+/** Weather and clock of a match: the title screen's choice (spec §12.3). */
 export interface EnvironmentSettings {
   weather: WeatherId;
   startHour: number;

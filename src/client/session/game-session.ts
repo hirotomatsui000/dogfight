@@ -15,7 +15,7 @@ import type { WeatherId } from '../../shared/world/weather.ts';
 import type { StoresState } from '../../shared/world/entities.ts';
 import type { GameEvent } from '../../shared/world/events.ts';
 
-/** What the renderer and HUD may know about an aircraft. Local and network sessions both provide it. */
+/** What the renderer and HUD may know about an aircraft. */
 export interface AircraftView {
   readonly id: number;
   readonly callsign: string;
@@ -113,11 +113,11 @@ export interface GameSession {
   modeStatus(): ModeStatus;
   /** The jet the local pilot flies from the next respawn on: one of their team's (M5). */
   chooseNextJet(aircraftId: string): void;
-  /** Free Flight (M5): new weather and the hour it is now (online, for the whole room). */
+  /** Free Flight (M5): new weather and the hour it is now. */
   changeWorld(weather: WeatherId, hour: number, clockRunning: boolean): void;
   /** Free Flight (M5): fly from a point of the map, or its runway when the point is on an airfield. */
   flyFrom(x: number, z: number): void;
-  /** Free Flight target drones (M5): offline only. */
+  /** Free Flight target drones (M5): only in Free Flight. */
   readonly canCallDrones: boolean;
   setDrones(on: boolean): void;
   dispose(): void;

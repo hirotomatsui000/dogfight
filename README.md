@@ -4,17 +4,21 @@ A browser-based flight-combat prototype. Two teams, **USA** and **Russia**, fly 
 real aircraft over a fictional landscape inspired by Poland. This repository is being built in milestones (see
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
+**Play it:** https://hirotomatsui000.github.io/dogfight/ (desktop or laptop with a keyboard and mouse). The site is
+rebuilt after every push ([Publish as a website](#publish-as-a-website)).
+
 **Current milestone: M5 "Modes & polish"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
-"Multiplayer", M3 "Roster & weapons" and M4 "World")
-- **Four modes, offline and online**:
+"Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02: the game is
+single player against AI pilots and runs entirely in the browser.
+- **Four modes**:
   - **Dogfight** (Team Deathmatch): first to 15, or the most after 10 minutes.
   - **Air Superiority**: three zones (A, B, C) on the front, each a cylinder 4 km across from 1,000 to 7,000 m. The
     side with more jets inside takes a zone; each zone you own scores a point every 2 s. First to 300.
   - **Team Objective**: each side guards two slow **Sentinel** radar planes flown by the game. Shooting one down is
     worth 20 points and takes the other side's datalink down for 60 s; it comes back after 2 minutes. Every fighter
     shot down is worth a point. First to 60.
-  - **Free Flight**: no enemies. From the pause menu set the time of day, the clock and the weather, and (offline)
-    call up target drones; on the map (M) click anywhere to fly from there, or on an airfield to start on its runway.
+  - **Free Flight**: no enemies. From the pause menu set the time of day, the clock and the weather, and call up
+    target drones; on the map (M) click anywhere to fly from there, or on an airfield to start on its runway.
   - Strike and the Training flight are still there.
 - **Pilots per side** (1, 2 or 4): your AI wingmen against as many AI pilots.
 - **Team datalink**: you also see the enemies your teammates have on radar, drawn hollow on the radar display and the
@@ -46,9 +50,6 @@ Earlier milestones:
 - The medium-range radar missile **Lance** (key 2) with radar locks, chaff, and a RADAR LOCK warning when an enemy
   radar locks on to you. AI pilots fly a mix of jets and use Lances beyond Dart range.
 - Balanced by a bot tournament: every USA jet against every Russian jet, Ace against Ace, within 35–65% wins.
-- **Online play** through a small Node.js game server: rooms of up to 16 pilots, bots in the empty seats, any mode,
-  invite links, quick chat, and automatic reconnects. The server is the referee; your own jet is predicted so it
-  answers the stick at once, and everyone else is drawn smoothly about 0.1 s in the past.
 - A **training flight** (about 3 minutes): fly through rings, gun a drone, lock and fire a missile, beat a missile.
 - **Settings**: volume, mouse sensitivity and invert, rebindable keys, gamepad and flight-stick setup, HUD color and
   size, graphics (Auto, Low, Medium, High) and the accessibility options.
@@ -63,7 +64,6 @@ Earlier milestones:
 - A third-person camera that follows your jet, and a title screen over a live 3D view of the jet you pick.
 - Sim-lite flight physics over Lechovia, or the original 60 × 60 km test range (Strike and Training fly there);
   satellite-photo scenery.
-- Offline play runs entirely in the browser; online play needs the game server (below).
 
 ## Requirements
 
@@ -84,58 +84,8 @@ enemies). **Controls** lists the keys;
 **Settings** changes them, the mouse, the gamepad, the HUD, the graphics and the sound (also from the pause menu).
 Click the view to capture the mouse, then fly with the mouse.
 
-Other devices on the same network can open the "Network" URL that Vite prints.
-
-## Play online
-
-```bash
-npm run build
-npm start
-```
-
-`npm start` runs the game server: it serves the built site from `dist/`, the game connection at `/ws`, and prints the
-addresses to open, one for this machine and one for each network (for friends on the same Wi-Fi). Open one, press
-**ONLINE** next to FLY, and **Join room** (or **Quick play**). Everyone in a room shares one sky; bots fly the empty
-seats. Your jet picks your team. The pilot who opens a room fixes its mode (**New room plays** on the ONLINE sheet:
-Dogfight, Air Superiority, Team Objective, Free Flight or Strike; the title screen's Mission by default) and the World
-chosen on the title screen (map, time of day, clock and weather; Strike rooms fly on the test range). Each pilot still
-picks an air or runway start. Free Flight rooms have no bots and no weapons; anyone in one can change its time of day
-and weather from the pause menu, and fly from anywhere by clicking the map. **Copy invite link** gives
-a link like `http://192.168.1.20:8080/?room=friday` that drops a friend into the same room. Keys **7**, **8**, **9**
-and **0** send quick-chat lines. The match never pauses online: the pause menu only covers the screen.
-
-While developing, run `npm run server` in one terminal and `npm run dev` in another: Vite passes the game connection
-on to the server (set `GAME_SERVER=host:port` if it runs elsewhere).
-
-Testing aids, added to the page address: `?lag=150` delays every message by 150 ms each way (add `&jitter=30` for
-uneven delay), and `?debug=1` shows frames per second, round trip, input queue, prediction error, altitude, the
-landing gear and the time of day.
-
-Server settings, as environment variables or `--name=value` options:
-
-| Variable | Option | Default | Meaning |
-|---|---|---|---|
-| `PORT` | `--port` | 8080 | port for the site and the game connection |
-| `HOST` | `--host` | 0.0.0.0 | address to listen on |
-| `MAX_ROOMS` | `--max-rooms` | 20 | rooms open at once |
-| `MAX_HUMANS_PER_ROOM` | `--max-humans` | 16 | pilots per room |
-| `BOTS_PER_TEAM` | `--bots-per-team` | 4 | team size that bots fill up to |
-| `BOT_SKILL` | `--bot-skill` | veteran | rookie, veteran or ace |
-| `DIST_DIR` | `--dist` | dist | the built site to serve |
-
-`GET /healthz` reports the server's health and `GET /api/rooms` lists the rooms.
-
-### Run the server with Docker
-
-```bash
-docker build -t contested-skies .
-docker run --rm -p 8080:8080 contested-skies
-```
-
-The image builds the site and runs the server as an unprivileged user on port 8080, with a health check. Any host
-that runs a container and allows WebSockets works (put it behind HTTPS so the page connects with `wss://`). After
-deploying, `npm run smoke -- https://your-server.example` checks it from outside: the health check, the page, and two
-test pilots who join a room, fly for 15 seconds, see each other and swap a chat line (`--lag=150` adds delay).
+Other devices on the same network can open the "Network" URL that Vite prints. Adding `?debug=1` to the address shows
+frames per second, angle of attack, G, Mach, altitude, the landing gear and the time of day.
 
 ## Controls
 
@@ -218,7 +168,7 @@ In Team Objective:
 
 In Free Flight:
 - Pause (P) to change the time of day, the clock and the weather, or to call up four target drones that circle round
-  you and never shoot back (offline).
+  you and never shoot back.
 - Press M and click the map to fly from that point, 1.5 km above the ground; click an airfield to start on its runway.
 
 On the runway (*Runway start*):
@@ -245,30 +195,19 @@ top speed, turn rate, stall speed and G-limits.
 jet, Ace bots, 100 seeded duels each, and fails if a pairing wins outside 35–65% of its decided duels.
 `TOURNAMENT=1 npm test` runs the same check inside the test suite (a minute or two).
 
-`npm run smoke` checks a running game server (default http://localhost:8080) with two test pilots; see
-[Run the server with Docker](#run-the-server-with-docker). Add `-- --mode=air-superiority` (or `team-objective`,
-`free-flight`, `strike`) to check a room of another mode.
-
 ## Publish as a website
 
-Netlify builds the site from this repository and publishes it at the same address after every push.
-`netlify.toml` holds the settings: `npm run build` on Node 24, the `dist` folder, the site's address for link
-previews, and a long cache for the hashed files in `dist/assets`. A push that changes only documentation, the server or
-`tools/` skips the build.
+The game is published with GitHub Pages at https://hirotomatsui000.github.io/dogfight/. After every push to `main` or
+to a `claude/…` branch, the **Publish site** workflow (`.github/workflows/publish.yml`) runs the tests, builds the site
+and replaces the `gh-pages` branch with it, which GitHub Pages serves: the page changes a minute or two after the
+push. The latest push wins, whichever of those branches it went to. When the tests fail nothing is published; the run
+on the repository's **Actions** tab says why.
 
-To link a Netlify site to the repository (once):
-1. On https://app.netlify.com open the site, then its configuration: **Build & deploy** → **Continuous deployment** →
-   **Link repository** (a new site: **Add new project** → **Import an existing project**).
-2. Choose GitHub, allow Netlify to read `hirotomatsui000/dogfight`, and pick the branch to publish. Netlify reads the
-   build settings from `netlify.toml`.
-3. To publish another branch later, change the production branch under **Branches and deploy contexts**.
+To switch it on (once): on GitHub open the repository's **Settings** → **Pages**, and under **Build and deployment**
+choose Source **Deploy from a branch**, branch **gh-pages**, folder **/ (root)**, then **Save**. The `gh-pages` branch
+appears after the workflow's first run.
 
-Each published push counts as a production deploy on Netlify's plan (the free plan's monthly credits cover about 20),
-so push finished work together rather than every commit.
-
-A static site has no game server, so it plays offline only: for online play, run the server
-([Play online](#play-online)). Visitors need a desktop or laptop with a keyboard and mouse; phones and tablets see a
-notice.
+Visitors need a desktop or laptop with a keyboard and mouse; phones and tablets see a notice.
 
 ### One-file build
 
@@ -278,9 +217,8 @@ npm run build:single
 
 This writes `dist-single/index.html`: the whole game, including the scenery photos and the jet models, in one
 self-contained file (about 5.4 MB), plus the social-preview image `og-image.jpg` and the icon `icon-180.png` that
-other sites and phones fetch. It runs when opened directly in a browser, or from any static host: drag the
-`dist-single` folder onto https://app.netlify.com/drop. For link previews on social sites, build with the site's
-address: `SITE_URL=https://your-site.netlify.app npm run build:single`.
+other sites and phones fetch. It runs when opened directly in a browser, or from any static host. For link previews
+on social sites, build with the site's address: `SITE_URL=https://example.org/ npm run build:single`.
 
 ## Scenery
 
@@ -289,17 +227,16 @@ tiled across the fictional map by land type, with a close-up detail photo (Poly 
 `node tools/fetch-assets.ts` re-creates the photos in `src/client/assets/` from the original sources. The sky, the
 clouds and the light are computed from the time of day and the weather (until M4 the sky was a photo).
 
-Lechovia itself is generated from a seed (`src/shared/data/maps/lechovia/`), the same way on every computer and on
-the game server, so nothing has to be downloaded.
+Lechovia itself is generated from a seed (`src/shared/data/maps/lechovia/`), the same way on every computer, so nothing has to be downloaded.
 
 ## Project layout
 
 | Path | Contents |
 |---|---|
-| `src/shared/` | Pure TypeScript game core, shared by the browser and the game server. It holds data-driven aircraft (`data/aircraft/`), physics (`physics/`), steering AI (`ai/`), terrain and maps (`map/`, `data/maps/`), game modes (`modes/`) and the simulation `world/`. |
-| `src/client/` | Browser client: session loop (local or networked), input, rendering (Three.js), cameras, HUD and menus. |
-| `src/server/` | Game server: HTTP and WebSocket, rooms, bots, snapshots, lag compensation. Runs straight from TypeScript. |
-| `src/shared/net/` | The wire protocol: JSON control messages and the binary input and snapshot formats. |
+| `src/shared/` | Pure TypeScript game core, independent of the browser (the tests and tools run it in Node). It holds data-driven aircraft (`data/aircraft/`), physics (`physics/`), steering AI (`ai/`), terrain and maps (`map/`, `data/maps/`), game modes (`modes/`) and the simulation `world/`. |
+| `src/client/` | Browser client: session loop, input, rendering (Three.js), cameras, HUD and menus. |
+| `tools/` | Node scripts: the balance tournament, the one-file build, and the asset and model pipelines. |
+| `.github/workflows/` | The workflow that tests, builds and publishes the site. |
 | `docs/superpowers/` | Design spec and implementation plans. |
 
 ### Adding an aircraft

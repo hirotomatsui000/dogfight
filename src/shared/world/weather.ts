@@ -31,10 +31,6 @@ export const WEATHER: Readonly<Record<WeatherId, WeatherPreset>> = {
 
 export const WEATHER_IDS: readonly WeatherId[] = ['clear', 'scattered', 'broken', 'overcast', 'rain'];
 
-export function isWeatherId(v: unknown): v is WeatherId {
-  return WEATHER_IDS.some((w) => w === v);
-}
-
 /** Cumulus clumps are about this wide; the field is sampled on this scale. */
 const CLUMP_SCALE_M = 2600;
 /** Width of the soft edge of a cloud in field units. */
@@ -45,8 +41,7 @@ const SAMPLE_STEP_M = 200;
 const MAX_SAMPLES = 120;
 
 /**
- * Where the clouds are (spec §12.3): a deterministic field over the map, shared by the server, the simulation and the
- * renderer. Clouds block visual detection and infrared locks, never radar.
+ * Where the clouds are (spec §12.3): a deterministic field over the map, shared by the simulation and the renderer. Clouds block visual detection and infrared locks, never radar.
  */
 export class CloudField {
   readonly preset: WeatherPreset;

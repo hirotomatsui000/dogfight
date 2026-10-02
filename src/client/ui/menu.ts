@@ -10,7 +10,6 @@ import { MISSION_RULES } from '../hud/objective-hud.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
 import { isTouchOnly } from './device.ts';
-import { onlineSheet } from './online-sheet.ts';
 import { openSettings } from './settings-screen.ts';
 import type { SettingsStore } from './settings.ts';
 import { loadSetting, saveSetting } from './storage.ts';
@@ -23,15 +22,13 @@ export interface StartOptions {
   controlMode: ControlMode;
   mission: MissionId;
   difficulty: DifficultyId;
-  /** set for online play (M2): the room to join */
-  online?: { room: string };
   /** the map for Dogfight and Free Flight (M4); Lechovia when unset */
   map?: MapId;
   /** in the air or on the runway (M4) */
   start?: SpawnStart;
   /** weather and clock (M4) */
   environment?: EnvironmentSettings;
-  /** pilots per side offline: you and AI wingmen against as many AI pilots (M5); 1 when unset */
+  /** pilots per side: you and AI wingmen against as many AI pilots (M5); 1 when unset */
   teamSize?: number;
 }
 
@@ -51,7 +48,7 @@ const MISSIONS: readonly { value: FlyMission; label: string }[] = [
   { value: 'team-objective', label: 'Team Objective' },
   { value: 'strike', label: 'Strike' },
 ];
-/** Pilots per side offline (M5). */
+/** Pilots per side (M5). */
 export const TEAM_SIZES = ['1', '2', '4'] as const;
 type TeamSizeChoice = (typeof TEAM_SIZES)[number];
 const CONTROL_LABELS: Record<ControlMode, string> = { 'mouse-aim': 'Mouse aim', direct: 'Keyboard' };
@@ -334,7 +331,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
 
   const main = el('div', 'start-main');
   const brand = el('header', 'brand');
-  brand.append(titleLockup(), el('p', 'brand-tag', 'Jet dogfight · AI pilots or online'));
+  brand.append(titleLockup(), el('p', 'brand-tag', 'Jet dogfight against AI pilots'));
   if (typeof window.matchMedia === 'function' && isTouchOnly((q) => window.matchMedia(q))) {
     const notice = el('p', 'notice', 'This game needs a keyboard and mouse. Open it on a desktop or laptop computer.');
     notice.setAttribute('role', 'status');
@@ -399,17 +396,11 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
       saveSetting('teamSize', n);
     },
   );
-  size.title = 'You and AI wingmen against as many AI pilots (offline)';
+  size.title = 'You and AI wingmen against as many AI pilots';
 
   const launch = el('div', 'launch');
   const fly = el('button', 'fly', 'Fly');
   fly.type = 'submit';
-  const onlineButton = el('button', 'online-button', 'Online');
-  onlineButton.type = 'button';
-  onlineButton.title = 'Fly against other people in a room';
-  onlineButton.setAttribute('aria-haspopup', 'dialog');
-  const launchRow = el('div', 'launch-row');
-  launchRow.append(fly, onlineButton);
   const links = el('div', 'links');
   const training = el('button', 'link', 'Training');
   training.type = 'button';
@@ -425,7 +416,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   settingsLink.type = 'button';
   settingsLink.setAttribute('aria-haspopup', 'dialog');
   links.append(training, freeFlight, controlsLink, settingsLink);
-  launch.append(launchRow, links);
+  launch.append(fly, links);
 
   const opponents = el('div', 'opponent-row');
   opponents.append(skill, size);
@@ -433,11 +424,9 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   form.append(top, main, credits());
 
   const sheet = controlsSheet(settings);
-  const invitedRoom = new URLSearchParams(location.search).get('room');
-  const online = onlineSheet(invitedRoom ?? 'public', () => mission, (room, mode) => start(mode, { room }));
-  screen.append(form, sheet, online);
+  screen.append(form, sheet);
 
-  const start = (mission: MissionId, onlineRoom?: { room: string }) => {
+  const start = (mission: MissionId) => {
     const w = effectiveWorld(world, mission);
     const options: StartOptions = {
       aircraftId,
@@ -445,7 +434,6 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
       controlMode: settings.current.controlMode,
       mission,
       difficulty,
-      online: onlineRoom,
       map: w.map,
       start: w.start,
       environment: environmentOf(w),
@@ -463,14 +451,11 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   freeFlight.addEventListener('click', () => start('free-flight'));
   training.addEventListener('click', () => start('training'));
   controlsLink.addEventListener('click', () => sheet.showModal());
-  onlineButton.addEventListener('click', () => online.showModal());
   settingsLink.addEventListener('click', () => openSettings(root, settings, 'controls'));
 
   root.appendChild(screen);
   handlers.onPreview(aircraftId);
   handlers.onWorld?.(environmentOf(world));
   fly.focus();
-  // An invite link (?room=name) opens the online sheet on that room.
-  if (invitedRoom) online.showModal();
   return () => screen.remove();
 }

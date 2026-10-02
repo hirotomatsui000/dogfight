@@ -6,15 +6,6 @@ import { TeamDeathmatchMode } from './team-deathmatch.ts';
 import { TeamObjectiveMode } from './team-objective.ts';
 import { TrainingMode } from './training.ts';
 
-export const MODE_LABELS: Readonly<Record<ModeId, string>> = {
-  'team-deathmatch': 'Team Deathmatch',
-  'air-superiority': 'Air Superiority',
-  'team-objective': 'Team Objective',
-  'free-flight': 'Free Flight',
-  strike: 'Strike',
-  training: 'Training',
-};
-
 export interface ModeOptions {
   /** Strike: aircraft per team */
   strike?: Partial<StrikeOptions>;
@@ -22,7 +13,7 @@ export interface ModeOptions {
   scoreLimit?: number;
 }
 
-/** A fresh mode by id, for the World, the server's rooms and the client's online session. */
+/** A fresh mode by id for the World. */
 export function createMode(id: ModeId, options: ModeOptions = {}): GameMode {
   const limit = options.scoreLimit === undefined ? {} : { scoreLimit: options.scoreLimit };
   switch (id) {

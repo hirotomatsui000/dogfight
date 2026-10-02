@@ -25,12 +25,12 @@ export function nearestTimeOfDay(hour: number): TimeOfDayId {
 }
 
 /**
- * Free Flight's controls in the pause menu (spec §13, M5): time of day, the clock and the weather (online, for the
- * whole room), and target drones offline. The map (M) flies you from wherever you click.
+ * Free Flight's controls in the pause menu (spec §13, M5): time of day, the clock, the weather and target drones. The
+ * map (M) flies you from wherever you click.
  */
-export function freeFlightPanel(current: () => GameSession, online: boolean): { element: HTMLElement; refresh(): void } {
+export function freeFlightPanel(session: GameSession): { element: HTMLElement; refresh(): void } {
   const box = el('div', 'ff-panel');
-  box.appendChild(el('p', 'eyebrow', online ? 'Free flight · the whole room shares this sky' : 'Free flight'));
+  box.appendChild(el('p', 'eyebrow', 'Free flight'));
   const row = el('div', 'world-row');
   const select = <T extends string>(label: string, values: readonly T[], names: (v: T) => string, onChange: (v: T) => void) => {
     const sel = el('select', 'world-select');
@@ -44,13 +44,6 @@ export function freeFlightPanel(current: () => GameSession, online: boolean): { 
     sel.addEventListener('change', () => onChange(sel.value as T));
     return sel;
   };
-  const session = {
-    get environment() {
-      return current().environment;
-    },
-    hour: () => current().hour(),
-    changeWorld: (w: WeatherId, h: number, c: boolean) => current().changeWorld(w, h, c),
-  };
   const time = select('Time of day', TIME_OF_DAY_IDS, (t) => TIME_OF_DAY_LABELS[t], (t) => session.changeWorld(session.environment.weather, START_HOURS[t], session.environment.clockRunning));
   const weather = select('Weather', WEATHER_IDS, (w) => WEATHER[w].label, (w: WeatherId) => session.changeWorld(w, session.hour(), session.environment.clockRunning));
   const clockLabel = el('label', 'world-clock');
@@ -61,11 +54,11 @@ export function freeFlightPanel(current: () => GameSession, online: boolean): { 
   row.append(time, weather, clockLabel);
   box.appendChild(row);
   let drones: HTMLInputElement | null = null;
-  if (current().canCallDrones) {
+  if (session.canCallDrones) {
     const label = el('label', 'world-clock');
     drones = el('input');
     drones.type = 'checkbox';
-    drones.addEventListener('change', () => current().setDrones(drones?.checked ?? false));
+    drones.addEventListener('change', () => session.setDrones(drones?.checked ?? false));
     label.append(drones, el('span', undefined, 'Target drones (four unarmed enemy jets around you)'));
     box.appendChild(label);
   }
@@ -76,7 +69,7 @@ export function freeFlightPanel(current: () => GameSession, online: boolean): { 
       time.value = nearestTimeOfDay(session.hour());
       weather.value = session.environment.weather;
       clock.checked = session.environment.clockRunning;
-      if (drones) drones.checked = current().modeStatus().drones === true;
+      if (drones) drones.checked = session.modeStatus().drones === true;
     },
   };
 }

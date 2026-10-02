@@ -1,8 +1,7 @@
 import type { Vector3 } from 'three';
 
 /**
- * Recent positions and velocities of one aircraft, newest last. Bots use it for delayed perception; the M2 server
- * will use it for lag compensation.
+ * Recent positions and velocities of one aircraft, newest last. Bots use it for delayed perception.
  */
 export class MotionHistory {
   private readonly capacity: number;
@@ -36,15 +35,6 @@ export class MotionHistory {
     this.vel[i + 1] = vel.y;
     this.vel[i + 2] = vel.z;
     this.count = Math.min(this.count + 1, this.capacity);
-  }
-
-  /** The position recorded `ticksAgo` records ago (0 = newest), clamped to the oldest. False when nothing is recorded. */
-  positionAt(ticksAgo: number, out: Vector3): boolean {
-    if (this.count === 0) return false;
-    const back = Math.min(Math.max(0, Math.round(ticksAgo)), this.count - 1);
-    const i = ((this.head - back + this.capacity) % this.capacity) * 3;
-    out.set(this.pos[i], this.pos[i + 1], this.pos[i + 2]);
-    return true;
   }
 
   /**

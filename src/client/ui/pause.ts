@@ -5,8 +5,6 @@ export interface PauseHandlers {
 }
 
 export interface PauseOptions {
-  /** a line under the title, e.g. that an online match keeps going */
-  note?: string;
   /** an extra section under the buttons (Free Flight's sky and drones, M5) */
   extra?: { element: HTMLElement; refresh(): void };
 }
@@ -26,12 +24,6 @@ export class PauseMenu {
     title.textContent = 'Paused';
     title.style.margin = '0 0 8px';
     panel.appendChild(title);
-    if (options.note) {
-      const note = document.createElement('p');
-      note.className = 'subtitle';
-      note.textContent = options.note;
-      panel.appendChild(note);
-    }
     panel.append(
       this.button('Resume', 'button', () => handlers.onResume()),
       this.button('Settings', 'button secondary', () => handlers.onSettings()),

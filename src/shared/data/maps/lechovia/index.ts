@@ -40,7 +40,7 @@ export function lechoviaMap(data: LechoviaData): MapDefinition {
 
 const cache = new Map<number, MapDefinition>();
 
-/** Lechovia for a seed, generated once per process (the server, tests and tools). */
+/** Lechovia for a seed, generated once per process (the page, tests and tools). */
 export function createLechovia(seed = LECHOVIA_SEED): MapDefinition {
   let def = cache.get(seed);
   if (!def) {

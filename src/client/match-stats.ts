@@ -21,10 +21,7 @@ export interface FlightLog {
 
 const blank = (): PilotStats => ({ damage: 0, missilesFired: 0, missileHits: 0, gunHits: 0, sentinels: 0 });
 
-/**
- * Match statistics for the end-of-match summary (M5). Built from the same events every client receives, so it works
- * offline and online alike, without the server keeping score of anything new.
- */
+/** Match statistics for the end-of-match summary (M5), built from the game events. */
 export class MatchStats {
   private readonly pilots = new Map<number, PilotStats>();
   readonly flight: FlightLog = { topSpeedMs: 0, maxG: 0, airborneS: 0, distanceM: 0 };

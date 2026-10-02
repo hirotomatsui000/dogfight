@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 13)
+# Contested Skies — Design Spec (revision 14)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -37,12 +37,18 @@
     flashing and colour-blind team colours. Plan: `docs/superpowers/plans/2026-10-01-m5-modes-polish.md`.
   - Revision 13 (2026-10-02): the public site deploys itself: Netlify builds the multi-file site (`dist/`) from the
     repository on every push (`netlify.toml`), replacing hand-dropped single-file builds (§24).
+  - Revision 14 (2026-10-02): at the owner's request **online play is removed**: the game is single player against AI
+    pilots and has no server. The server, the wire protocol, NetworkSession, the ONLINE sheet, quick chat, the version
+    check, error reports and cannon lag compensation are deleted; §7, §16 and the online rows of §17 describe that code
+    as it was (last in commit `a9139d5`). The site moves from Netlify to GitHub Pages: a GitHub Actions workflow tests,
+    builds and publishes it after every push to `main` or a `claude/…` branch (§24).
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
 ## 1. Summary
 
-A browser-based, online multiplayer flight-combat simulator prototype.
+A browser-based flight-combat simulator prototype. (Revision 14: single player only; the multiplayer described below
+was built in M2 and removed again.)
 - **Teams:** USA and Russia, each flying four **fictional** fighters inspired by real aircraft.
 - **Map:** a large **fictional Eastern European country, "Lechovia"**, whose geography is inspired by Poland:
   - a northern sea coast and a lake district;
@@ -93,6 +99,7 @@ A browser-based, online multiplayer flight-combat simulator prototype.
 | Datalink | Built in M5: each pilot sees the enemies on teammates' radar, drawn hollow, never lockable. Sentinels carry a 150 km all-round radar, so they feed it | M5, 2026-10-01 |
 | Offline team size | "Pilots per side" 1, 2 or 4 on the title screen: AI wingmen against as many AI pilots; Strike scales to 4 aircraft per pilot per team | M5, 2026-10-01 |
 | Free Flight online | No bots, no weapons, no drones; anyone in the room changes its weather and clock; "fly from here" on the map. Target drones are offline only | M5, 2026-10-01 |
+| Online play removed | The owner chose a static website with no server to run or pay for: online play and everything that served it are deleted; the site is published with GitHub Pages from every push | Owner request, 2026-10-02 |
 
 ## 3. Goals and non-goals
 
@@ -221,6 +228,8 @@ contested-skies/
 Tests are colocated as `*.test.ts`.
 
 ## 7. Multiplayer architecture (M2)
+
+Removed in revision 14; kept as a record of what was built (code last in commit `a9139d5`).
 
 - **Topology:** one Node process serves the built site (`dist/`) and a WebSocket at `/ws` on one port (default 8080);
   the room name travels in the `hello` message. LAN players open `http://<host-ip>:8080`; the server prints its LAN
@@ -933,6 +942,8 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 
 ## 16. Server (M2)
 
+Removed in revision 14, with §7.
+
 - **`main.ts`:** config from env/CLI (`PORT` 8080, `HOST` 0.0.0.0, `MAX_ROOMS` 20, `MAX_HUMANS_PER_ROOM` 16,
   `BOTS_PER_TEAM` 4, `BOT_SKILL` veteran, `DIST_DIR` dist); static files from `dist/` (hashed assets cached for good,
   the page revalidated); `ws` at `/ws`; `GET /healthz`, `GET /api/rooms`, `POST /api/error` (rate limited); LAN URL
@@ -949,10 +960,6 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 | Situation | Behavior |
 |---|---|
 | WebGL unavailable | Friendly message with browser guidance |
-| WebSocket drops (M2) | "Connection lost" overlay; 3 automatic reconnects (1/2/4 s), then a Reconnect button |
-| Join rejected | A panel shows the server's message with "Back to menu"; the title screen keeps its choices |
-| Server runs another build | A banner asks the player to reload (checked on join and on every reconnect) |
-| Malformed or abusive client | Violations counted → disconnect; server unaffected |
 | Exception inside a simulation step | Logged; the offending entity is removed if identifiable; the room/session continues; 3 consecutive failures stop it with a visible error |
 | Invalid aircraft data file | `validateAircraftConfig` fails the test suite and throws at registration with the aircraft id and field |
 
@@ -1101,9 +1108,9 @@ its milestone.
 | Hardware range | Low/Medium/High graphics presets (pixel ratio, texture size, draw distance, effects), chosen automatically from the measured frame rate and changeable in settings | M1c |
 | Loading | A loading progress bar. Once assets pass about 5 MB, publish the multi-file build (`dist/`) instead of one HTML file so browsers cache and load pieces in parallel | M1c (progress), M2 (multi-file) |
 | Sharing | A title screen with a Play button over a live 3D background (M1b); page title, description, social-preview image and icon (M1c) | M1b, M1c |
-| Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle. (Revision 13: Netlify is linked to the repository and builds the multi-file site on every push that changes the page, per `netlify.toml`; the one-file build remains for hand deploys) | M2 |
-| Joining | An invite link per room, and "Quick play" that joins the busiest room. Bots fill empty seats so one human plus bots is a full match | M2 |
+| Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle. (Revision 13: Netlify is linked to the repository and builds the multi-file site on every push that changes the page, per `netlify.toml`; the one-file build remains for hand deploys.) (Revision 14: no server; GitHub Pages serves the multi-file site from the `gh-pages` branch, which `.github/workflows/publish.yml` rebuilds after the tests pass on every push to `main` or a `claude/…` branch, at https://hirotomatsui000.github.io/dogfight/) | M2 |
+| Joining | An invite link per room, and "Quick play" that joins the busiest room. Bots fill empty seats so one human plus bots is a full match. (Removed in revision 14) | M2 |
 | Safety | Server authority for all hits (§7); callsign filter; preset quick-chat messages only; rate limits; a short privacy note (no accounts, no tracking) | M2 |
-| Updates | A page/server version check that asks players to reload; browser error reporting; a server health check; one automated browser smoke test (load the site, fly 10 s) before each deploy | M2 |
+| Updates | A page/server version check that asks players to reload; browser error reporting; a server health check; one automated browser smoke test (load the site, fly 10 s) before each deploy. (Revision 14: all removed with the server; the publish workflow runs the unit tests before each deploy) | M2 |
 | Feedback | Hit markers, kill confirmation and kill feed (M1b); kill cam, spectating while respawning, changing jets on respawn (M5, built) | M1b, M5 |
 | Accessibility | Team markers that differ in shape as well as color; HUD color and size options; every sound warning also shown as text; reduce-motion also covers G-force effects; reduce flashing and colour-blind team colours (M5, built) | M1c, M5 |

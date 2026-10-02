@@ -19,29 +19,21 @@ function requireElement(id: string): HTMLElement {
 
 const app = requireElement('app');
 
-function showError(message: string, title = 'Something went wrong', back?: () => void): void {
+function showError(message: string): void {
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
   const panel = document.createElement('div');
   panel.className = 'panel narrow stack';
   const heading = document.createElement('h2');
-  heading.textContent = title;
+  heading.textContent = 'Something went wrong';
   const text = document.createElement('p');
   text.className = 'notice';
   text.textContent = message;
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'button';
-  if (back) {
-    button.textContent = 'Back to menu';
-    button.addEventListener('click', () => {
-      overlay.remove();
-      back();
-    });
-  } else {
-    button.textContent = 'Reload';
-    button.addEventListener('click', () => location.reload());
-  }
+  button.textContent = 'Reload';
+  button.addEventListener('click', () => location.reload());
   panel.append(heading, text, button);
   overlay.appendChild(panel);
   app.appendChild(overlay);
@@ -54,10 +46,7 @@ function run(scenery: Promise<SceneryTextures>, world: Promise<LoadedMap>, aircr
   const launch = (options: StartOptions): void => {
     startGame(app, options, { onQuit: showMenu, onRestart: launch }, scenery, aircraftMeshes, settings, progress).catch((err: unknown) => {
       console.error(err);
-      const message = err instanceof Error ? err.message : String(err);
-      // A refused or unreachable server is not a crash: go back and play offline or try another room.
-      if (options.online) showError(message, 'Could not join the room', showMenu);
-      else showError(message);
+      showError(err instanceof Error ? err.message : String(err));
     });
   };
 
