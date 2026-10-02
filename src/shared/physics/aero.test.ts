@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { kestrel } from '../data/aircraft/kestrel.ts';
 import { listAircraft } from '../data/aircraft/registry.ts';
 import { DEG } from '../math/units.ts';
-import { cornerSpeed, dragCoefficient, liftCoefficient, stallSpeed, thrustNewtons, trimAlpha, waveDragFactor } from './aero.ts';
+import { cornerSpeed, dragCoefficient, fuelFlowKgS, liftCoefficient, stallSpeed, thrustNewtons, trimAlpha, waveDragFactor } from './aero.ts';
 
 const p = kestrel.physics;
 
@@ -77,6 +77,33 @@ describe('thrustNewtons', () => {
   });
   it('applies a damage thrust scale', () => {
     expect(thrustNewtons(1, p, 1, 0, 0.75)).toBeCloseTo(97500, 6);
+  });
+});
+
+describe('fuelFlowKgS (revision 16)', () => {
+  it('burns about 1.6 kg/s at military power and 7.4 kg/s in full afterburner (Kestrel, sea level)', () => {
+    expect(fuelFlowKgS(0.9, p, 1, 0)).toBeCloseTo(1.6, 1);
+    expect(fuelFlowKgS(1, p, 1, 0)).toBeCloseTo(7.3, 1);
+  });
+  it('rises with the throttle, never stops at idle, and falls with the thinner air up high', () => {
+    let last = 0;
+    for (let t = 0; t <= 1; t += 0.05) {
+      const f = fuelFlowKgS(t, p, 1, 0);
+      expect(f).toBeGreaterThanOrEqual(last);
+      last = f;
+    }
+    expect(fuelFlowKgS(0, p, 1, 0)).toBeGreaterThan(0.1);
+    expect(fuelFlowKgS(1, p, 0.3, 0.9)).toBeLessThan(0.5 * fuelFlowKgS(1, p, 1, 0));
+    expect(fuelFlowKgS(1, p, 1, 0, 0)).toBe(0);
+  });
+  it('empties every fighter in 5 to 13 minutes of full afterburner at sea level, and much later at military power', () => {
+    for (const c of listAircraft()) {
+      const ab = c.physics.fuelKg / fuelFlowKgS(1, c.physics, 1, 0) / 60;
+      const mil = c.physics.fuelKg / fuelFlowKgS(0.9, c.physics, 1, 0) / 60;
+      expect(ab, c.id).toBeGreaterThan(5);
+      expect(ab, c.id).toBeLessThan(13);
+      expect(mil, c.id).toBeGreaterThan(25);
+    }
   });
 });
 

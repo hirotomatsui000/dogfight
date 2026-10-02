@@ -12,7 +12,7 @@ export const sapsan: AircraftConfig = {
     massKg: 26500,
     wingAreaM2: 62,
     thrustMilN: 150000,
-    thrustAbN: 250000,
+    thrustAbN: 243000,
     cd0: 0.023,
     k: 0.13,
     clAlpha: 4.0,
@@ -24,6 +24,8 @@ export const sapsan: AircraftConfig = {
     maxRollRateDegS: 120,
     maxYawRateDegS: 20,
     thrustVectoring: 0,
+    fuelKg: 8500,
+    departureResistance: 0.4,
   },
   sensors: {
     radarRangeKm: 60,

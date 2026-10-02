@@ -12,6 +12,7 @@ import { resetRadarLock, updateRadarLock } from '../targeting/radar-lock.ts';
 import { detectContacts, type Obscurant, RADAR_SCAN_INTERVAL_S } from '../targeting/sensors.ts';
 import { advanceProjectile, createProjectile, type Projectile, pullTrigger, TRIGGER_AT_REST } from '../weapons/cannon.ts';
 import { decoyChance, rollDecoy } from '../weapons/countermeasures.ts';
+import type { SteadyWind } from '../physics/wind.ts';
 import { type Bomb, bombDamage, hasLanded, releaseBomb, stepBomb, surfaceCrossing } from '../weapons/bomb.ts';
 import { activeRangeM, isArmed, isSpent, launchMissile, type Missile, stepMissile, withinGimbal } from '../weapons/missile.ts';
 import type { AircraftEntity } from './entities.ts';
@@ -37,6 +38,8 @@ export interface CombatHost {
   matchOver(): boolean;
   /** false while a team's datalink is down (Team Objective, M5) */
   datalinkUp(team: TeamId): boolean;
+  /** the wind carries falling bombs (revision 16) */
+  readonly wind: SteadyWind;
 }
 
 /**
@@ -266,7 +269,7 @@ export class Combat {
     const list = this.bombs;
     for (let i = list.length - 1; i >= 0; i--) {
       const b = list[i];
-      stepBomb(b, dt);
+      stepBomb(b, dt, host.wind);
       const landed = hasLanded(b, host.terrain);
       if (landed) this.explodeBomb(b);
       if (landed || b.ageS >= b.spec.maxFallS || Math.hypot(b.pos.x - area.x, b.pos.z - area.z) > area.radiusM) {

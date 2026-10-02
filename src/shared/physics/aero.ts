@@ -54,6 +54,23 @@ export function thrustNewtons(
   return base * Math.pow(sigma, 0.75) * (1 + 0.2 * mach * (1 - sigma)) * thrustScale;
 }
 
+/** Fuel per newton-second of thrust up to military power: about 0.75 lb/lbf/h (revision 16). */
+export const TSFC_MIL = 2.1e-5;
+/** Fuel per newton-second of the afterburner's extra thrust, which is about five times as thirsty. */
+export const TSFC_AB = 1.05e-4;
+/** Even at idle the engines burn this share of their military-power flow. */
+const IDLE_FLOW_SHARE = 0.08;
+
+/** Fuel flow in kg/s for the same throttle and air as `thrustNewtons`. */
+export function fuelFlowKgS(throttle: number, p: AircraftPhysics, sigma: number, mach: number, thrustScale = 1): number {
+  const t = clamp(throttle, 0, 1);
+  const air = Math.pow(sigma, 0.75) * (1 + 0.2 * mach * (1 - sigma)) * thrustScale;
+  const milFlow = TSFC_MIL * p.thrustMilN;
+  if (t <= 0.9) return Math.max(IDLE_FLOW_SHARE * milFlow, milFlow * lerp(0.05, 1, t / 0.9)) * air;
+  const extra = (p.thrustAbN - p.thrustMilN) * ((t - 0.9) / 0.1);
+  return (milFlow + TSFC_AB * extra) * air;
+}
+
 /** Angle of attack for 1 G level flight at the given speed and density, capped at alphaMax. */
 export function trimAlpha(p: AircraftPhysics, speed: number, density: number): number {
   const cl = (p.massKg * G0) / (0.5 * density * speed * speed * p.wingAreaM2);

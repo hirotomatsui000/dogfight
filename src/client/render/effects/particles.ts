@@ -7,7 +7,9 @@ import {
   NormalBlending,
   Points,
   ShaderMaterial,
+  Vector3,
 } from 'three';
+import type { SteadyWind } from '../../../shared/physics/wind.ts';
 
 export interface ParticleSpawn {
   x: number;
@@ -107,7 +109,11 @@ export interface ParticleFrame {
   pixelScale: number;
   fogColor: Color;
   fogDensity: number;
+  /** smoke and trails drift with it (revision 16) */
+  wind?: SteadyWind;
 }
+
+const windTmp = new Vector3();
 
 /** A fixed pool of particles simulated on the CPU; the oldest particle is reused when the pool is full. */
 export class ParticleSystem {
@@ -205,9 +211,13 @@ export class ParticleSystem {
       }
       const t = this.age[i] / this.life[i];
       const keep = Math.max(0, 1 - this.drag[i] * dt);
-      this.velocity[i3] *= keep;
+      // Drag slows a particle to the air's speed, not to a stop: smoke drifts downwind.
+      const air = frame.wind && this.drag[i] > 0 ? frame.wind.steadyAt(this.position[i3 + 1], windTmp) : null;
+      const ax = air ? air.x : 0;
+      const az = air ? air.z : 0;
+      this.velocity[i3] = ax + (this.velocity[i3] - ax) * keep;
       this.velocity[i3 + 1] = this.velocity[i3 + 1] * keep + this.lift[i] * dt;
-      this.velocity[i3 + 2] *= keep;
+      this.velocity[i3 + 2] = az + (this.velocity[i3 + 2] - az) * keep;
       this.position[i3] += this.velocity[i3] * dt;
       this.position[i3 + 1] += this.velocity[i3 + 1] * dt;
       this.position[i3 + 2] += this.velocity[i3 + 2] * dt;

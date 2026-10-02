@@ -13,9 +13,16 @@ const DT = 1 / 60;
 const field: Airfield = { id: 'test', name: 'Test Field', team: 'usa', x: 0, z: 0, headingRad: 90 * DEG, lengthM: 3000, widthM: 45, elevationM: 120 };
 const features = { settlements: [], roads: [], rivers: [], airfields: [field] };
 
-function run(s: FlightState, physicsId: string, seconds: number, control: (s: FlightState, t: number) => Partial<ReturnType<typeof neutralInput>>, each?: (s: FlightState) => void): void {
+function run(
+  s: FlightState,
+  physicsId: string,
+  seconds: number,
+  control: (s: FlightState, t: number) => Partial<ReturnType<typeof neutralInput>>,
+  each?: (s: FlightState) => void,
+  wind = new Vector3(),
+): void {
   const config = listAircraft().find((a) => a.id === physicsId)!;
-  const env: FlightEnv = { thrustScale: 1, rollScale: 1, groundM: NaN };
+  const env: FlightEnv = { thrustScale: 1, rollScale: 1, groundM: NaN, wind, fuelUsedKg: 0 };
   const input = neutralInput(0.9);
   for (let t = 0; t < seconds; t += DT) {
     Object.assign(input, neutralInput(0.9), control(s, t));
@@ -62,6 +69,23 @@ describe('ground handling and take-off (spec §8, M4)', () => {
       });
     }
   }
+
+  it('lifts off sooner into a headwind (revision 16)', () => {
+    const liftoff = (wind: Vector3) => {
+      const s = runwayFlightState(field, 0);
+      let at: number | null = null;
+      run(s, 'kestrel', 40, () => ({ throttle: 0.9, pitch: 0.6 }), (st) => {
+        if (at === null && !st.onGround) at = airfieldLocal(field, st.pos.x, st.pos.z).u;
+      }, wind);
+      return at!;
+    };
+    // The runway points east: a wind from the east is a headwind.
+    const calm = liftoff(new Vector3());
+    const headwind = liftoff(new Vector3(-10, 0, 0));
+    const tailwind = liftoff(new Vector3(10, 0, 0));
+    expect(calm - headwind).toBeGreaterThan(100);
+    expect(tailwind - calm).toBeGreaterThan(100);
+  });
 
   it('rolls straight down the centre line with the stick centred', () => {
     const s = runwayFlightState(field, 0);

@@ -95,6 +95,23 @@ describe('ControlMapper', () => {
     expect(look.map(snap({ keys: new Set(['KeyC']), mouseDX: 100 }), flight, 1 / 60).lookYaw).toBeCloseTo(0.2, 6);
   });
 
+  it('recovers from a spin by itself in mouse-aim mode, with the aim on the horizon ahead (revision 16)', () => {
+    const m = new ControlMapper();
+    const flight = northbound();
+    m.resetAim(flight);
+    flight.spin = 1;
+    const out = m.map(snap({ mouseDX: 400, mouseDY: -400 }), flight, 1 / 60);
+    expect(out.pitch).toBeLessThan(0);
+    expect(out.roll).toBe(0);
+    expect(out.yaw).toBe(-1);
+    expect(m.aimDirection.y).toBeCloseTo(0, 6);
+    // A held key still wins.
+    expect(m.map(snap({ keys: new Set(['KeyS']) }), flight, 1).pitch).toBe(1);
+    // Keyboard steering leaves the recovery to the pilot.
+    const direct = new ControlMapper({ mode: 'direct' });
+    expect(direct.map(snap({}), flight, 1 / 60).yaw).toBe(0);
+  });
+
   it('reports weapon edges and holds', () => {
     const m = new ControlMapper();
     const out = m.map(snap({ keys: new Set(['Space', 'KeyB', 'KeyF']), pressed: new Set(['KeyF', 'KeyG', 'KeyR', 'KeyX', 'Digit2']) }), northbound(), 1 / 60);

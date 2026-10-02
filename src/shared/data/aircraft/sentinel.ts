@@ -29,6 +29,8 @@ function sentinel(team: 'usa' | 'russia'): AircraftConfig {
       maxRollRateDegS: 30,
       maxYawRateDegS: 5,
       thrustVectoring: 0,
+      fuelKg: 20000,
+      departureResistance: 0.3,
     },
     sensors: {
       radarRangeKm: 150,

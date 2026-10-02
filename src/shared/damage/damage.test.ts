@@ -1,3 +1,4 @@
+import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { SRM_DART } from '../data/weapons.ts';
 import { blastDamage, clearCredit, type CreditRecord, damageFlightEnv, damageState, maneuverKillCredit } from './damage.ts';
@@ -13,7 +14,7 @@ describe('damage', () => {
   });
 
   it('weakens the engine and controls as damage grows', () => {
-    const env = { thrustScale: 1, rollScale: 1, groundM: NaN };
+    const env = { thrustScale: 1, rollScale: 1, groundM: NaN, wind: new Vector3(), fuelUsedKg: 0 };
     expect(damageFlightEnv('healthy', env)).toMatchObject({ thrustScale: 1, rollScale: 1 });
     expect(damageFlightEnv('damaged', env)).toMatchObject({ thrustScale: 0.9, rollScale: 1 });
     expect(damageFlightEnv('critical', env)).toMatchObject({ thrustScale: 0.75, rollScale: 0.7 });

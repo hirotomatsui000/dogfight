@@ -24,6 +24,7 @@ import { setStrobes } from './render/environment/night-lights.ts';
 import { releaseCue, TargetAlerts, targetDestroyedText } from './hud/strike-hud.ts';
 import { formatClock, formatTimeOfDay, speedLabel, speedValue } from './hud/format.ts';
 import { sentinelDownText, zoneEventText, zoneFeedText } from './hud/objective-hud.ts';
+import { BINGO_SHARE, spinHint } from './hud/flight-warnings.ts';
 import { takeoffHint } from './hud/takeoff.ts';
 import { trainingPrompt } from './hud/training-prompts.ts';
 import { BASE_MOUSE_SENSITIVITY, ControlMapper, type ControlMode } from './input/control-mapper.ts';
@@ -254,6 +255,9 @@ export async function startGame(
     };
   }
   const particleFrame: ParticleFrame = { pixelScale: 1000, fogColor: new Color(), fogDensity: 0 };
+  const windAtJet = new Vector3();
+  /** which fuel warnings this life has had (revision 16) */
+  let fuelAlert: 'full' | 'bingo' | 'dry' = 'full';
   const bufferSize = new Vector2();
   const lead = new Vector3();
   const burst = new Vector3();
@@ -504,6 +508,7 @@ export async function startGame(
         nextJet = null;
         audio?.respawn();
         if (me.flight.onGround) showBanner('CLEARED FOR TAKE-OFF', nowS);
+        fuelAlert = 'full';
       }
       // The gear motor runs as the wheels start to come up.
       if (me && me.alive && me.flight.gear < 1 && lastGear >= 1) audio?.gearMotor();
@@ -512,6 +517,18 @@ export async function startGame(
       session.update(dt, controls);
       for (const e of session.drainEvents()) handleEvent(e, nowS);
       if (me) stats.sampleFlight(me.alive, me.flight.onGround, me.flight.airspeed, me.flight.gLoad, dt);
+      // Fuel warnings (revision 16): once at BINGO, once when the engines flame out.
+      if (me && me.alive) {
+        const fuel = me.stores.fuelKg;
+        if (fuel <= 0 && fuelAlert !== 'dry') {
+          fuelAlert = 'dry';
+          audio?.fuelWarning(true);
+        } else if (fuel > 0 && fuel < BINGO_SHARE * me.config.physics.fuelKg && fuelAlert === 'full') {
+          fuelAlert = 'bingo';
+          showBanner('BINGO FUEL', nowS);
+          audio?.fuelWarning(false);
+        }
+      }
       killFeed.update(dt);
       const meNow = session.localView();
       if (meNow && !meNow.alive && deathCam.phase !== 'off') {
@@ -590,6 +607,8 @@ export async function startGame(
     environment.update(session.hour(), renderer.camera, active ? dt : 0);
     particleFrame.fogColor.copy(environment.fog.color);
     particleFrame.fogDensity = environment.fog.density;
+    // Free Flight can change the weather, and the wind with it.
+    particleFrame.wind = session.wind;
     hud.setNight(environment.night);
     sceneSync.update(session.views(), nowS, renderer.camera.position);
     targetModels.update(session.groundTargets());
@@ -629,7 +648,7 @@ export async function startGame(
       }
       const targets = session.groundTargets();
       const status = session.modeStatus();
-      const bombImpact = local.alive && local.stores.bombs > 0 ? predictImpact(f.pos, f.vel, BOMB_ANVIL, terrain, DT, impactPoint) : null;
+      const bombImpact = local.alive && local.stores.bombs > 0 ? predictImpact(f.pos, f.vel, BOMB_ANVIL, terrain, DT, impactPoint, session.wind) : null;
       // Not on the take-off run: the gear is down until the jet is well clear of the runway.
       const pullUp = local.alive && f.gear === 0 && timeToImpact(f, terrain) !== null;
       hud.draw({
@@ -661,6 +680,8 @@ export async function startGame(
         releaseCue: releaseCue(bombImpact, targets),
         training: status.training ? trainingPrompt(status.training, settings.current.keys, mapper.settings.mode, padFrame.active) : null,
         localTime: formatTimeOfDay(session.hour()),
+        wind: session.wind.steadyAt(f.pos.y, windAtJet),
+        spinHint: f.spin !== 0 ? spinHint(mapper.settings.mode, f.spin, settings.current.keys, padFrame.active) : undefined,
       });
       if (audio && active) {
         const cam = renderer.camera;

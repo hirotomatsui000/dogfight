@@ -1,5 +1,7 @@
-import { BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Mesh, NormalBlending, ShaderMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Mesh, NormalBlending, ShaderMaterial, Vector3 } from 'three';
 import type { ParticleFrame } from './particles.ts';
+
+const windTmp = new Vector3();
 
 /** How a family of trails looks and lasts. */
 export interface TrailLook {
@@ -214,11 +216,15 @@ export class TrailRibbons {
     const look = this.store.look;
     this.store.age(t);
     let v = 0;
+    const wind = frame.wind;
     const put = (p: TrailPoint, tx: number, ty: number, tz: number, s: number) => {
-      const k = Math.min(1, (t - p.t) / look.lifeS);
-      this.pos[v * 3] = p.x;
+      const age = t - p.t;
+      const k = Math.min(1, age / look.lifeS);
+      // The trail drifts with the air it was left in (revision 16).
+      const drift = wind ? wind.steadyAt(p.y, windTmp) : null;
+      this.pos[v * 3] = p.x + (drift ? drift.x * age : 0);
       this.pos[v * 3 + 1] = p.y;
-      this.pos[v * 3 + 2] = p.z;
+      this.pos[v * 3 + 2] = p.z + (drift ? drift.z * age : 0);
       this.tangent[v * 3] = tx;
       this.tangent[v * 3 + 1] = ty;
       this.tangent[v * 3 + 2] = tz;

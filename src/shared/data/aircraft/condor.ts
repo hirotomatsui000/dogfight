@@ -24,6 +24,8 @@ export const condor: AircraftConfig = {
     maxRollRateDegS: 135,
     maxYawRateDegS: 20,
     thrustVectoring: 0,
+    fuelKg: 6000,
+    departureResistance: 0.5,
   },
   sensors: {
     radarRangeKm: 55,

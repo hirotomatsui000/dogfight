@@ -7,16 +7,25 @@ import { DEG, G0, RAD } from '../math/units.ts';
 import { stallSpeed, trimAlpha } from './aero.ts';
 import { atmosphere } from './atmosphere.ts';
 import { type ControlInput, neutralInput } from './controls.ts';
-import { createFlightState, type FlightState, headingRad, stepFlight } from './flight-model.ts';
+import { createFlightState, DEFAULT_FLIGHT_ENV, type FlightEnv, type FlightState, headingRad, stepFlight } from './flight-model.ts';
+import { fuelFlowKgS } from './aero.ts';
+import { getAircraft } from '../data/aircraft/registry.ts';
 
 const DT = 1 / 60;
 type InputFn = (t: number, s: FlightState) => Partial<ControlInput>;
 
-function fly(s: FlightState, c: AircraftConfig, seconds: number, input: Partial<ControlInput> | InputFn, onStep?: (s: FlightState) => void) {
+function fly(
+  s: FlightState,
+  c: AircraftConfig,
+  seconds: number,
+  input: Partial<ControlInput> | InputFn,
+  onStep?: (s: FlightState) => void,
+  env: Readonly<FlightEnv> = DEFAULT_FLIGHT_ENV,
+) {
   const steps = Math.round(seconds / DT);
   for (let i = 0; i < steps; i++) {
     const partial = typeof input === 'function' ? input(i * DT, s) : input;
-    stepFlight(s, { ...neutralInput(s.throttle), ...partial }, c.physics, DT);
+    stepFlight(s, { ...neutralInput(s.throttle), ...partial }, c.physics, DT, env);
     onStep?.(s);
   }
 }
@@ -193,5 +202,138 @@ describe.each(listAircraft().map((c) => [c.id, c] as const))('flight model: %s',
     const b = randomFlight(77);
     expect(a.pos.toArray()).toEqual(b.pos.toArray());
     expect(a.quat.toArray()).toEqual(b.quat.toArray());
+  });
+});
+
+const envWith = (wind: Vector3, fuelUsedKg = 0): FlightEnv => ({ ...DEFAULT_FLIGHT_ENV, wind, fuelUsedKg });
+
+describe('wind and fuel in the flight model (revision 16)', () => {
+  const c = getAircraft('kestrel');
+
+  it('flies in the moving air: the track drifts downwind while airspeed and height hold', () => {
+    const calm = level(250, 5000, 0.75);
+    const windy = level(250, 5000, 0.75);
+    // A 20 m/s wind from the west, across the jet's northbound track.
+    windy.vel.x += 20;
+    fly(calm, c, 30, {});
+    fly(windy, c, 30, {}, undefined, envWith(new Vector3(20, 0, 0)));
+    expect(windy.pos.x - calm.pos.x).toBeCloseTo(600, 3);
+    expect(windy.airspeed).toBeCloseTo(calm.airspeed, 6);
+    expect(windy.pos.y).toBeCloseTo(calm.pos.y, 3);
+  });
+
+  it('reads a headwind as airspeed: the same ground speed into the wind gives more lift', () => {
+    const alphaRad = trimAlpha(c.physics, 150, atmosphere(3000).density);
+    const s = createFlightState({ position: new Vector3(0, 3000, 0), headingRad: 0, speed: 150, throttle: 0.75, alphaRad });
+    fly(s, c, DT, {}, undefined, envWith(new Vector3(0, 0, 30)));
+    // Northbound (-z) into a wind blowing south (+z): 30 m/s more air over the wings, (180 / 150)² the lift.
+    expect(s.airspeed).toBeCloseTo(180, 0);
+    expect(s.gLoad).toBeGreaterThan(1.3);
+  });
+
+  it('reports the fuel flow for the throttle and air, and none when the engines are out', () => {
+    const s = level(250, 300, 1);
+    s.throttle = 1;
+    fly(s, c, DT, { throttle: 1 });
+    expect(s.fuelFlow).toBeCloseTo(fuelFlowKgS(1, c.physics, atmosphere(s.pos.y).sigma, s.mach), 3);
+    fly(s, c, DT, { throttle: 1 }, undefined, { ...DEFAULT_FLIGHT_ENV, thrustScale: 0 });
+    expect(s.fuelFlow).toBe(0);
+    expect(s.thrust).toBe(0);
+  });
+
+  it('accelerates and turns better as the fuel burns off', () => {
+    const full = level(200, 3000, 1);
+    const light = level(200, 3000, 1);
+    fly(full, c, 10, { throttle: 1 });
+    fly(light, c, 10, { throttle: 1 }, undefined, envWith(new Vector3(), c.physics.fuelKg));
+    expect(light.airspeed - full.airspeed).toBeGreaterThan(10);
+  });
+});
+
+describe('departures and spins (revision 16)', () => {
+  /** Full aft stick and full roll from a slow, level start; the time the spin began, or null. */
+  const yankAndBank = (id: string, speed: number, altitude: number) => {
+    const c = getAircraft(id);
+    const s = level(speed, altitude, 0.9);
+    let at: number | null = null;
+    fly(s, c, 8, (t, st) => {
+      if (at === null && st.spin !== 0) at = t;
+      return { pitch: 1, roll: 1, throttle: 0.9 };
+    });
+    return at;
+  };
+  /** A developed spin to the right: started from slow level flight and held with pro-spin controls. */
+  const spinning = (id: string, altitude = 7000) => {
+    const s = level(70, altitude, 0.4);
+    s.spin = 1;
+    fly(s, getAircraft(id), 8, { pitch: 1, yaw: 1, throttle: 0.4 });
+    return s;
+  };
+
+  it('departs a departure-prone jet stalled slow with full aft stick and roll', () => {
+    expect(yankAndBank('shade', 70, 2000)).not.toBeNull();
+    expect(yankAndBank('shade', 110, 8000)).not.toBeNull();
+  });
+
+  it('keeps hard-limited and thrust-vectoring jets in control in the same abuse', () => {
+    for (const id of ['kestrel', 'condor', 'prizrak', 'yastreb']) expect(yankAndBank(id, 70, 2000), id).toBeNull();
+  });
+
+  for (const c of listAircraft()) {
+    it(`${c.name} never departs in a hard turn at fighting speed`, () => {
+      const s = level(200, 3000, 1);
+      fly(s, c, 6, (_t, st) => {
+        expect(st.spin).toBe(0);
+        return { pitch: 1, roll: 0.4, throttle: 1 };
+      });
+    });
+
+    it(`${c.name} falls at a spin's rate, holds the spin while pro-spin, and recovers with neutral controls`, () => {
+      const s = spinning(c.id);
+      expect(s.spin).toBe(1);
+      expect(-s.vel.y).toBeGreaterThan(50);
+      expect(-s.vel.y).toBeLessThan(110);
+      fly(s, c, 6, { pitch: 1, yaw: 1, throttle: 0.4 });
+      expect(s.spin).toBe(1);
+      let recovered: number | null = null;
+      fly(s, c, 8, (t, st) => {
+        if (recovered === null && st.spin === 0) recovered = t;
+        return { throttle: 0.4 };
+      });
+      expect(recovered).not.toBeNull();
+      expect(recovered!).toBeLessThan(6);
+    });
+
+    it(`${c.name} recovers faster with opposite rudder and the stick forward, and does not spin again at once`, () => {
+      const neutral = spinning(c.id);
+      const anti = spinning(c.id);
+      const time = (s: FlightState, input: Partial<ControlInput>) => {
+        let t = 0;
+        while (s.spin !== 0 && t < 10) {
+          fly(s, c, DT, input);
+          t += DT;
+        }
+        return t;
+      };
+      const tNeutral = time(neutral, { throttle: 0.4 });
+      const tAnti = time(anti, { pitch: -1, yaw: -1, throttle: 0.4 });
+      expect(tAnti).toBeLessThan(tNeutral);
+      fly(anti, c, 3, (_t, st) => {
+        expect(st.spin).toBe(0);
+        return { throttle: 0.9 };
+      });
+    });
+  }
+
+  it('drops a jet that runs out of airspeed nose-high into a spin, thrust vectoring or not (it needs thrust)', () => {
+    for (const id of ['kestrel', 'prizrak']) {
+      const s = createFlightState({ position: new Vector3(0, 3000, 0), headingRad: 0, pitchRad: 85 * DEG, speed: 180, throttle: 0 });
+      let spun = false;
+      fly(s, getAircraft(id), 30, (_t, st) => {
+        spun ||= st.spin !== 0;
+        return { throttle: 0 };
+      });
+      expect(spun, id).toBe(true);
+    }
   });
 });

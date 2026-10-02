@@ -24,6 +24,8 @@ export const prizrak: AircraftConfig = {
     maxRollRateDegS: 160,
     maxYawRateDegS: 25,
     thrustVectoring: 1,
+    fuelKg: 8500,
+    departureResistance: 0.85,
   },
   sensors: {
     radarRangeKm: 50,

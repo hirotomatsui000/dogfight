@@ -10,6 +10,7 @@ import type { SeekerState } from '../../shared/targeting/ir-seeker.ts';
 import type { RadarLockState } from '../../shared/targeting/radar-lock.ts';
 import type { Contact } from '../../shared/targeting/sensors.ts';
 import type { MissileWarning } from '../../shared/targeting/warnings.ts';
+import type { SteadyWind } from '../../shared/physics/wind.ts';
 import type { EnvironmentSettings } from '../../shared/world/time-of-day.ts';
 import type { WeatherId } from '../../shared/world/weather.ts';
 import type { StoresState } from '../../shared/world/entities.ts';
@@ -99,6 +100,8 @@ export interface GameSession {
   readonly localId: number | null;
   /** weather and clock of this match (M4); a new object when Free Flight changes them (M5) */
   readonly environment: EnvironmentSettings;
+  /** the match's wind, without gusts (revision 16): the HUD, the bomb sight and drifting smoke */
+  readonly wind: SteadyWind;
   /** the local hour now (M4) */
   hour(): number;
   update(frameDtS: number, input: ControlInput): void;

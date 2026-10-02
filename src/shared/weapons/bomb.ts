@@ -5,6 +5,7 @@ import type { Terrain } from '../map/terrain.ts';
 import { G0 } from '../math/units.ts';
 import { type AirData, atmosphere, SEA_LEVEL_DENSITY } from '../physics/atmosphere.ts';
 import type { FlightState } from '../physics/flight-model.ts';
+import { NO_WIND, type SteadyWind } from '../physics/wind.ts';
 
 /** A free-fall bomb in flight (spec §10.4). */
 export interface Bomb {
@@ -29,6 +30,9 @@ const air: AirData = { density: 0, temperature: 0, speedOfSound: 0, sigma: 0 };
 const p = new Vector3();
 const v = new Vector3();
 const prev = new Vector3();
+const wind = new Vector3();
+const airVel = new Vector3();
+const STILL_AIR = new Vector3();
 
 /** A bomb leaving the aircraft with the aircraft's position and velocity. */
 export function releaseBomb(id: number, carrier: BombCarrier, spec: BombSpec): Bomb {
@@ -37,19 +41,20 @@ export function releaseBomb(id: number, carrier: BombCarrier, spec: BombSpec): B
 }
 
 /**
- * One fixed step of gravity plus speed-squared drag (semi-implicit Euler). The World and the impact prediction both
- * use it, so a predicted impact matches the real one.
+ * One fixed step of gravity plus speed-squared drag against the moving air (semi-implicit Euler). The World and the
+ * impact prediction both use it, so a predicted impact matches the real one; the wind carries the bomb (revision 16).
  */
-export function advanceBomb(pos: Vector3, vel: Vector3, spec: BombSpec, density: number, dt: number): void {
+export function advanceBomb(pos: Vector3, vel: Vector3, spec: BombSpec, density: number, dt: number, windVel: Vector3 = STILL_AIR): void {
   const k = (spec.dragPerM * density) / SEA_LEVEL_DENSITY;
-  vel.multiplyScalar(Math.max(0, 1 - k * vel.length() * dt));
+  airVel.subVectors(vel, windVel);
+  vel.copy(windVel).addScaledVector(airVel, Math.max(0, 1 - k * airVel.length() * dt));
   vel.y -= G0 * dt;
   pos.addScaledVector(vel, dt);
 }
 
-export function stepBomb(b: Bomb, dt: number): void {
+export function stepBomb(b: Bomb, dt: number, windField: SteadyWind = NO_WIND): void {
   b.prevPos.copy(b.pos);
-  advanceBomb(b.pos, b.vel, b.spec, atmosphere(b.pos.y, air).density, dt);
+  advanceBomb(b.pos, b.vel, b.spec, atmosphere(b.pos.y, air).density, dt, windField.steadyAt(b.pos.y, wind));
   b.ageS += dt;
 }
 
@@ -75,13 +80,21 @@ export function surfaceCrossing(from: Vector3, to: Vector3, terrain: Terrain, ou
  * Where a bomb released now from `pos` with `vel` would land, stepping exactly as the World does with the same `dt`.
  * Null when it would not land within the bomb's maximum fall time.
  */
-export function predictImpact(pos: Vector3, vel: Vector3, spec: BombSpec, terrain: Terrain, dt: number, out: Vector3): Vector3 | null {
+export function predictImpact(
+  pos: Vector3,
+  vel: Vector3,
+  spec: BombSpec,
+  terrain: Terrain,
+  dt: number,
+  out: Vector3,
+  windField: SteadyWind = NO_WIND,
+): Vector3 | null {
   p.copy(pos);
   v.copy(vel);
   const steps = Math.ceil(spec.maxFallS / dt);
   for (let i = 0; i < steps; i++) {
     prev.copy(p);
-    advanceBomb(p, v, spec, atmosphere(p.y, air).density, dt);
+    advanceBomb(p, v, spec, atmosphere(p.y, air).density, dt, windField.steadyAt(p.y, wind));
     if (clearance(p, terrain) <= 0) return surfaceCrossing(prev, p, terrain, out);
   }
   return null;

@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 15)
+# Contested Skies — Design Spec (revision 16)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -44,6 +44,8 @@
     builds and publishes it after every push to `main` or a `claude/…` branch (§24).
   - Revision 15 (2026-10-02): the owner found mouse aim too quick: 100% sensitivity is now 0.0011 rad per pixel (was
     0.0022), and free look turns twice as fast per pixel as the aim, as quick as before (§15.3).
+  - Revision 16 (2026-10-02): at the owner's request, fuel, wind and spins (§8, §9, §12.3, §15, §19, §23). Plan:
+    `docs/superpowers/plans/2026-10-02-fuel-wind-spins.md`.
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -342,7 +344,28 @@ State: `{pos, vel, quat, angVel, throttle, airbrake}`, plus derived `alpha, beta
     rolling off it is a crash. A gentle touchdown with the gear still fully down (a bounce on the take-off run) rolls on.
   - The gear retracts over 4 s once the jet is 30 m above the airfield or has left it, and adds drag (CD +0.02) while
     out. Every jet lifts off within the runway at military power (190–230 kt, 15–24 s) and at full afterburner.
-- **Not modeled:** fuel burn, spins/departures, wind, landing gear damage.
+- **Fuel (revision 16):** `physics.fuelKg` is internal fuel, included in `massKg` (the full-tank mass); the mass in the
+  equations is `massKg − fuel burnt`. Fuel flow follows thrust: 2.1·10⁻⁵ kg/(N·s) up to military power and
+  1.05·10⁻⁴ kg/(N·s) for the afterburner's extra thrust, never under 8% of the military-power flow (Kestrel at sea
+  level: 1.6 kg/s military, 7.3 kg/s full afterburner; full afterburner empties a tank in 6.5–12 minutes at sea level).
+  An empty tank flames the engines out: no thrust, no flow. A respawn, Training's restock and Free Flight's "fly from
+  here" refuel; there is no refuelling in flight.
+- **Wind (revision 16):** `FlightEnv.wind` is the air's velocity; airspeed, Mach, α, β, lift and drag use
+  `vel − wind`, so the jet drifts with the air mass and its ground speed differs from its airspeed. On the wheels the
+  headwind along the runway counts as airspeed. Gusts come from the wind field (§12.3).
+- **Departures and spins (revision 16):** with `stalled = clamp((α − α_max)/5°, 0, 1)` and
+  `instability = stalled·(1 − departureResistance)·(1 − authority)`, the yaw command gains
+  `−8·instability·(β − 0.5 rad·roll)`: stalled at low dynamic pressure the jet loses its weathercock stability and a
+  roll input drops a wing. When `instability > 0.05` and `|β| > 12°`, or the jet is slower than 30 m/s with
+  `(1 − resistance)·(1 − authority) > 0.3`, it departs into a spin (direction from the sideslip). In the spin the
+  fly-by-wire is out: the body yaws round the vertical at `100°·(1 − 0.4·resistance)`/s, the attitude is pulled to 45°
+  nose down with wings level, and the broadside airframe adds CD 0.9, so it falls at 70–100 m/s. After 1.5 s,
+  recovery progresses at `(0.2 + 0.35·opposite rudder + 0.15·forward stick)·(1 + resistance)` per second; aft stick or
+  pro-spin rudder undo it at 0.5/s. On recovery the body rates drop to 30% and for 3 s the AoA limit is `α_max − 2°`
+  with no instability, so the jet dives out instead of spinning again. Hard-limited jets (limiter ≤ α_max + 1°) and
+  thrust-vectoring jets with thrust barely depart; with the throttle closed thrust vectoring cannot help.
+- **Not modeled:** landing gear damage; missiles ignore the wind; cannon shells keep the shooter's velocity, so the
+  wind does not move them relative to the target.
 
 ## 9. Aircraft roster (fictional, data-driven)
 
@@ -418,6 +441,13 @@ M 1.9–2.3 at 11 km and M 1.1–1.4 at sea level; instantaneous turn 20–27 °
 - Each pairing's win rate (of the decided duels; a mid-air collision is a draw) must be 35–65%. If one isn't, adjust
   that aircraft's data file (never the flight code) and re-run.
 - Result (revision 10): every pairing within 35–65% over seeds 1–100, and between 38% and 62% over seeds 1–200.
+- Revision 16 (fuel, departures; duels fly in still air): the Sapsan's afterburner went from 250 to 243 kN, the
+  Shade's departure resistance is 0.7 and its hit radius 5 m. Every pairing is within 35–65% again; Shade–Sapsan
+  (36%) and Kestrel–Prizrak (35%) sit at the edge. Fuel barely changes a 3-minute duel; departures were the Shade's
+  problem (5–6 spins per 100 duels at resistance 0.5, 2 at 0.7). Departure resistance per jet: Shade 0.7, Tempest 0.7,
+  Kestrel 0.6, Condor 0.5, Prizrak 0.85, Yastreb 0.85, Sapsan 0.4, Kobchik 0.55 (Sentinel 0.3). Internal fuel (kg):
+  Shade 7,500, Tempest 7,800, Kestrel 3,200, Condor 6,000, Prizrak 8,500, Yastreb 8,000, Sapsan 8,500, Kobchik 3,500
+  (Sentinel 20,000).
 
 ## 10. Weapons, targeting and countermeasures (abstracted)
 
@@ -603,6 +633,12 @@ The "Anvil" is an abstract, unguided free-fall bomb for the Strike mode (§13.1)
   time and dims at night.
 - Night: town and street lights, runway edge (white), threshold (green) and end (red) lights, and red, green and
   white navigation lights with strobes on every jet.
+- Wind (revision 16): surface / 11 km speed and gust share per preset: Clear 3 / 15 m/s, 10%; Scattered 5 / 20, 15%;
+  Broken 7 / 25, 20%; Overcast 9 / 28, 20%; Rain 12 / 32, 35%. The speed holds to 1 km, then rises to the upper-air
+  value at 11 km while the direction veers 30°. The direction it blows from is drawn from the match seed between 200°
+  and 340° (westerlies). Gusts are three smooth waves in space and time per axis (vertical at 40%), bounded by the gust
+  share. Training, tests and the balance tournament fly in still air (`EnvironmentSettings.calm`). Smoke, fire and
+  contrails drift with the wind; the clouds stay put.
 
 - **Geography inspired by Poland:**
   - **North:** a sea coast with beaches, a sand spit and a lagoon.
@@ -835,6 +871,13 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   with reduce motion, M5).
 - **M5:** the zone strip and markers (§13.3), Sentinel markers and the datalink state (§13.4), hollow datalink
   contacts; the respawn screen names the killer (jet and hit points left), who you watch, and the next jet.
+- **Revision 16:** `GS` (ground speed) under the AoA; `WIND 262° 37 KT` (bearing it blows from, speed in the jet's
+  units) under the vertical speed; `FUEL 72%` above the throttle, amber under 20% (BINGO) and red at 0. Crossing
+  BINGO shows a `BINGO FUEL` banner with two low chimes; a flameout sounds three falling chimes and keeps `FLAMEOUT`
+  on screen. A spin replaces STALL with a red `SPIN` and a steady recovery line: `AUTO RECOVERY` in mouse aim
+  (the mapper pushes the stick forward, holds opposite rudder and parks the aim on the horizon ahead), otherwise the
+  pilot's own keys (`W NOSE DOWN · Q RUDDER · LET GO OF THE ROLL`, or stick forward and a bumper on a gamepad). AI
+  pilots recover the same way and stay off the afterburner below 25% fuel. The bomb sight allows for the wind.
 
 ### 15.3 Controls
 
@@ -1090,7 +1133,7 @@ brief (§11 of the brief: steps 1–11).
 
 - Accounts, persistence, stats history, rankings and leaderboards.
 - Free-text and voice chat (preset quick-chat is in scope, M2).
-- Landing and rearming, fuel, spins/departures, wind.
+- Landing and rearming. (Fuel, spins/departures and wind arrived in revision 16.)
 - Air-to-ground weapons other than the Strike mode's abstract bomb (§10.4), which never damages aircraft.
 - Real-world map data.
 - Functional cockpit instruments/MFDs.

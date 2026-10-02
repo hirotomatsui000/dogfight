@@ -14,6 +14,7 @@ import {
   verticalSpeedValue,
 } from './format.ts';
 import { drawGameLayer } from './game-layer.ts';
+import { BINGO_SHARE, formatFuel, formatWind } from './flight-warnings.ts';
 import { drawDatalink, drawObjective, drawZones } from './objective-layer.ts';
 import type { HudFrame } from './hud-frame.ts';
 import { AMBER, FONT, FONT_BIG, FONT_SMALL, GREEN, PRIMARY, RED, SHADOW, WHITE } from './palette.ts';
@@ -226,6 +227,8 @@ export class Hud {
     ctx.fillText(formatMach(flight.mach), x, y + 44);
     ctx.fillText(`G ${flight.gLoad.toFixed(1)}  ${this.maxG.toFixed(1)}`, x, y + 64);
     ctx.fillText(`α ${(flight.alpha * RAD).toFixed(1)}`, x, y + 84);
+    // Ground speed differs from airspeed by the wind (revision 16).
+    ctx.fillText(`GS ${Math.round(speedValue(flight.vel.length(), units))}`, x, y + 104);
   }
 
   private drawAltitude(f: HudFrame): void {
@@ -240,6 +243,11 @@ export class Hud {
     ctx.fillText(`${vs >= 0 ? '+' : ''}${Math.round(vs)} ${verticalSpeedLabel(units)}`, x, y + 44);
     if (f.radarAltitudeM < RADAR_ALT_SHOW_M) {
       ctx.fillText(`R ${Math.round(altitudeValue(f.radarAltitudeM, units))}`, x, y + 64);
+    }
+    if (f.wind) {
+      ctx.font = FONT_SMALL;
+      ctx.fillText(formatWind(f.wind.x, f.wind.z, units), x, y + 84);
+      ctx.font = FONT;
     }
   }
 
@@ -274,6 +282,13 @@ export class Hud {
     ctx.fillText(ab ? 'AB' : `${Math.round((t / 0.9) * 100)}%`, x - 4, y + h + 22);
     ctx.font = FONT_SMALL;
     ctx.fillText('THR', x - 2, y - 8);
+    // Fuel (revision 16): amber from BINGO, red when the tank is dry.
+    const v = f.view;
+    const share = v.stores.fuelKg / v.config.physics.fuelKg;
+    ctx.save();
+    if (share < BINGO_SHARE) ctx.fillStyle = v.stores.fuelKg <= 0 ? RED : AMBER;
+    ctx.fillText(formatFuel(v.stores.fuelKg, v.config.physics.fuelKg), x - 2, y - 26);
+    ctx.restore();
     ctx.font = FONT;
   }
 
@@ -294,10 +309,16 @@ export class Hud {
 
   private drawWarnings(f: HudFrame, clock: number): void {
     const blinkOn = clock % 0.6 < 0.4;
-    const stalled = f.view.flight.alpha > f.view.config.physics.alphaMaxDeg * DEG;
+    const flight = f.view.flight;
+    const stalled = flight.alpha > f.view.config.physics.alphaMaxDeg * DEG;
     if (f.hitTaken) this.drawCenterText(WARNING_CAPTIONS['hit-taken'], this.height / 2 + 150, RED, FONT_BIG);
-    if (f.pullUp && blinkOn) this.drawCenterText('PULL UP', this.height / 2 + 110, RED, FONT_BIG);
+    if (flight.spin !== 0) {
+      // A spin outranks the stall it came from (revision 16); the recovery line stays steady to be readable.
+      if (blinkOn) this.drawCenterText('SPIN', this.height / 2 + 110, RED, FONT_BIG);
+      if (f.spinHint) this.drawCenterText(f.spinHint, this.height / 2 + 134, RED, FONT);
+    } else if (f.pullUp && blinkOn) this.drawCenterText('PULL UP', this.height / 2 + 110, RED, FONT_BIG);
     else if (stalled && blinkOn) this.drawCenterText('STALL', this.height / 2 + 110, AMBER, FONT_BIG);
+    if (f.view.stores.fuelKg <= 0) this.drawCenterText('FLAMEOUT', this.height / 2 + 186, RED, FONT_BIG);
     const left = f.view.boundarySecondsLeft;
     if (left !== null) this.drawCenterText(`RETURN TO COMBAT AREA  ${Math.ceil(left)}`, this.height * 0.28, AMBER, FONT_BIG);
   }

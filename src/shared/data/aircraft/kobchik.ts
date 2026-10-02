@@ -24,6 +24,8 @@ export const kobchik: AircraftConfig = {
     maxRollRateDegS: 160,
     maxYawRateDegS: 20,
     thrustVectoring: 0,
+    fuelKg: 3500,
+    departureResistance: 0.55,
   },
   sensors: {
     radarRangeKm: 30,

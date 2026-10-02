@@ -34,6 +34,8 @@ export function validateAircraftConfig(c: AircraftConfig): string[] {
     [inRange(p.maxRollRateDegS, big ? 15 : 60, 400), 'physics.maxRollRateDegS must be 60..400 (support 15..400)'],
     [inRange(p.maxYawRateDegS, big ? 2 : 5, 60), 'physics.maxYawRateDegS must be 5..60 (support 2..60)'],
     [inRange(p.thrustVectoring, 0, 1), 'physics.thrustVectoring must be 0..1'],
+    [inRange(p.fuelKg / p.massKg, 0.1, 0.45), 'physics.fuelKg must be 10..45% of massKg'],
+    [inRange(p.departureResistance, 0, 1), 'physics.departureResistance must be 0..1'],
     [inRange(s.radarRangeKm, 10, big ? 250 : 120), 'sensors.radarRangeKm must be 10..120 (support 10..250)'],
     [inRange(s.radarConeDeg, 30, big ? 180 : 90), 'sensors.radarConeDeg must be 30..90 (support 30..180)'],
     [inRange(s.stealth, 0, 1), 'sensors.stealth must be 0..1'],

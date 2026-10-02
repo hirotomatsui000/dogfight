@@ -16,6 +16,7 @@ import { trimAlpha } from '../physics/aero.ts';
 import { atmosphere } from '../physics/atmosphere.ts';
 import { type ControlInput, neutralInput, sanitizeInput } from '../physics/controls.ts';
 import { createFlightState, type FlightEnv, type FlightState, stepFlight } from '../physics/flight-model.ts';
+import { WindField } from '../physics/wind.ts';
 import type { Projectile } from '../weapons/cannon.ts';
 import type { Bomb } from '../weapons/bomb.ts';
 import type { Missile } from '../weapons/missile.ts';
@@ -32,6 +33,8 @@ export const DT = 1 / TICK_RATE;
 export const BOUNDARY_GRACE_S = 15;
 export const CEILING_M = 18000;
 export const GROUND_CLEARANCE_M = 2;
+/** AI pilots stay off the afterburner below this share of fuel (revision 16). */
+export const AI_FUEL_SAVING_SHARE = 0.25;
 /** Free Flight's "fly from here" (M5): at least this high, and this far above the ground, inside this share of the area. */
 const FLY_FROM_MIN_ALTITUDE_M = 2000;
 const FLY_FROM_CLEARANCE_M = 1500;
@@ -84,6 +87,8 @@ export class World implements ModeDirector, CombatHost, BotWorld {
   /** weather and clock; Free Flight can change them during a match (M5) */
   environment: EnvironmentSettings;
   clouds: CloudField;
+  /** the match's wind, from the weather and the seed (revision 16) */
+  wind: WindField;
   tick = 0;
   private readonly seed: number;
   private readonly aircraft = new Map<number, AircraftEntity>();
@@ -91,7 +96,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
   private readonly bots = new Map<number, { pilot: Pilot; input: ControlInput }>();
   private events: GameEvent[] = [];
   private nextId = 1;
-  private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1, groundM: NaN };
+  private readonly env: FlightEnv = { thrustScale: 1, rollScale: 1, groundM: NaN, wind: new Vector3(), fuelUsedKg: 0 };
   private readonly approach: Approach = { distance: 0, fraction: 0 };
   private readonly living: AircraftEntity[] = [];
 
@@ -104,17 +109,20 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     this.environment = { ...(opts.environment ?? CALM_NOON) };
     // The clouds belong to the map and the weather, so every client draws the same ones.
     this.clouds = new CloudField(WEATHER[this.environment.weather], opts.map.seed);
+    this.wind = windFor(this.environment, opts.seed);
     opts.mode.prepare?.(opts.map);
     this.groundTargets = opts.mode.groundTargets(opts.map).map((spec) => createGroundTarget(spec, opts.terrain));
     this.combat = new Combat(this);
     for (const spec of opts.mode.supportAircraft?.(opts.map) ?? []) this.addSupport(spec);
   }
 
-  /** New weather and clock for the rest of the match (Free Flight, M5); the clouds are rebuilt for the new weather. */
+  /** New weather and clock for the rest of the match (Free Flight, M5); the clouds and wind follow the new weather. */
   setEnvironment(env: EnvironmentSettings): void {
     const weatherChanged = env.weather !== this.environment.weather;
+    const windChanged = weatherChanged || env.calm !== this.environment.calm;
     this.environment = { ...env };
     if (weatherChanged) this.clouds = new CloudField(WEATHER[env.weather], this.map.seed);
+    if (windChanged) this.wind = windFor(env, this.seed);
   }
 
   /**
@@ -328,13 +336,21 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       const bot = this.bots.get(a.id);
       const raw = bot ? bot.pilot.think(this, a, bot.input) : inputs.get(a.id);
       if (raw) sanitizeInput(raw, a.input);
+      if (bot) airmanship(a);
     }
+    const timeS = this.tick * DT;
     for (const a of this.aircraft.values()) {
       if (!a.alive) continue;
       a.prevPos.copy(a.flight.pos);
-      damageFlightEnv(damageState(a.hp, a.config.damage.hitPoints), this.env);
-      this.env.groundM = airfieldGroundHeight(this.map.features, a.flight.pos.x, a.flight.pos.z);
-      stepFlight(a.flight, a.input, a.config.physics, DT, this.env);
+      const env = this.env;
+      damageFlightEnv(damageState(a.hp, a.config.damage.hitPoints), env);
+      // An empty tank flames the engines out (revision 16).
+      if (a.stores.fuelKg <= 0) env.thrustScale = 0;
+      env.groundM = airfieldGroundHeight(this.map.features, a.flight.pos.x, a.flight.pos.z);
+      this.wind.at(a.flight.pos, timeS, env.wind);
+      env.fuelUsedKg = a.config.physics.fuelKg - a.stores.fuelKg;
+      stepFlight(a.flight, a.input, a.config.physics, DT, env);
+      a.stores.fuelKg = Math.max(0, a.stores.fuelKg - a.flight.fuelFlow * DT);
       a.history.record(a.flight.pos, a.flight.vel);
     }
     if (this.mode.combatEnabled) this.combat.step(DT);
@@ -453,4 +469,23 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     resetForSpawn(a);
     this.emit({ type: 'spawned', aircraftId: a.id, spawnGen: a.spawnGen });
   }
+}
+
+/** The match's wind: the weather's, from a direction drawn from the seed, or none in a calm. */
+function windFor(env: EnvironmentSettings, seed: number): WindField {
+  return env.calm ? new WindField({ surfaceMs: 0, aloftMs: 0, gust: 0, fromRad: 0 }, seed) : WindField.forWeather(WEATHER[env.weather], seed);
+}
+
+/**
+ * What every AI pilot does whatever its tactics (revision 16): recover from a spin with the stick forward and opposite
+ * rudder, and save fuel by staying off the afterburner once the tank runs low.
+ */
+function airmanship(a: AircraftEntity): void {
+  const input = a.input;
+  if (a.flight.spin !== 0) {
+    input.pitch = -0.5;
+    input.roll = 0;
+    input.yaw = -a.flight.spin;
+  }
+  if (a.stores.fuelKg < AI_FUEL_SAVING_SHARE * a.config.physics.fuelKg) input.throttle = Math.min(input.throttle, 0.9);
 }

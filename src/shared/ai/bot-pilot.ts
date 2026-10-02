@@ -9,6 +9,7 @@ import { type AirData, atmosphere } from '../physics/atmosphere.ts';
 import type { ControlInput } from '../physics/controls.ts';
 import type { FlightState } from '../physics/flight-model.ts';
 import { incomingMissileWarning, type MissileWarning } from '../targeting/warnings.ts';
+import type { SteadyWind } from '../physics/wind.ts';
 import { predictImpact } from '../weapons/bomb.ts';
 import { leadDirection } from '../weapons/lead.ts';
 import type { Missile } from '../weapons/missile.ts';
@@ -30,6 +31,8 @@ export interface BotWorld {
   groundTargetList(): readonly GroundTarget[];
   /** where the mode wants this bot when it has nothing near to fight (M5); null or absent = patrol */
   botGoal?(bot: AircraftEntity): BotGoal | null;
+  /** bomb runs allow for the wind (revision 16) */
+  readonly wind: SteadyWind;
 }
 
 const GROUND_HORIZON_S = 5;
@@ -518,7 +521,7 @@ export class BotPilot {
   private updateThrow(world: BotWorld, f: FlightState, fine: boolean): void {
     this.throwRefreshTick = world.tick + Math.round(THROW_REFRESH_S * world.tickRate);
     const dt = fine ? 1 / world.tickRate : THROW_PREDICT_DT_S;
-    const landing = predictImpact(f.pos, f.vel, BOMB_ANVIL, world.terrain, dt, this.impact);
+    const landing = predictImpact(f.pos, f.vel, BOMB_ANVIL, world.terrain, dt, this.impact, world.wind);
     this.throwAlong = landing ? this.rel.subVectors(landing, f.pos).setY(0).dot(this.track) : 0;
   }
 

@@ -19,14 +19,20 @@ export interface WeatherPreset {
   /** sunlight left under the clouds */
   lightFactor: number;
   rain: boolean;
+  /** wind near the ground, m/s (revision 16) */
+  windMs: number;
+  /** wind at 11 km and above, m/s */
+  windAloftMs: number;
+  /** gusts as a share of the wind speed */
+  gust: number;
 }
 
 export const WEATHER: Readonly<Record<WeatherId, WeatherPreset>> = {
-  clear: { id: 'clear', label: 'Clear', coverage: 0, cloudBaseM: 1800, cloudTopM: 2400, deck: false, hazeFactor: 0.8, lightFactor: 1, rain: false },
-  scattered: { id: 'scattered', label: 'Scattered', coverage: 0.25, cloudBaseM: 1600, cloudTopM: 2700, deck: false, hazeFactor: 1, lightFactor: 1, rain: false },
-  broken: { id: 'broken', label: 'Broken', coverage: 0.6, cloudBaseM: 1300, cloudTopM: 3200, deck: false, hazeFactor: 1.2, lightFactor: 0.75, rain: false },
-  overcast: { id: 'overcast', label: 'Overcast', coverage: 1, cloudBaseM: 1100, cloudTopM: 2300, deck: true, hazeFactor: 1.6, lightFactor: 0.4, rain: false },
-  rain: { id: 'rain', label: 'Rain', coverage: 1, cloudBaseM: 800, cloudTopM: 2600, deck: true, hazeFactor: 2.6, lightFactor: 0.28, rain: true },
+  clear: { id: 'clear', label: 'Clear', coverage: 0, cloudBaseM: 1800, cloudTopM: 2400, deck: false, hazeFactor: 0.8, lightFactor: 1, rain: false, windMs: 3, windAloftMs: 15, gust: 0.1 },
+  scattered: { id: 'scattered', label: 'Scattered', coverage: 0.25, cloudBaseM: 1600, cloudTopM: 2700, deck: false, hazeFactor: 1, lightFactor: 1, rain: false, windMs: 5, windAloftMs: 20, gust: 0.15 },
+  broken: { id: 'broken', label: 'Broken', coverage: 0.6, cloudBaseM: 1300, cloudTopM: 3200, deck: false, hazeFactor: 1.2, lightFactor: 0.75, rain: false, windMs: 7, windAloftMs: 25, gust: 0.2 },
+  overcast: { id: 'overcast', label: 'Overcast', coverage: 1, cloudBaseM: 1100, cloudTopM: 2300, deck: true, hazeFactor: 1.6, lightFactor: 0.4, rain: false, windMs: 9, windAloftMs: 28, gust: 0.2 },
+  rain: { id: 'rain', label: 'Rain', coverage: 1, cloudBaseM: 800, cloudTopM: 2600, deck: true, hazeFactor: 2.6, lightFactor: 0.28, rain: true, windMs: 12, windAloftMs: 32, gust: 0.35 },
 };
 
 export const WEATHER_IDS: readonly WeatherId[] = ['clear', 'scattered', 'broken', 'overcast', 'rain'];

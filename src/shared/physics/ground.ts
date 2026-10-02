@@ -1,7 +1,7 @@
 import { Euler, Vector3 } from 'three';
 import type { AircraftPhysics } from '../data/aircraft/types.ts';
 import { approach, clamp, DEG, G0, lerp, moveToward, smoothstep } from '../math/units.ts';
-import { dragCoefficient, liftCoefficient, thrustNewtons } from './aero.ts';
+import { dragCoefficient, fuelFlowKgS, liftCoefficient, thrustNewtons } from './aero.ts';
 import { type AirData, atmosphere } from './atmosphere.ts';
 import type { ControlInput } from './controls.ts';
 import type { FlightEnv, FlightState } from './flight-model.ts';
@@ -47,7 +47,8 @@ const euler = new Euler(0, 0, 0, 'YXZ');
 /**
  * One tick on the wheels (spec §8, M4): thrust, drag and wheel friction along the heading, no side slip, gear springs
  * under the weight, nose-wheel steering from the roll and rudder inputs, and rotation once the elevator has
- * authority. The jet leaves the ground by itself when lift exceeds weight; `onGround` then turns false.
+ * authority. The jet leaves the ground by itself when lift exceeds weight; `onGround` then turns false. Lift and drag
+ * come from the airspeed along the runway, so a headwind shortens the roll (revision 16).
  */
 export function stepGround(s: FlightState, input: ControlInput, p: AircraftPhysics, dt: number, env: Readonly<FlightEnv>): void {
   const groundM = env.groundM;
@@ -66,25 +67,28 @@ export function stepGround(s: FlightState, input: ControlInput, p: AircraftPhysi
   const hz = -Math.cos(heading);
   let u = Math.max(0, s.vel.x * hx + s.vel.z * hz);
   let vy = s.vel.y;
+  const headwind = -(env.wind.x * hx + env.wind.z * hz);
+  const ua = Math.max(0, u + headwind);
+  const mass = p.massKg - env.fuelUsedKg;
 
-  const qbar = 0.5 * air.density * u * u;
-  const mach = u / air.speedOfSound;
-  const alpha = pitch - Math.atan2(vy, Math.max(u, 1));
+  const qbar = 0.5 * air.density * ua * ua;
+  const mach = ua / air.speedOfSound;
+  const alpha = pitch - Math.atan2(vy, Math.max(ua, 1));
   const qS = qbar * p.wingAreaM2;
   const cl = liftCoefficient(alpha, p);
   const drag = qS * (dragCoefficient(mach, cl, alpha, 0, s.airbrake, p) + GEAR_DRAG * s.gear);
   const lift = qS * cl;
   const thrust = thrustNewtons(s.throttle, p, air.sigma, mach, env.thrustScale);
-  const weight = p.massKg * G0;
+  const weight = mass * G0;
 
   // Gear springs carry what the wings do not.
   const compression = groundM + GEAR_HEIGHT_M - s.pos.y;
-  const wheelLoad = compression > 0 ? Math.max(0, p.massKg * (SPRING_OMEGA * SPRING_OMEGA * compression - 2 * SPRING_ZETA * SPRING_OMEGA * vy)) : 0;
+  const wheelLoad = compression > 0 ? Math.max(0, mass * (SPRING_OMEGA * SPRING_OMEGA * compression - 2 * SPRING_ZETA * SPRING_OMEGA * vy)) : 0;
   const friction = (ROLLING_FRICTION + (input.airbrake ? BRAKE_FRICTION : 0)) * wheelLoad;
-  let au = (thrust * Math.cos(pitch) - drag - friction) / p.massKg;
+  let au = (thrust * Math.cos(pitch) - drag - friction) / mass;
   if (u <= 0 && au < 0) au = 0;
   u = Math.max(0, u + au * dt);
-  vy += ((lift + thrust * Math.sin(pitch) + wheelLoad - weight) / p.massKg) * dt;
+  vy += ((lift + thrust * Math.sin(pitch) + wheelLoad - weight) / mass) * dt;
 
   // Steering: the nose wheel at taxi speed, the rudder when fast; nothing turns a jet standing still.
   const steer = clamp(input.yaw + input.roll, -1, 1);
@@ -107,8 +111,9 @@ export function stepGround(s: FlightState, input: ControlInput, p: AircraftPhysi
   s.alpha = alpha;
   s.beta = 0;
   s.mach = mach;
-  s.airspeed = Math.hypot(u, vy);
+  s.airspeed = Math.hypot(ua, vy);
   s.thrust = thrust;
+  s.fuelFlow = fuelFlowKgS(s.throttle, p, air.sigma, mach, env.thrustScale);
   s.gLoad = (lift + wheelLoad) / weight;
   if (s.pos.y - groundM - GEAR_HEIGHT_M > LIFTOFF_CLEARANCE_M && vy > 0) s.onGround = false;
 }

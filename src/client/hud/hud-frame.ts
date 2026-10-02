@@ -45,4 +45,8 @@ export interface HudFrame {
   training: TrainingPrompt | null;
   /** the time of day, "17:32" (M4) */
   localTime?: string;
+  /** the air's velocity at the jet's height, without gusts (revision 16) */
+  wind?: Vector3;
+  /** what to do in a spin, under the SPIN warning (revision 16) */
+  spinHint?: string;
 }

@@ -10,6 +10,19 @@ rebuilt after every push ([Publish as a website](#publish-as-a-website)).
 **Current milestone: M5 "Modes & polish"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
 "Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02: the game is
 single player against AI pilots and runs entirely in the browser.
+- **Fuel, wind and spins** (2026-10-02):
+  - Every jet carries its real-world share of internal fuel and burns it with the throttle; the afterburner drinks
+    about five times as much per unit of thrust. The jet gets lighter as it burns. The HUD shows `FUEL` above the
+    throttle; at 20% it says `BINGO FUEL`, and an empty tank flames the engines out (`FLAMEOUT`): you glide. Respawning
+    (or Free Flight's "fly from here") fills the tanks.
+  - The wind comes with the weather (light in clear skies, strong and gusty in rain), from the west-ish, stronger and
+    veering higher up. You fly in the moving air: the HUD shows ground speed (`GS`) and the wind under the altitude,
+    a headwind shortens the take-off run, bombs drift (the bomb sight allows for it), and smoke and contrails blow
+    downwind. Training flies in still air.
+  - Too slow and stalled, a jet can depart into a spin, especially if you roll there; it yaws round and falls at
+    70–100 m/s. Mouse aim recovers by itself (`SPIN` · `AUTO RECOVERY`). With keyboard steering: nose down (W),
+    rudder against the spin (Q or E, as the HUD says) and let go of the roll. Thrust-vectoring jets (Prizrak,
+    Yastreb) and hard-limited ones (Kestrel, Condor) are hard to depart; the Sapsan is the easiest.
 - **Four modes**:
   - **Dogfight** (Team Deathmatch): first to 15, or the most after 10 minutes.
   - **Air Superiority**: three zones (A, B, C) on the front, each a cylinder 4 km across from 1,000 to 7,000 m. The
@@ -145,6 +158,8 @@ In a fight:
   work. Flares and chaff (X) help too: flares against the Dart (better off afterburner), chaff against the Lance
   (better for the stealthy jets).
 - Distant jets and missiles are drawn a little larger than life so they never shrink to a single pixel.
+- Watch the fuel: afterburner all the time empties the tank in 6–12 minutes near the ground (longer up high).
+- Keep your speed up: a stalled, slow jet that rolls can spin (see above), and spinning low is fatal.
 
 In Strike (choose **Strike** under Mission on the title screen):
 - The USA jets defend: keep at least two of the three targets standing for 9 minutes, or shoot Russia's jets down

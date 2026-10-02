@@ -24,6 +24,8 @@ export const tempest: AircraftConfig = {
     maxRollRateDegS: 155,
     maxYawRateDegS: 20,
     thrustVectoring: 0.5,
+    fuelKg: 7800,
+    departureResistance: 0.7,
   },
   sensors: {
     radarRangeKm: 50,

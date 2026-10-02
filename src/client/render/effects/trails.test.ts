@@ -1,4 +1,4 @@
-import { Color } from 'three';
+import { Color, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { TrailRibbons, TrailStore } from './trails.ts';
 
@@ -41,6 +41,18 @@ describe('trail bookkeeping (M5)', () => {
     for (let i = 0; i < 8; i++) r.store.emit('a', { x: i * 100, y: 0, z: 0 }, 1, i * 0.5);
     r.update(4, { pixelScale: 1000, fogColor: new Color(), fogDensity: 0 }, 1);
     expect(r.mesh.geometry.drawRange.count).toBe(18);
+    r.dispose();
+  });
+
+  it('drifts older points downwind (revision 16)', () => {
+    const r = new TrailRibbons(look, 30);
+    r.store.emit('a', { x: 0, y: 0, z: 0 }, 1, 0);
+    r.store.emit('a', { x: 100, y: 0, z: 0 }, 1, 0.5);
+    const wind = { steadyAt: (_y: number, out: Vector3) => out.set(0, 0, 10) };
+    r.update(4, { pixelScale: 1000, fogColor: new Color(), fogDensity: 0, wind }, 1);
+    const pos = r.mesh.geometry.getAttribute('position');
+    // The first vertex is the oldest point, 4 s old: 40 m downwind.
+    expect(pos.getZ(0)).toBeCloseTo(40, 4);
     r.dispose();
   });
 });

@@ -24,6 +24,8 @@ export const yastreb: AircraftConfig = {
     maxRollRateDegS: 140,
     maxYawRateDegS: 25,
     thrustVectoring: 1,
+    fuelKg: 8000,
+    departureResistance: 0.85,
   },
   sensors: {
     radarRangeKm: 55,

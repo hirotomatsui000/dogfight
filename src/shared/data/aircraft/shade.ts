@@ -24,6 +24,8 @@ export const shade: AircraftConfig = {
     maxRollRateDegS: 130,
     maxYawRateDegS: 20,
     thrustVectoring: 0,
+    fuelKg: 7500,
+    departureResistance: 0.7,
   },
   sensors: {
     radarRangeKm: 60,
@@ -35,7 +37,7 @@ export const shade: AircraftConfig = {
     sensorFusion: true,
   },
   stores: { cannon: 'RC-25', cannonRounds: 180, srm: 2, mrm: 4, countermeasures: 32 },
-  damage: { hitPoints: 100, hitRadiusM: 5.5 },
+  damage: { hitPoints: 100, hitRadiusM: 5 },
   visual: {
     lengthM: 15.7,
     spanM: 10.7,

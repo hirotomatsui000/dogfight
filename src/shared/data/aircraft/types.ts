@@ -26,6 +26,10 @@ export interface AircraftPhysics {
   maxYawRateDegS: number;
   /** 0 = none, 1 = full 3-D thrust vectoring */
   thrustVectoring: number;
+  /** internal fuel; part of massKg, which is the mass with full tanks (revision 16) */
+  fuelKg: number;
+  /** 0 … 1: how hard a stall at low speed turns into a spin, and how quickly the jet recovers (revision 16) */
+  departureResistance: number;
 }
 
 export interface AircraftSensors {

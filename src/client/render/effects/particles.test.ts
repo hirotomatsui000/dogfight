@@ -1,4 +1,4 @@
-import { Color } from 'three';
+import { Color, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { ParticleSystem } from './particles.ts';
 
@@ -49,5 +49,18 @@ describe('particle density', () => {
     ps.density = 0.5;
     for (let i = 0; i < 20; i++) ps.spawn(puff());
     expect(ps.liveCount).toBe(10);
+  });
+});
+
+describe('particles in the wind', () => {
+  it('lets drag carry smoke along with the wind instead of stopping it (revision 16)', () => {
+    const ps = new ParticleSystem(1, false);
+    ps.spawn({ ...puff(), vx: 0, lift: 0, drag: 2 });
+    const wind = { steadyAt: (_y: number, out: Vector3) => out.set(0, 0, 8) };
+    for (let i = 0; i < 30; i++) ps.update(0.02, { ...frame, wind });
+    const pos = ps.points.geometry.getAttribute('position');
+    // Drag 2 brings it up to the wind's 8 m/s: 8 × (0.6 − (1 − e^−1.2) / 2) ≈ 2.0 m in 0.6 s.
+    expect(pos.getZ(0)).toBeCloseTo(2, 0);
+    expect(pos.getX(0)).toBeCloseTo(0, 6);
   });
 });

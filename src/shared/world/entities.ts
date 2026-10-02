@@ -17,6 +17,8 @@ export interface StoresState {
   mrm: number;
   countermeasures: number;
   bombs: number;
+  /** internal fuel left (revision 16) */
+  fuelKg: number;
 }
 
 /** Long ago: "never fired" for launch and countermeasure intervals. */
@@ -106,7 +108,7 @@ export function createAircraftEntity(n: NewAircraft): AircraftEntity {
     kills: 0,
     deaths: 0,
     spawnSlot: n.spawnSlot,
-    stores: { cannonRounds: 0, srm: 0, mrm: 0, countermeasures: 0, bombs: 0 },
+    stores: { cannonRounds: 0, srm: 0, mrm: 0, countermeasures: 0, bombs: 0, fuelKg: 0 },
     cannonAccumulator: TRIGGER_AT_REST,
     firingCannon: false,
     lastMissileTick: NEVER,
@@ -133,7 +135,7 @@ export function createAircraftEntity(n: NewAircraft): AircraftEntity {
   return entity;
 }
 
-/** Full hit points and stores, cleared targeting and credit: the state of a freshly spawned aircraft. */
+/** Full hit points, stores and tanks, cleared targeting and credit: the state of a freshly spawned aircraft. */
 export function resetForSpawn(a: AircraftEntity): void {
   const s = a.config.stores;
   a.hp = a.config.damage.hitPoints;
@@ -142,6 +144,7 @@ export function resetForSpawn(a: AircraftEntity): void {
   a.stores.mrm = s.mrm;
   a.stores.countermeasures = s.countermeasures;
   a.stores.bombs = a.bombLoad;
+  a.stores.fuelKg = a.config.physics.fuelKg;
   a.cannonAccumulator = TRIGGER_AT_REST;
   a.firingCannon = false;
   a.lastMissileTick = NEVER;

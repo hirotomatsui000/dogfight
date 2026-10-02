@@ -23,6 +23,8 @@ export const kestrel: AircraftConfig = {
     maxRollRateDegS: 180,
     maxYawRateDegS: 20,
     thrustVectoring: 0,
+    fuelKg: 3200,
+    departureResistance: 0.6,
   },
   sensors: {
     radarRangeKm: 35,

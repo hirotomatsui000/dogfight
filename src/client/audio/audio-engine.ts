@@ -269,6 +269,11 @@ export class AudioEngine {
     else this.notes([660, 880, 1100], 0.1, 'sine', 0.1);
   }
 
+  /** Fuel (revision 16): two low chimes at BINGO, three falling ones when the engines flame out. */
+  fuelWarning(flameout: boolean): void {
+    this.notes(flameout ? [523, 440, 349] : [440, 440], 0.18, 'square', 0.05);
+  }
+
   /** The end of a match (M5): a major chord for a win, minor for a loss, open for a draw. */
   matchEnd(result: 'win' | 'loss' | 'draw'): void {
     const chord = result === 'win' ? [392, 494, 587] : result === 'loss' ? [392, 466, 587] : [392, 587];

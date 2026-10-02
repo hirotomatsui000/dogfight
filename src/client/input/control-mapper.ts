@@ -134,7 +134,16 @@ export class ControlMapper {
     const padPitch = pad ? pad.pitch : 0;
     const padRoll = pad ? pad.roll : 0;
     const padYaw = pad ? pad.yaw : 0;
-    if (this.settings.mode === 'mouse-aim' && flight) {
+    if (this.settings.mode === 'mouse-aim' && flight && flight.spin !== 0) {
+      // Automatic spin recovery (revision 16): stick forward, rudder against the spin, wings left alone. The aim waits
+      // on the horizon ahead of the nose, so the jet pulls out of the dive once it flies again.
+      this.aimHeading = headingRad(flight);
+      this.aimPitch = 0;
+      this.updateAimDirection();
+      out.pitch = pick(this.pitchAxis, padPitch, -0.5);
+      out.roll = pick(this.rollAxis, padRoll, 0);
+      out.yaw = pick(this.yawAxis, padYaw, -flight.spin);
+    } else if (this.settings.mode === 'mouse-aim' && flight) {
       steerToward(flight, this.aimDirection, {}, this.steer);
       out.pitch = pick(this.pitchAxis, padPitch, this.steer.pitch);
       out.roll = pick(this.rollAxis, padRoll, this.steer.roll);

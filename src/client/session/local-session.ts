@@ -7,6 +7,7 @@ import type { Terrain } from '../../shared/map/terrain.ts';
 import { Rng } from '../../shared/math/rng.ts';
 import type { GameMode, ModeStatus } from '../../shared/modes/mode.ts';
 import { type ControlInput, neutralInput } from '../../shared/physics/controls.ts';
+import type { SteadyWind } from '../../shared/physics/wind.ts';
 import { incomingMissileWarning } from '../../shared/targeting/warnings.ts';
 import { projectileVelocity } from '../../shared/weapons/cannon.ts';
 import type { GameEvent } from '../../shared/world/events.ts';
@@ -98,6 +99,10 @@ export class LocalSession implements GameSession {
       destroyed: t.destroyed,
     }));
     this.pendingEvents.push(...this.world.drainEvents());
+  }
+
+  get wind(): SteadyWind {
+    return this.world.wind;
   }
 
   get environment(): EnvironmentSettings {

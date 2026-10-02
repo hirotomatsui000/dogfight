@@ -52,6 +52,8 @@ export interface EnvironmentSettings {
   weather: WeatherId;
   startHour: number;
   clockRunning: boolean;
+  /** still air whatever the weather (Training, tests and the balance tournament; revision 16) */
+  calm?: boolean;
 }
 
 /**
@@ -62,5 +64,5 @@ export function environmentAt(weather: WeatherId, hour: number, clockRunning: bo
   return { weather, startHour: hourAt(hour, clockRunning, -elapsedS), clockRunning };
 }
 
-/** A plain noon sky with no clouds: the World's default, so tests and the balance tournament stay as they were. */
-export const CALM_NOON: Readonly<EnvironmentSettings> = { weather: 'clear', startHour: 12, clockRunning: false };
+/** A plain noon sky with no clouds and no wind: the World's default, so tests and the balance tournament stay as they were. */
+export const CALM_NOON: Readonly<EnvironmentSettings> = { weather: 'clear', startHour: 12, clockRunning: false, calm: true };

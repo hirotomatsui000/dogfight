@@ -114,7 +114,7 @@ describe('time of day (spec §12.3)', () => {
     expect(hourAt(23, true, 120)).toBeCloseTo(1, 9);
     expect(hourAt(12, false, 600)).toBe(12);
     expect(START_HOURS.night).toBeGreaterThan(18);
-    expect(CALM_NOON).toEqual({ weather: 'clear', startHour: 12, clockRunning: false });
+    expect(CALM_NOON).toEqual({ weather: 'clear', startHour: 12, clockRunning: false, calm: true });
   });
 
   it('fades daylight through twilight', () => {
