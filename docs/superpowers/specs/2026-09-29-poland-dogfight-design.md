@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 16)
+# Contested Skies — Design Spec (revision 17)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -46,6 +46,8 @@
     0.0022), and free look turns twice as fast per pixel as the aim, as quick as before (§15.3).
   - Revision 16 (2026-10-02): at the owner's request, fuel, wind and spins (§8, §9, §12.3, §15, §19, §23). Plan:
     `docs/superpowers/plans/2026-10-02-fuel-wind-spins.md`.
+  - Revision 17 (2026-10-02): at the owner's request, career records kept in the browser (§15.5, §23): totals,
+    personal bests, matches by mission and jet, the last ten matches; no account.
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -972,6 +974,15 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
     receives. In Free Flight the pause menu holds the sky and drone controls.
   - In Strike the match-end screen leads with the reason (`TARGETS HELD`, `TARGETS DESTROYED`, `RUSSIA OUT OF
     AIRCRAFT` or `USA OUT OF AIRCRAFT`) and lists the targets destroyed above the per-pilot table.
+- **Career records (revision 17):** every finished match except Training (Free Flight never finishes) is added to
+  this browser's records (`localStorage`, key `contested-skies:career`, read through a sanitizer so damaged or older
+  data loads as zeros): matches won, lost and drawn; kills, deaths, Sentinels, missiles fired and hit, gun hits,
+  damage, time in the air and distance; matches and wins per mission; matches, kills and deaths per jet (by the jet
+  flown at the time); the last 10 matches (day, mission, pilots per side, skill, jet, result, kills, deaths); and
+  personal bests: most kills in a match, longest kill streak, most damage in a match, longest life and top speed
+  (values under 1 never count). The end screen says "First match on record" the first time and lists every best a
+  match beats ("New best · Most kills in a match: 7"). The title screen's **Records** link opens a sheet with all of
+  it, and **Erase records** (two clicks) starts over. Quitting a match from the pause menu records nothing.
 - **Settings** persist in `localStorage` (try/catch, defaults if unavailable). The settings screen (M1c), from the
   title screen and the pause menu, has five tabs: Controls (steering, mouse sensitivity 25–300%, invert), Keys
   (rebinding), Gamepad (status, assignments, calibration), Display (graphics, HUD color green/amber/white, HUD size
@@ -1131,7 +1142,8 @@ brief (§11 of the brief: steps 1–11).
 
 ## 23. Out of scope (v1)
 
-- Accounts, persistence, stats history, rankings and leaderboards.
+- Accounts, rankings and leaderboards; records shared between browsers or devices. (Records kept in one browser
+  arrived in revision 17.)
 - Free-text and voice chat (preset quick-chat is in scope, M2).
 - Landing and rearming. (Fuel, spins/departures and wind arrived in revision 16.)
 - Air-to-ground weapons other than the Strike mode's abstract bomb (§10.4), which never damages aircraft.

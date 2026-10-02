@@ -23,6 +23,24 @@ describe('match statistics (M5)', () => {
     s.sampleFlight(true, true, 60, 1, 1);
     s.sampleFlight(true, false, 300, 7.5, 2);
     s.sampleFlight(false, false, 900, 12, 1);
-    expect(s.flight).toEqual({ topSpeedMs: 300, maxG: 7.5, airborneS: 2, distanceM: 660 });
+    expect(s.flight).toEqual({ topSpeedMs: 300, maxG: 7.5, airborneS: 2, distanceM: 660, longestLifeS: 3 });
+  });
+
+  it('keeps the longest life, the best kill streak and kills and deaths per jet', () => {
+    const s = new MatchStats();
+    s.sampleFlight(true, false, 200, 1, 40);
+    s.sampleFlight(false, false, 0, 0, 1);
+    s.sampleFlight(true, false, 200, 1, 25);
+    expect(s.flight.longestLifeS).toBe(40);
+    s.localKill('kestrel');
+    s.localKill('kestrel');
+    s.localDeath('kestrel');
+    s.localKill('condor');
+    expect(s.bestStreak).toBe(2);
+    expect(Object.fromEntries(s.jets)).toEqual({ kestrel: { kills: 2, deaths: 1 }, condor: { kills: 1, deaths: 0 } });
+    s.reset();
+    expect(s.bestStreak).toBe(0);
+    expect(s.jets.size).toBe(0);
+    expect(s.flight.longestLifeS).toBe(0);
   });
 });

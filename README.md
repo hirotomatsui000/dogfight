@@ -41,6 +41,11 @@ single player against AI pilots and runs entirely in the browser.
 - **Contrails** above 8 km, **wingtip vapour** above 5 G, jets that burn when badly hit, and wrecks that fall in flames.
 - **Fuller sound**: explosions and nearby jets heard from where they are (with a Doppler shift as they pass), missiles
   going by, a stall horn, a pull-up tone, runway rumble, rain, and chimes for kills, zones and Sentinels.
+- **Records** (2026-10-02): every finished match is saved in your browser, no account needed. **Records** on the
+  title screen shows your totals (matches, wins, kills, deaths, missiles and hits, damage, time in the air), personal
+  bests (most kills in a match, longest kill streak, most damage, longest life, top speed), matches by mission and by
+  jet, and your last ten matches. The end screen tells you when you beat a best. Training and Free Flight are not
+  counted, and clearing the site's data erases the records.
 - **End-of-match summary**: damage per pilot, how the zones or Sentinels ended up, and your own flight (kills,
   missiles fired and hit, gun hits, damage, top speed, max G, time in the air).
 - **Accessibility**: reduce motion (also softens the G blackout and holds the kill cam still), reduce flashing (steady

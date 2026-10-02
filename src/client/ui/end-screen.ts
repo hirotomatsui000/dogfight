@@ -60,10 +60,18 @@ export interface EndScreenHandlers {
 }
 
 /**
- * Match results with "Fly again" and "Main menu" (M5: damage per pilot, and `flight`, the local pilot's own numbers).
- * Returns a cleanup function.
+ * Match results with "Fly again" and "Main menu" (M5: damage per pilot, and `flight`, the local pilot's own numbers;
+ * revision 17: `highlights`, lines about the career records such as the personal bests this match beat). Returns a
+ * cleanup function.
  */
-export function showEndScreen(root: HTMLElement, result: MatchResult, rows: readonly ResultRow[], handlers: EndScreenHandlers, flight: readonly (readonly [string, string])[] = []): () => void {
+export function showEndScreen(
+  root: HTMLElement,
+  result: MatchResult,
+  rows: readonly ResultRow[],
+  handlers: EndScreenHandlers,
+  flight: readonly (readonly [string, string])[] = [],
+  highlights: readonly string[] = [],
+): () => void {
   const overlay = document.createElement('div');
   overlay.className = 'overlay translucent';
   const panel = document.createElement('div');
@@ -75,6 +83,17 @@ export function showEndScreen(root: HTMLElement, result: MatchResult, rows: read
   detail.className = 'subtitle';
   detail.textContent = result.detail;
   const parts: HTMLElement[] = [title, detail];
+  if (highlights.length > 0) {
+    const list = document.createElement('ul');
+    list.className = 'new-bests';
+    list.setAttribute('aria-label', 'Records');
+    for (const line of highlights) {
+      const li = document.createElement('li');
+      li.textContent = line;
+      list.appendChild(li);
+    }
+    parts.push(list);
+  }
   if (result.note) {
     const note = document.createElement('p');
     note.className = 'subtitle';

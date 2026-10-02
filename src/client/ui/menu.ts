@@ -10,6 +10,8 @@ import { MISSION_RULES } from '../hud/objective-hud.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
 import { isTouchOnly } from './device.ts';
+import { MISSION_LABELS } from './records-format.ts';
+import { recordsSheet } from './records-sheet.ts';
 import { openSettings } from './settings-screen.ts';
 import type { SettingsStore } from './settings.ts';
 import { loadSetting, saveSetting } from './storage.ts';
@@ -42,12 +44,10 @@ export interface StartMenuHandlers {
 
 const CONTROL_MODES: readonly ControlMode[] = ['mouse-aim', 'direct'];
 type FlyMission = Exclude<MissionId, 'free-flight' | 'training'>;
-const MISSIONS: readonly { value: FlyMission; label: string }[] = [
-  { value: 'team-deathmatch', label: 'Dogfight' },
-  { value: 'air-superiority', label: 'Air Superiority' },
-  { value: 'team-objective', label: 'Team Objective' },
-  { value: 'strike', label: 'Strike' },
-];
+const MISSIONS: readonly { value: FlyMission; label: string }[] = (['team-deathmatch', 'air-superiority', 'team-objective', 'strike'] as const).map((value) => ({
+  value,
+  label: MISSION_LABELS[value],
+}));
 /** Pilots per side (M5). */
 export const TEAM_SIZES = ['1', '2', '4'] as const;
 type TeamSizeChoice = (typeof TEAM_SIZES)[number];
@@ -415,7 +415,11 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   const settingsLink = el('button', 'link', 'Settings');
   settingsLink.type = 'button';
   settingsLink.setAttribute('aria-haspopup', 'dialog');
-  links.append(training, freeFlight, controlsLink, settingsLink);
+  const recordsLink = el('button', 'link', 'Records');
+  recordsLink.type = 'button';
+  recordsLink.title = 'Your matches, kills and personal bests in this browser';
+  recordsLink.setAttribute('aria-haspopup', 'dialog');
+  links.append(training, freeFlight, controlsLink, settingsLink, recordsLink);
   launch.append(fly, links);
 
   const opponents = el('div', 'opponent-row');
@@ -424,7 +428,8 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   form.append(top, main, credits());
 
   const sheet = controlsSheet(settings);
-  screen.append(form, sheet);
+  const records = recordsSheet();
+  screen.append(form, sheet, records.dialog);
 
   const start = (mission: MissionId) => {
     const w = effectiveWorld(world, mission);
@@ -451,6 +456,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   freeFlight.addEventListener('click', () => start('free-flight'));
   training.addEventListener('click', () => start('training'));
   controlsLink.addEventListener('click', () => sheet.showModal());
+  recordsLink.addEventListener('click', () => records.open());
   settingsLink.addEventListener('click', () => openSettings(root, settings, 'controls'));
 
   root.appendChild(screen);

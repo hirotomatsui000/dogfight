@@ -52,6 +52,8 @@ import { LocalSession } from './session/local-session.ts';
 import { DebugOverlay } from './ui/debug-overlay.ts';
 import { matchResult, type ResultRow, showEndScreen } from './ui/end-screen.ts';
 import { MatchStats } from './match-stats.ts';
+import { loadCareer, recordMatch, saveCareer } from './career.ts';
+import { bestLine } from './ui/records-format.ts';
 import { MapScreen } from './ui/map-screen.ts';
 import { loadingText } from './ui/load-bar.ts';
 import type { StartOptions } from './ui/menu.ts';
@@ -356,6 +358,9 @@ export async function startGame(
         if (d < EXPLOSION_SHAKE_RANGE_M) cameraRig.addTrauma(0.6 * (1 - d / EXPLOSION_SHAKE_RANGE_M));
       }
       const me = session.localView();
+      // Career records (revision 17): the local pilot's kills and deaths by jet, and the kill streak.
+      if (victim && e.aircraftId === session.localId) stats.localDeath(victim.config.id);
+      else if (victim && killer?.isLocal && killer.team !== victim.team) stats.localKill(killer.config.id);
       if (e.aircraftId === session.localId) {
         deathMessage = deathText(e.cause, killer?.callsign ?? null);
         respawnAt = nowS + mode.respawnDelayS;
@@ -453,6 +458,34 @@ export async function startGame(
     if (training) settings.update({ trainingDone: true });
     const final = session.modeStatus();
     const result = matchResult(final, me ? me.team : 'usa', destroyed);
+    // Career records (revision 17): every finished match but Training goes into this browser's records.
+    const bests: string[] = [];
+    if (me && mine && !training) {
+      const { career, newBests } = recordMatch(loadCareer(), {
+        at: new Date().toISOString(),
+        mode: options.mission,
+        aircraftId: me.config.id,
+        result: final.winner === me.team ? 'win' : final.winner === 'draw' ? 'draw' : 'loss',
+        kills: me.kills,
+        deaths: me.deaths,
+        sentinels: mine.sentinels,
+        missilesFired: mine.missilesFired,
+        missileHits: mine.missileHits,
+        gunHits: mine.gunHits,
+        damage: Math.round(mine.damage),
+        airborneS: fl.airborneS,
+        distanceM: fl.distanceM,
+        bestStreak: stats.bestStreak,
+        longestLifeS: fl.longestLifeS,
+        topSpeedMs: fl.topSpeedMs,
+        jets: Object.fromEntries(stats.jets),
+        teamSize,
+        difficulty: options.difficulty,
+      });
+      saveCareer(career);
+      if (career.matches === 1) bests.push('First match on record · see Records on the title screen');
+      for (const id of newBests) bests.push(`New best · ${bestLine(id, career.bests[id]?.value ?? 0, me.config.id)}`);
+    }
     audio?.matchEnd(training || (me && final.winner === me.team) ? 'win' : final.winner === 'draw' ? 'draw' : 'loss');
     closeEndScreen = showEndScreen(root, result, rows, {
       againLabel: training ? 'Fly a dogfight' : undefined,
@@ -464,7 +497,7 @@ export async function startGame(
         cleanup();
         handlers.onQuit();
       },
-    }, flight);
+    }, flight, bests);
   };
 
   const frame = (now: number) => {
