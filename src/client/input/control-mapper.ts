@@ -33,8 +33,10 @@ export interface MapperSettings {
   bindings: Bindings;
 }
 
-/** Mouse radians per pixel at the settings screen's 1× sensitivity. */
-export const BASE_MOUSE_SENSITIVITY = 0.0022;
+/** Mouse-aim radians per pixel at the settings screen's 100% (halved from 0.0022 after the owner found it too quick). */
+export const BASE_MOUSE_SENSITIVITY = 0.0011;
+/** Free look turns the head this many times faster per pixel than the aim, so a glance over the shoulder stays short. */
+const LOOK_SENSITIVITY_SCALE = 2;
 const DEFAULT_SETTINGS: MapperSettings = { mode: 'mouse-aim', mouseSensitivity: BASE_MOUSE_SENSITIVITY, invertY: false, bindings: DEFAULT_BINDINGS };
 const AXIS_RAMP_S = 0.15;
 const THROTTLE_RATE = 0.6;
@@ -113,8 +115,9 @@ export class ControlMapper {
       this.lookYaw = pad.lookX * LOOK_YAW_LIMIT;
       this.lookPitch = -pad.lookY * LOOK_PITCH_LIMIT;
     } else if (this.freeLook) {
-      this.lookYaw = clamp(this.lookYaw + snap.mouseDX * sens, -LOOK_YAW_LIMIT, LOOK_YAW_LIMIT);
-      this.lookPitch = clamp(this.lookPitch - snap.mouseDY * sens * ySign, -LOOK_PITCH_LIMIT, LOOK_PITCH_LIMIT);
+      const look = sens * LOOK_SENSITIVITY_SCALE;
+      this.lookYaw = clamp(this.lookYaw + snap.mouseDX * look, -LOOK_YAW_LIMIT, LOOK_YAW_LIMIT);
+      this.lookPitch = clamp(this.lookPitch - snap.mouseDY * look * ySign, -LOOK_PITCH_LIMIT, LOOK_PITCH_LIMIT);
     } else {
       this.lookYaw = approach(this.lookYaw, 0, dt, LOOK_RETURN_TAU);
       this.lookPitch = approach(this.lookPitch, 0, dt, LOOK_RETURN_TAU);

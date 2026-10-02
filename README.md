@@ -82,7 +82,8 @@ Team Objective or Strike), an aircraft, the opponents' skill and how many pilots
 air or runway start, time of day, whether the clock runs, weather), and press **FLY** (or **Free flight** to fly without
 enemies). **Controls** lists the keys;
 **Settings** changes them, the mouse, the gamepad, the HUD, the graphics and the sound (also from the pause menu).
-Click the view to capture the mouse, then fly with the mouse.
+Click the view to capture the mouse, then fly with the mouse. If the aim moves too fast or too slowly, change **Mouse
+sensitivity** under **Settings → Controls** (100% turns the aim about 6° per 100 pixels of mouse travel).
 
 Other devices on the same network can open the "Network" URL that Vite prints. Adding `?debug=1` to the address shows
 frames per second, angle of attack, G, Mach, altitude, the landing gear and the time of day.

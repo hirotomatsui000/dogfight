@@ -84,6 +84,17 @@ describe('ControlMapper', () => {
     expect(Math.abs(m.lookYaw)).toBeLessThan(0.01);
   });
 
+  it('turns the head twice as far per pixel as the aim', () => {
+    const m = new ControlMapper({ mouseSensitivity: 0.001 });
+    const flight = northbound();
+    m.resetAim(flight);
+    m.map(snap({ mouseDX: 100 }), flight, 1 / 60);
+    const aimYaw = Math.atan2(m.aimDirection.x, -m.aimDirection.z);
+    expect(aimYaw).toBeCloseTo(0.1, 6);
+    const look = new ControlMapper({ mouseSensitivity: 0.001 });
+    expect(look.map(snap({ keys: new Set(['KeyC']), mouseDX: 100 }), flight, 1 / 60).lookYaw).toBeCloseTo(0.2, 6);
+  });
+
   it('reports weapon edges and holds', () => {
     const m = new ControlMapper();
     const out = m.map(snap({ keys: new Set(['Space', 'KeyB', 'KeyF']), pressed: new Set(['KeyF', 'KeyG', 'KeyR', 'KeyX', 'Digit2']) }), northbound(), 1 / 60);

@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 14)
+# Contested Skies — Design Spec (revision 15)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -42,6 +42,8 @@
     check, error reports and cannon lag compensation are deleted; §7, §16 and the online rows of §17 describe that code
     as it was (last in commit `a9139d5`). The site moves from Netlify to GitHub Pages: a GitHub Actions workflow tests,
     builds and publishes it after every push to `main` or a `claude/…` branch (§24).
+  - Revision 15 (2026-10-02): the owner found mouse aim too quick: 100% sensitivity is now 0.0011 rad per pixel (was
+    0.0022), and free look turns twice as fast per pixel as the aim, as quick as before (§15.3).
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -837,6 +839,8 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
 ### 15.3 Controls
 
 - **Mouse-aim (default):** the mouse sets an aim direction and `steerToward` flies the jet there; the keyboard adds on top.
+  At 100% sensitivity the aim turns 0.0011 rad (0.063°) per pixel (revision 15); free look (C or right mouse) turns
+  the head twice as far per pixel.
 - **Keyboard direct:** W/S pitch (W = nose down), A/D roll, Q/E yaw, with input ramping over 0.15 s. Arrow keys also
   pitch and roll.
 - **Gamepad and flight stick (M1c):** the browser Gamepad API.
