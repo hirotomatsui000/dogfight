@@ -1,0 +1,45 @@
+# Tests and builds the game after every push, then publishes it on GitHub Pages (README, "Publish as a website").
+# The site is the gh-pages branch: one commit holding the built files, replaced each time.
+name: Publish site
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  workflow_dispatch:
+
+# One publish at a time; a newer push replaces one still waiting.
+concurrency:
+  group: publish-site
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          # Absolute links for the social-preview image.
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+      - name: Publish to the gh-pages branch
+        working-directory: dist
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          touch .nojekyll
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Site built from ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
