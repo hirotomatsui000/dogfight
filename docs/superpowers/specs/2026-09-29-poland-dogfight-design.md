@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 12)
+# Contested Skies — Design Spec (revision 13)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -35,6 +35,8 @@
     online (protocol 4); pilots per side offline; kill cam, spectating and a jet change while waiting to respawn;
     contrails, wingtip vapour, burning damage and falling wrecks; positional sound; an end-of-match summary; reduce
     flashing and colour-blind team colours. Plan: `docs/superpowers/plans/2026-10-01-m5-modes-polish.md`.
+  - Revision 13 (2026-10-02): the public site deploys itself: Netlify builds the multi-file site (`dist/`) from the
+    repository on every push (`netlify.toml`), replacing hand-dropped single-file builds (§24).
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -1099,7 +1101,7 @@ its milestone.
 | Hardware range | Low/Medium/High graphics presets (pixel ratio, texture size, draw distance, effects), chosen automatically from the measured frame rate and changeable in settings | M1c |
 | Loading | A loading progress bar. Once assets pass about 5 MB, publish the multi-file build (`dist/`) instead of one HTML file so browsers cache and load pieces in parallel | M1c (progress), M2 (multi-file) |
 | Sharing | A title screen with a Play button over a live 3D background (M1b); page title, description, social-preview image and icon (M1c) | M1b, M1c |
-| Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle | M2 |
+| Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle. (Revision 13: Netlify is linked to the repository and builds the multi-file site on every push that changes the page, per `netlify.toml`; the one-file build remains for hand deploys) | M2 |
 | Joining | An invite link per room, and "Quick play" that joins the busiest room. Bots fill empty seats so one human plus bots is a full match | M2 |
 | Safety | Server authority for all hits (§7); callsign filter; preset quick-chat messages only; rate limits; a short privacy note (no accounts, no tracking) | M2 |
 | Updates | A page/server version check that asks players to reload; browser error reporting; a server health check; one automated browser smoke test (load the site, fly 10 s) before each deploy | M2 |

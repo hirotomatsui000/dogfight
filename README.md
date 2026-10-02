@@ -251,23 +251,36 @@ jet, Ace bots, 100 seeded duels each, and fails if a pairing wins outside 35–6
 
 ## Publish as a website
 
+Netlify builds the site from this repository and publishes it at the same address after every push.
+`netlify.toml` holds the settings: `npm run build` on Node 24, the `dist` folder, the site's address for link
+previews, and a long cache for the hashed files in `dist/assets`. A push that changes only documentation, the server or
+`tools/` skips the build.
+
+To link a Netlify site to the repository (once):
+1. On https://app.netlify.com open the site, then its configuration: **Build & deploy** → **Continuous deployment** →
+   **Link repository** (a new site: **Add new project** → **Import an existing project**).
+2. Choose GitHub, allow Netlify to read `hirotomatsui000/dogfight`, and pick the branch to publish. Netlify reads the
+   build settings from `netlify.toml`.
+3. To publish another branch later, change the production branch under **Branches and deploy contexts**.
+
+Each published push counts as a production deploy on Netlify's plan (the free plan's monthly credits cover about 20),
+so push finished work together rather than every commit.
+
+A static site has no game server, so it plays offline only: for online play, run the server
+([Play online](#play-online)). Visitors need a desktop or laptop with a keyboard and mouse; phones and tablets see a
+notice.
+
+### One-file build
+
 ```bash
 npm run build:single
 ```
 
 This writes `dist-single/index.html`: the whole game, including the scenery photos and the jet models, in one
 self-contained file (about 5.4 MB), plus the social-preview image `og-image.jpg` and the icon `icon-180.png` that
-other sites and phones fetch. For link previews on social sites, build with the site's address:
-`SITE_URL=https://your-site.netlify.app npm run build:single`.
-
-To publish it on Netlify:
-1. Open https://app.netlify.com/drop.
-2. Drag the `dist-single` folder onto the page.
-3. Netlify gives the site a public URL, which you can rename under **Site configuration**.
-
-Any static host works the same way, and the file also runs when opened directly in a browser. A static site has
-no game server, so it plays offline only: for online play, run the server ([Play online](#play-online)). Visitors need a
-desktop or laptop with a keyboard and mouse; phones and tablets see a notice.
+other sites and phones fetch. It runs when opened directly in a browser, or from any static host: drag the
+`dist-single` folder onto https://app.netlify.com/drop. For link previews on social sites, build with the site's
+address: `SITE_URL=https://your-site.netlify.app npm run build:single`.
 
 ## Scenery
 
