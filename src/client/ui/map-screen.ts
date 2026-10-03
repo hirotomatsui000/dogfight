@@ -122,8 +122,7 @@ export class MapScreen {
   private readonly terrain: Terrain;
   private base: HTMLCanvasElement | null = null;
   open = false;
-  /** Free Flight (M5): a click on the map flies the jet from there. */
-  onPick: ((x: number, z: number) => void) | null = null;
+  private pick: ((x: number, z: number) => void) | null = null;
 
   constructor(root: HTMLElement, def: MapDefinition, terrain: Terrain) {
     this.def = def;
@@ -136,12 +135,23 @@ export class MapScreen {
     this.canvas = document.createElement('canvas');
     this.overlay.appendChild(this.canvas);
     this.canvas.addEventListener('click', (e) => {
-      if (!this.onPick) return;
+      if (!this.pick) return;
       const r = this.canvas.getBoundingClientRect();
       const p = pickPoint(this.def, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
-      this.onPick(p.x, p.z);
+      this.pick(p.x, p.z);
     });
     root.appendChild(this.overlay);
+  }
+
+  /** Free Flight (M5): a click on the map flies the jet from there. */
+  get onPick(): ((x: number, z: number) => void) | null {
+    return this.pick;
+  }
+
+  /** The overlay lets clicks through to the game; a pickable map takes them itself. */
+  set onPick(fn: ((x: number, z: number) => void) | null) {
+    this.pick = fn;
+    this.canvas.classList.toggle('pickable', fn !== null);
   }
 
   toggle(): void {
@@ -249,10 +259,7 @@ export class MapScreen {
       this.marker(ctx, p, headingRad(v.flight), color, 6 * s, false, enemy && !known.has(v.id));
     }
     if (me && me.alive) this.marker(ctx, at(me.position.x, me.position.z), headingRad(me.flight), '#63ff95', 9 * s, true);
-    if (this.onPick) {
-      label('CLICK TO FLY FROM THERE · AN AIRFIELD STARTS ON ITS RUNWAY', px / 2, px - 40 * s, `700 ${Math.round(13 * s)}px system-ui, sans-serif`, '#63ff95');
-      this.canvas.style.cursor = 'crosshair';
-    }
+    if (this.pick) label('CLICK TO FLY FROM THERE · AN AIRFIELD STARTS ON ITS RUNWAY', px / 2, px - 40 * s, `700 ${Math.round(13 * s)}px system-ui, sans-serif`, '#63ff95');
     // North and the scale.
     label('N ↑', 24 * s, 28 * s, `700 ${Math.round(14 * s)}px system-ui, sans-serif`);
     const km = def.sizeM > 100000 ? 20 : 5;

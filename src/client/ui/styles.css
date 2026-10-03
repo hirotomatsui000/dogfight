@@ -269,6 +269,8 @@ input:focus-visible + .option { color: var(--hud); }
 .campaign-button:focus-visible { outline: 2px solid var(--hud); outline-offset: 4px; }
 .map-screen { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; background: rgb(8 16 24 / 0.45); }
 .map-screen canvas { border-radius: 4px; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.25), 0 8px 40px rgb(0 0 0 / 0.5); opacity: 0.94; }
+/* Free Flight: the map itself takes the click that flies the jet from there (the overlay lets clicks through). */
+.map-screen canvas.pickable { pointer-events: auto; cursor: crosshair; }
 .debug-overlay { position: absolute; right: 12px; top: 120px; padding: 6px 8px; font: 500 11px/1.5 var(--mono); color: var(--hud); background: rgb(0 0 0 / 0.55); white-space: pre; pointer-events: none; }
 
 /* The main action is a red "remove before flight" streamer: stitched edge, grommet, a flutter on hover. */

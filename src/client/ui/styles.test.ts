@@ -9,6 +9,14 @@ describe('styles.css', () => {
     expect(css).toMatch(/\[hidden\]\s*\{\s*display:\s*none\s*!important;?\s*\}/);
   });
 
+  it("lets Free Flight's map take clicks although the map overlay lets them through", () => {
+    // Regression: `.map-screen { pointer-events: none }` reached the map canvas too, so clicking the map to fly from
+    // there (M5) went to the game view underneath.
+    const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.map-screen\s*\{[^}]*pointer-events:\s*none/);
+    expect(css).toMatch(/\.map-screen canvas\.pickable\s*\{[^}]*pointer-events:\s*auto/);
+  });
+
   it('styles every class the client code puts on an element', () => {
     // Regression: dropping the title screen's "Clock runs" (revision 19) also dropped `.world-clock`, which Free
     // Flight's pause panel still used for its check boxes.

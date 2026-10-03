@@ -250,6 +250,15 @@ describe('World combat', () => {
     expect(shooter.targetId).toBeNull();
   });
 
+  it('reports the hit points a hit actually took, not more than were left', () => {
+    const { world, shooter, target } = duel();
+    world.applyDamage(target, 30, shooter, 'cannon');
+    world.applyDamage(target, 999, shooter, 'missile');
+    const hits = world.drainEvents().filter((e) => e.type === 'hit');
+    expect(hits.map((e) => (e.type === 'hit' ? e.damage : 0))).toEqual([30, target.config.damage.hitPoints - 30]);
+    expect(target.alive).toBe(false);
+  });
+
   it('counts the match seconds to a respawn, and has none for a side with no jets left (Strike)', () => {
     const { world, shooter, target } = duel();
     expect(world.respawnInS(shooter)).toBeNull();

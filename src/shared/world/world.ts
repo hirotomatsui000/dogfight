@@ -405,15 +405,19 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     return drained;
   }
 
-  /** Weapon damage. Records the attacker for kill credit and destroys the victim at 0 hit points. */
+  /**
+   * Weapon damage. Records the attacker for kill credit and destroys the victim at 0 hit points. The hit event reports
+   * the hit points actually taken, so a blast bigger than what is left does not swell the damage dealt.
+   */
   applyDamage(victim: AircraftEntity, amount: number, attacker: AircraftEntity | null, weapon: WeaponKind): void {
     if (!victim.alive || amount <= 0) return;
+    const taken = Math.min(amount, victim.hp);
     victim.hp = Math.max(0, victim.hp - amount);
     if (attacker && attacker.team !== victim.team) {
       victim.lastDamagedBy = attacker.id;
       victim.lastDamagedTick = this.tick;
     }
-    this.emit({ type: 'hit', aircraftId: victim.id, attackerId: attacker ? attacker.id : null, weapon, damage: amount });
+    this.emit({ type: 'hit', aircraftId: victim.id, attackerId: attacker ? attacker.id : null, weapon, damage: taken });
     if (victim.hp <= 0) this.destroy(victim, weapon, attacker);
   }
 
