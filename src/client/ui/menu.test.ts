@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { kestrel } from '../../shared/data/aircraft/kestrel.ts';
 import { kobchik } from '../../shared/data/aircraft/kobchik.ts';
 import { STRIKE_DEFAULTS } from '../../shared/modes/strike.ts';
 import { DEFAULT_BINDINGS, rebind } from '../input/bindings.ts';
 import { controlsHelp } from './controls-help.ts';
-import { aircraftSummary, effectiveWorld, environmentOf, pickValid, sanitizeCallsign, strikeRole, type WorldChoice } from './menu.ts';
+import { aircraftSummary, effectiveWorld, environmentOf, loadWorldChoice, pickValid, sanitizeCallsign, strikeRole, type WorldChoice } from './menu.ts';
 
 describe('start menu helpers', () => {
   it('cleans callsigns', () => {
@@ -75,5 +75,21 @@ describe('world choice (M4)', () => {
 
   it('turns the choice into the weather and clock of the match', () => {
     expect(environmentOf(choice)).toEqual({ weather: 'rain', startHour: 17.5, clockRunning: false });
+  });
+});
+
+describe('world choice (revision 19)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('keeps the map, start and time of day, but flies scattered cloud with the clock still', () => {
+    const stored: Record<string, string> = {
+      'contested-skies:map': '"lechovia"',
+      'contested-skies:start': '"runway"',
+      'contested-skies:timeOfDay': '"dusk"',
+      'contested-skies:weather': '"rain"',
+      'contested-skies:clock': 'true',
+    };
+    vi.stubGlobal('localStorage', { getItem: (k: string) => stored[k] ?? null, setItem: () => undefined, removeItem: () => undefined });
+    expect(loadWorldChoice()).toEqual({ map: 'lechovia', start: 'runway', time: 'dusk', clock: false, weather: 'scattered' });
   });
 });

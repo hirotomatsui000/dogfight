@@ -55,7 +55,8 @@
     Contested Skies; browser storage keeps the old `contested-skies:` prefix so saved data survives), and the site
     moves to https://lechovia-skies.github.io/._./ (the owner moved the repository to a free organization
     `lechovia-skies` and named it `._.`, §24). A soundtrack chosen by the owner plays on the title screen and in
-    flight (§15.5), the synthesized engine sound is gone, and dusk and night are lit brighter (§12.3). Team Objective is
+    flight (§15.5), the synthesized engine sound is gone, dusk and night are lit brighter (§12.3), and the title screen
+    no longer offers the weather or "Clock runs" (§15.5). Team Objective is
     evened out between the sides (§13.4, §14): Sentinels run in a level, bank-limited turn (they used to spiral into the
     ground), start alike, lean inward at the edge; every third fighter of a team escorts, counted within the team; bots
     break off near a Sentinel; every fighter carries 4 Lances; the USA's Sentinels get 50 HP per Russian fighter.
@@ -1022,7 +1023,9 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   line states the selected jet's role: "Kestrel · USA: hold all three targets for 9 minutes" or "Kobchik · Russia:
   destroy two of the three targets". Free Flight stays a link.
 - **World row (M4):** map (Lechovia or the Test Range), Air or Runway start, time of day (Dawn, Day, Dusk, Night), a
-  "Clock runs" switch and the weather. The scene behind the menu shows the chosen time and weather. Strike and Training
+  "Clock runs" switch and the weather. The scene behind the menu shows the chosen time and weather. Revision 19: at the
+  owner's request the weather and "Clock runs" are gone from the title screen; its matches fly in scattered cloud with
+  the clock still (Free Flight's pause menu and campaign missions still set both). Strike and Training
   fix the Test Range and an air start. Online, the pilot who opens a room fixes its map, time, clock and weather.
 - **Later menus (M5, as built):** Mission offers Dogfight, Air Superiority, Team Objective and Strike, with a line on
   the chosen mission's rules; "Pilots per side" (1, 2, 4) sits beside the opponent skill. The ONLINE sheet chooses the

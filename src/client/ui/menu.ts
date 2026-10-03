@@ -4,7 +4,7 @@ import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import { MAP_IDS, MAP_NAMES, type MapId } from '../../shared/data/maps/registry.ts';
 import { SPAWN_STARTS, type SpawnStart } from '../../shared/world/spawns.ts';
 import { type EnvironmentSettings, START_HOURS, TIME_OF_DAY_IDS, TIME_OF_DAY_LABELS, type TimeOfDayId } from '../../shared/world/time-of-day.ts';
-import { WEATHER, WEATHER_IDS, type WeatherId } from '../../shared/world/weather.ts';
+import type { WeatherId } from '../../shared/world/weather.ts';
 import { STRIKE_DEFAULTS, STRIKE_DEFENDER } from '../../shared/modes/strike.ts';
 import { MISSION_RULES } from '../hud/objective-hud.ts';
 import type { ControlMode } from '../input/control-mapper.ts';
@@ -93,13 +93,20 @@ export interface WorldChoice {
   weather: WeatherId;
 }
 
+/**
+ * Matches from the title screen fly in scattered cloud with the clock standing still (revision 19: the owner took the
+ * weather and "Clock runs" choices off the title screen). Free Flight's pause menu still sets both.
+ */
+export const TITLE_WEATHER: WeatherId = 'scattered';
+export const TITLE_CLOCK = false;
+
 export function loadWorldChoice(): WorldChoice {
   return {
     map: pickValid(loadSetting<unknown>('map', 'lechovia'), MAP_IDS, 'lechovia'),
     start: pickValid(loadSetting<unknown>('start', 'air'), SPAWN_STARTS, 'air'),
     time: pickValid(loadSetting<unknown>('timeOfDay', 'day'), TIME_OF_DAY_IDS, 'day'),
-    clock: loadSetting<unknown>('clock', true) !== false,
-    weather: pickValid(loadSetting<unknown>('weather', 'scattered'), WEATHER_IDS, 'scattered'),
+    clock: TITLE_CLOCK,
+    weather: TITLE_WEATHER,
   };
 }
 
@@ -141,8 +148,6 @@ function worldGroup(initial: WorldChoice, onChange: (w: WorldChoice) => void): {
     saveSetting('map', w.map);
     saveSetting('start', w.start);
     saveSetting('timeOfDay', w.time);
-    saveSetting('clock', w.clock);
-    saveSetting('weather', w.weather);
     onChange({ ...w });
   };
   const map = select('Map', MAP_IDS, (m) => MAP_NAMES[m], w.map, (m) => {
@@ -158,21 +163,7 @@ function worldGroup(initial: WorldChoice, onChange: (w: WorldChoice) => void): {
     w.time = t;
     changed();
   });
-  const weather = select('Weather', WEATHER_IDS, (id) => WEATHER[id].label, w.weather, (id) => {
-    w.weather = id;
-    changed();
-  });
-  const clockLabel = el('label', 'world-clock');
-  const clock = el('input');
-  clock.type = 'checkbox';
-  clock.checked = w.clock;
-  clock.addEventListener('change', () => {
-    w.clock = clock.checked;
-    changed();
-  });
-  clockLabel.title = 'The clock runs at one hour per minute: a long match flies into the night';
-  clockLabel.append(clock, el('span', undefined, 'Clock runs'));
-  row.append(map, start, time, weather, clockLabel);
+  row.append(map, start, time);
   set.appendChild(row);
   let mission: MissionId = 'team-deathmatch';
   // Strike and Training keep the Test Range; runway starts need Lechovia's airfields.

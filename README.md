@@ -74,9 +74,10 @@ Earlier milestones:
   generated in a background thread while the title screen is up and drawn in more detail near your jet.
 - **Take off from a runway** (choose *Runway start*): open the throttle, pull up at about 170 kt, and the gear
   retracts by itself. There is no landing.
-- **Time of day and weather**: Dawn, Day, Dusk or Night, with a clock that runs one hour per minute (or holds), and
-  Clear, Scattered, Broken, Overcast or Rain. Clouds hide jets from your eyes and from heat-seeking missiles, not from
-  radar. At night towns, roads and runways light up and every jet shows navigation lights.
+- **Time of day and weather**: Dawn, Day, Dusk or Night on the title screen; matches from there fly in scattered
+  cloud with the clock standing still (since 2026-10-03). Free Flight's pause menu still offers Clear, Scattered,
+  Broken, Overcast or Rain and a clock that runs one hour per minute, and campaign missions bring their own weather.
+  Clouds hide jets from your eyes and from heat-seeking missiles, not from radar. At night towns, roads and runways light up and every jet shows navigation lights.
 - A **map screen** on M.
 - **Eight aircraft**, four per team: USA Shade, Tempest, Kestrel and Condor; Russia Prizrak, Yastreb, Sapsan and
   Kobchik, each with its own flight model, sensors, stores and strengths. The Shade and the Prizrak wear the owner's

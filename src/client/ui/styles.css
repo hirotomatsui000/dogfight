@@ -231,11 +231,8 @@ input:focus-visible + .option { color: var(--hud); }
 }
 .world-select:hover { box-shadow: inset 0 0 0 1px var(--canopy); }
 .world-select:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
-.world-select:focus-visible,
-.world-clock input:focus-visible { outline: 2px solid var(--hud); outline-offset: 2px; }
+.world-select:focus-visible { outline: 2px solid var(--hud); outline-offset: 2px; }
 .world-select option { color: var(--canopy); background: var(--ink); }
-.world-clock { display: inline-flex; gap: 6px; align-items: center; font: 500 11px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ghost); cursor: pointer; }
-.world-clock input { accent-color: var(--hud); margin: 0; }
 
 .pick-note {
   margin: 10px 0 0;
