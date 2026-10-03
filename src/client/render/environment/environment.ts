@@ -32,7 +32,22 @@ const HAZE_DENSITY = 2.8e-5;
 /** Inside a cloud the world fades to white within a few hundred metres. */
 const WHITEOUT_DENSITY = 5e-3;
 const SUN_INTENSITY = 2.6;
-const MOON_INTENSITY = 0.5;
+/**
+ * Dusk and night lighting (revision 19: the owner found both too dark to see). A fill light, a brighter exposure and a
+ * lighter night sky, haze and clouds keep the land, the horizon and the clouds readable; full daylight is unchanged.
+ */
+const MOON_INTENSITY = 1.1;
+const DAY_AMBIENT = 0.06;
+/** extra fill while the sun is low (dawn and dusk) and at night */
+const TWILIGHT_AMBIENT = 1;
+const NIGHT_AMBIENT = 2;
+const TWILIGHT_EXPOSURE = 0.4;
+const NIGHT_EXPOSURE = 2.3;
+/** the least image-based light, and the least light on the clouds, at night */
+const NIGHT_ENVIRONMENT = 0.4;
+const NIGHT_CLOUD_LIGHT = 0.2;
+/** the night sky's glow, this much stronger again while the sun is low, so the twilight sky is not black overhead */
+const TWILIGHT_SKY_LIFT = 2;
 /** The environment map is rebuilt when the sun has moved this much. */
 const ENV_REBUILD_RAD = 1.5 * DEG;
 /**
@@ -41,16 +56,17 @@ const ENV_REBUILD_RAD = 1.5 * DEG;
  */
 const SKY_SCALE = 0.14;
 /** A faint glow of the night sky, so the horizon still shows against the land. */
-const NIGHT_SKY_FLOOR = new Vector3(0.0025, 0.0035, 0.0075);
-const NIGHT_HAZE = new Color(0.012, 0.016, 0.028);
+const NIGHT_SKY_FLOOR = new Vector3(0.008, 0.011, 0.024);
+const NIGHT_HAZE = new Color(0.035, 0.045, 0.075);
 const GROUND_BOUNCE = new Color('#46503c');
+const MOONLIT_CLOUD = new Color(0.78, 0.84, 1);
 
 /** A Sky whose output is scaled to the scene's brightness and never quite black. */
 function scaledSky(): Sky {
   const sky = new Sky();
   const m = sky.material as ShaderMaterial;
   m.uniforms.skyScale = { value: SKY_SCALE };
-  m.uniforms.skyFloor = { value: NIGHT_SKY_FLOOR };
+  m.uniforms.skyFloor = { value: NIGHT_SKY_FLOOR.clone() };
   m.fragmentShader = m.fragmentShader
     .replace('uniform float time;', 'uniform float time;\nuniform float skyScale;\nuniform vec3 skyFloor;')
     .replace('gl_FragColor = vec4( texColor, 1.0 );', 'gl_FragColor = vec4( texColor * skyScale + skyFloor, 1.0 );');
@@ -202,9 +218,11 @@ export class Environment {
     this.moon.intensity = MOON_INTENSITY * moonUp * this.night * (underDeck ? 0.3 : 1);
     this.moon.position.copy(cam).addScaledVector(this.moonDirection, 1000);
     this.moon.target.position.copy(cam);
-    this.ambient.intensity = 0.06 + 0.5 * this.night;
-    this.scene.environmentIntensity = lerp(0.15, 1, day) * (underDeck ? 0.7 : 1);
-    this.renderer.toneMappingExposure = lerp(1, 1.6, this.night);
+    // Low sun: daylight still counts, but the land gets the sun's light at a grazing angle.
+    const lowSun = day * (1 - smoothstep(2 * DEG, 20 * DEG, sunElevation));
+    this.ambient.intensity = DAY_AMBIENT + TWILIGHT_AMBIENT * lowSun + NIGHT_AMBIENT * this.night;
+    this.scene.environmentIntensity = lerp(NIGHT_ENVIRONMENT, 1, day) * (underDeck ? 0.7 : 1);
+    this.renderer.toneMappingExposure = 1 + TWILIGHT_EXPOSURE * lowSun + (NIGHT_EXPOSURE - 1) * this.night;
 
     // Haze: the sky's horizon colour (or the grey under the deck), thicker in bad weather, white inside a cloud.
     horizonColor([this.sunDirection.x, this.sunDirection.y, this.sunDirection.z], skyParams(p), this.horizon);
@@ -212,12 +230,13 @@ export class Environment {
     // The eye adapts as the sun sets: the sky (and its haze) is drawn brighter while the sun is low.
     const skyScale = SKY_SCALE * lerp(3, 1, smoothstep(0, 25 * DEG, sunElevation));
     u.skyScale.value = skyScale;
+    (u.skyFloor.value as Vector3).copy(NIGHT_SKY_FLOOR).multiplyScalar(1 + TWILIGHT_SKY_LIFT * lowSun);
     fogColor.setRGB(this.horizon[0] * skyScale, this.horizon[1] * skyScale, this.horizon[2] * skyScale);
     // One haze colour serves every direction: keep it close to neutral so it suits the side away from the sun too.
     const luma = 0.2126 * fogColor.r + 0.7152 * fogColor.g + 0.0722 * fogColor.b;
     fogColor.lerp(this.tmp.setRGB(luma, luma, luma * 1.08), 0.4);
     if (deck) {
-      const grey = this.tmp.setRGB(0.62, 0.64, 0.68).multiplyScalar(lerp(0.03, 1, day) * (underDeck ? p.lightFactor * 1.4 : 1));
+      const grey = this.tmp.setRGB(0.62, 0.64, 0.68).multiplyScalar(lerp(NIGHT_CLOUD_LIGHT, 1, day) * (underDeck ? p.lightFactor * 1.4 : 1));
       if (underDeck) fogColor.copy(grey);
     }
     fogColor.lerp(NIGHT_HAZE, this.night * 0.9);
@@ -225,13 +244,17 @@ export class Environment {
     let density = HAZE_DENSITY * p.hazeFactor * (aboveDeck ? 0.8 : 1);
     if (inCloud > 0) {
       density = lerp(density, WHITEOUT_DENSITY, smoothstep(0, 0.6, inCloud));
-      fogColor.lerp(this.tmp.setRGB(0.8, 0.82, 0.86).multiplyScalar(lerp(0.04, 1, day)), smoothstep(0, 0.6, inCloud));
+      fogColor.lerp(this.tmp.setRGB(0.8, 0.82, 0.86).multiplyScalar(lerp(NIGHT_CLOUD_LIGHT, 1, day)), smoothstep(0, 0.6, inCloud));
     }
     this.fog.density = density;
 
     // Clouds lit by the sun (or the moon), shadowed underneath.
-    const sunLight = lerp(0.03, 1, day);
-    this.cloudLayer.lit.setRGB(1, lerp(0.7, 0.98, warm), lerp(0.55, 0.95, warm)).multiplyScalar((p.deck ? 0.8 : 1.05) * sunLight + 0.04);
+    const sunLight = lerp(NIGHT_CLOUD_LIGHT, 1, day);
+    this.cloudLayer.lit
+      .setRGB(1, lerp(0.7, 0.98, warm), lerp(0.55, 0.95, warm))
+      // By moonlight the clouds turn blue-grey rather than keeping the sunset's orange (revision 19).
+      .lerp(MOONLIT_CLOUD, this.night)
+      .multiplyScalar((p.deck ? 0.8 : 1.05) * sunLight + 0.04);
     this.cloudLayer.shadow.setRGB(0.55, 0.58, 0.64).multiplyScalar(sunLight * (p.deck ? 0.75 : 0.9) + 0.02);
     this.cloudLayer.update(cam);
     this.nightSky.update(cam, this.night, this.moonDirection, clearSky);
@@ -272,6 +295,7 @@ export class Environment {
     const envUniforms = (this.envSky.material as ShaderMaterial).uniforms;
     envUniforms.sunPosition.value.copy(this.sunDirection);
     envUniforms.skyScale.value = (this.sky.material as ShaderMaterial).uniforms.skyScale.value;
+    (envUniforms.skyFloor.value as Vector3).copy((this.sky.material as ShaderMaterial).uniforms.skyFloor.value as Vector3);
     (this.envGround.material as MeshBasicMaterial).color.copy(GROUND_BOUNCE).multiplyScalar(lerp(0.02, 1, day));
     (this.envGrey.material as MeshBasicMaterial).color.setRGB(0.5, 0.52, 0.55).multiplyScalar(lerp(0.02, 1, day) * this.preset.lightFactor * 1.6);
     this.envSky.visible = !underDeck;

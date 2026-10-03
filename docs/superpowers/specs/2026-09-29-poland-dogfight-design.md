@@ -55,7 +55,7 @@
     Contested Skies; browser storage keeps the old `contested-skies:` prefix so saved data survives), and the site
     moves to https://lechovia-skies.github.io/._./ (the owner moved the repository to a free organization
     `lechovia-skies` and named it `._.`, §24). A soundtrack chosen by the owner plays on the title screen and in
-    flight (§15.5), and the synthesized engine sound is gone. Team Objective is
+    flight (§15.5), the synthesized engine sound is gone, and dusk and night are lit brighter (§12.3). Team Objective is
     evened out between the sides (§13.4, §14): Sentinels run in a level, bank-limited turn (they used to spiral into the
     ground), start alike, lean inward at the edge; every third fighter of a team escorts, counted within the team; bots
     break off near a Sentinel; every fighter carries 4 Lances; the USA's Sentinels get 50 HP per Russian fighter.
@@ -636,7 +636,10 @@ The "Anvil" is an abstract, unguided free-fall bomb for the Strike mode (§13.1)
   ribbons that bridge rivers, and the terrain shader tints towns and marshes.
 - Sky: the Preetham model scaled to the scene's brightness (brighter while the sun is low), lighting the scene through
   an environment map rebuilt whenever the sun has moved 1.5°; haze takes the sky's horizon colour; stars, a full moon
-  opposite the sun, moonlight and a dim night ambient; exposure rises at night.
+  opposite the sun, moonlight and a dim night ambient; exposure rises at night. Revision 19 (the owner found dusk and
+  night too dark to see): a fill light and +0.4 exposure while the sun is low (under ~20°), and at night a stronger fill
+  (2.0), moon (1.1) and exposure (2.3), a lighter night sky, haze and image-based light, and moonlit blue-grey clouds;
+  full daylight is unchanged.
 - Weather (cloud base and top): Clear; Scattered 25% (1,600–2,700 m); Broken 60% (1,300–3,200 m); Overcast, a deck
   1,100–2,300 m; Rain, a deck 800–2,600 m with rain streaks below it. Cumulus are soft billboards placed in 1.6 km cells
   where the shared cloud field has cloud, sorted back to front, drawn within 20, 30 or 40 km (graphics preset);
