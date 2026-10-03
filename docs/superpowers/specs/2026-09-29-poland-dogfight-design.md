@@ -585,7 +585,7 @@ table above; AI pilots fire the plain ones.
 | Dart acquisition cone | ×1.3 (13°) |
 | Guidance | N = 3.5, 25 g, 0.35 s response lag, 70° gimbal limit |
 | Blast | 130 damage ≤ 6 m, linear to 0 at 20 m; proximity fuze 11 m |
-| Cannon | rounds hit within twice the target's hit radius |
+| Cannon | rounds hit within three times the target's hit radius (twice at first; the owner asked for more) |
 
 Measured with the same duels (missile hit rates; wins out of the duels flown, 60 after):
 
@@ -594,7 +594,7 @@ Measured with the same duels (missile hit rates; wins out of the duels flown, 60
 | Rookie player vs Veteran bot | Dart 18%, Lance 7%, 5 wins of 40 | Dart 29%, Lance 38%, 38 wins |
 | Rookie player vs Ace bot | Dart 0%, Lance 4%, 3 wins of 40 | Dart 11%, Lance 10%, 11 wins |
 | Veteran player vs Veteran bot | Dart 0%, Lance 16%, 10 wins of 30 | Dart 31%, Lance 38%, 51 wins |
-| Veteran player, guns only, vs Veteran bot | 18% of projectiles hit | 46% |
+| Veteran player, guns only, vs Veteran bot | 18% of projectiles hit | 46% at twice the radius, 57% at three times |
 
 Aces stay hard: they release the most flares and break best. A first try with stronger assists (×0.2 decoy, 30 g,
 0.25 s lag) made the Dart hit 57–73% and the player win nine duels in ten; the owner asked for "a little" easier.

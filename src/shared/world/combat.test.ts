@@ -55,11 +55,11 @@ describe('World combat', () => {
     expect(shooter.firingCannon).toBe(true);
   });
 
-  it("hits with the player's rounds within twice the target's hit radius, and no further", () => {
+  it("hits with the player's rounds within three times the target's hit radius, and no further", () => {
     const radius = getAircraft('kobchik').damage.hitRadiusM;
     for (const [offset, hits] of [
-      [1.5 * radius, true],
-      [2.5 * radius, false],
+      [2.5 * radius, true],
+      [3.5 * radius, false],
     ] as const) {
       const { world, shooter, target } = duel();
       place(shooter, 0, 3000, 300);

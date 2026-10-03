@@ -12,7 +12,7 @@ is rebuilt after every push ([Publish as a website](#publish-as-a-website)). The
 "Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02: the game is
 single player against AI pilots and runs entirely in the browser.
 - **Easier to hit** (2026-10-03): your missiles lock sooner, are fooled by flares and chaff far less often, turn
-  harder and burst wider, and your cannon rounds hit within twice the old distance. The AI pilots keep their weapons
+  harder and burst wider, and your cannon rounds hit within three times the old distance. The AI pilots keep their weapons
   as they were, so Aces are still hard to bring down.
 - **Music** (2026-10-03): "Life in the Danger Zone" by DJARTMUSIC (Pixabay) plays on the title screen from your
   first click or key press, and more quietly in flight. **Settings** → **Sound** has a Music switch and a music

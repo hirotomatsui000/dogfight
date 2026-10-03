@@ -93,6 +93,6 @@ describe('weapon data', () => {
       expect(player.maxFlightTimeS).toBe(plain.maxFlightTimeS);
       expect(player.blastDamage).toBe(plain.blastDamage);
     }
-    expect(PLAYER_GUN_REACH).toBe(2);
+    expect(PLAYER_GUN_REACH).toBe(3);
   });
 });

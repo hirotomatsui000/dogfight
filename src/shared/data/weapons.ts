@@ -226,8 +226,8 @@ export function missilesFor(pilot: { readonly isBot: boolean }): Readonly<Record
   return pilot.isBot ? MISSILES : PLAYER_MISSILES;
 }
 
-/** The player's cannon rounds hit anything this many times closer than the target's hit radius (revision 20). */
-export const PLAYER_GUN_REACH = 2;
+/** The player's cannon rounds hit within this many times the target's hit radius (revision 20; 2 at first, 3 since). */
+export const PLAYER_GUN_REACH = 3;
 
 /** One salvo is a flare and a chaff cloud: Darts roll against the flare, Lances against the chaff. */
 export interface CountermeasureSpec {
