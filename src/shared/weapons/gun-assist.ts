@@ -2,11 +2,12 @@ import type { Vector3 } from 'three';
 import { DEG } from '../math/units.ts';
 
 /**
- * The player's gun aim assist (revision 20): with the nose within 3° of an enemy's firing solution (the HUD pipper),
- * the rounds go to the solution; the help fades out by 6° off it. Only within gun range.
+ * The player's gun aim assist (revision 20): with the nose within 10° of an enemy's firing solution (the HUD pipper),
+ * the rounds go to the solution; the help fades out by 15° off it. Only within gun range. The owner asked for about
+ * 50 wins in 60 against Rookies; 3°/6° at first won 19 (gun-only bot duels, spec §10.5).
  */
-export const GUN_ASSIST_FULL_DEG = 3;
-export const GUN_ASSIST_MAX_DEG = 6;
+export const GUN_ASSIST_FULL_DEG = 10;
+export const GUN_ASSIST_MAX_DEG = 15;
 export const GUN_ASSIST_RANGE_M = 1500;
 
 /** How far the assist bends the rounds from the nose onto the firing solution `lead`: 0 none .. 1 all the way. */

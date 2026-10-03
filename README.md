@@ -13,7 +13,7 @@ is rebuilt after every push ([Publish as a website](#publish-as-a-website)). The
 single player against AI pilots and runs entirely in the browser.
 - **Easier to hit** (2026-10-03): your missiles lock sooner, are fooled by flares and chaff far less often, turn
   harder and burst wider, and your cannon rounds hit within three times the old distance. Guns have an aim assist: with the aim point
-  (the circle in front of the target) within a few degrees of your nose, the rounds go to it; a ring closes on the
+  (the circle in front of the target) within about 10° of your nose, the rounds go to it; a ring closes on the
   circle as the assist takes hold and turns red when it holds. The AI pilots keep their weapons
   as they were, so Aces are still hard to bring down.
 - **Music** (2026-10-03): "Life in the Danger Zone" by DJARTMUSIC (Pixabay) plays on the title screen from your

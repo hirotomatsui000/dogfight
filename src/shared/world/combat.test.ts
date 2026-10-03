@@ -61,9 +61,9 @@ describe('World combat', () => {
       [2.5 * radius, true],
       [3.5 * radius, false],
     ] as const) {
-      // 120 m ahead the target is more than 6° off the nose, beyond the aim assist.
+      // 50 m ahead the target is more than 15° off the nose, beyond the aim assist.
       const { world, shooter, target } = duel();
-      place(shooter, 0, 3000, 120);
+      place(shooter, 0, 3000, 50);
       place(target, offset, 3000, 0);
       const events = run(world, 20, () => hold(shooter.id, { fireCannon: true }));
       expect(events.some((e) => e.type === 'hit' && e.weapon === 'cannon')).toBe(hits);
@@ -73,11 +73,12 @@ describe('World combat', () => {
   it("bends the player's rounds onto an enemy a few degrees off the nose (aim assist)", () => {
     const radius = getAircraft('kobchik').damage.hitRadiusM;
     const { world, shooter, target } = duel();
-    // 40 m off at 600 m: about 3.8° off the nose and beyond the rounds' reach without the assist.
-    place(shooter, 0, 3000, 600);
-    place(target, 40, 3000, 0);
-    expect(40).toBeGreaterThan(3 * radius);
-    const events = run(world, 40, () => hold(shooter.id, { fireCannon: true }));
+    // 100 m off at 700 m: about 8° off the nose and far beyond the rounds' reach without the assist.
+    place(shooter, 0, 3000, 700);
+    place(target, 100, 3000, 0);
+    expect(100).toBeGreaterThan(3 * radius);
+    // The rounds take about 0.75 s to get there.
+    const events = run(world, 80, () => hold(shooter.id, { fireCannon: true }));
     expect(events.some((e) => e.type === 'hit' && e.weapon === 'cannon' && e.aircraftId === target.id)).toBe(true);
   });
 
