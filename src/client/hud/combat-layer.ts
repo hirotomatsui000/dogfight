@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { MRM_LANCE, SRM_DART } from '../../shared/data/weapons.ts';
+import { PLAYER_MISSILES } from '../../shared/data/weapons.ts';
 import { DEG } from '../../shared/math/units.ts';
 import type { SeekerMode } from '../../shared/targeting/ir-seeker.ts';
 import { radarLockProgress } from '../../shared/targeting/radar-lock.ts';
@@ -134,7 +134,7 @@ function drawTargetBox(ctx: CanvasRenderingContext2D, f: HudFrame, v: AircraftVi
     ctx.strokeStyle = locked ? RED : AMBER;
     ctx.globalAlpha = locked || clock % 0.3 < 0.18 ? 1 : 0.5;
     ctx.lineWidth = locked ? 2.4 : 1.6;
-    diamond(ctx, lockDiamondPx(h, radarLockProgress(lock, MRM_LANCE, me.config)));
+    diamond(ctx, lockDiamondPx(h, radarLockProgress(lock, PLAYER_MISSILES.lance, me.config)));
     ctx.stroke();
     ctx.restore();
   }
@@ -186,7 +186,7 @@ function drawPipper(ctx: CanvasRenderingContext2D): void {
 function drawSeeker(ctx: CanvasRenderingContext2D, p: Projector, f: HudFrame, clock: number): void {
   const s = f.view.seeker;
   if (s.mode === 'off' || !p.direction(f.camera, s.axis, pt)) return;
-  const r = Math.max(10, SRM_DART.acquisitionConeDeg * DEG * p.pixelsPerRadian(f.camera) * 0.35);
+  const r = Math.max(10, PLAYER_MISSILES.dart.acquisitionConeDeg * DEG * p.pixelsPerRadian(f.camera) * 0.35);
   ctx.save();
   ctx.lineWidth = 1.6;
   if (s.mode === 'search') {

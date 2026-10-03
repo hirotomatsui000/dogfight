@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { listAircraft } from './aircraft/registry.ts';
-import { BOMB_ANVIL, CANNONS, COUNTERMEASURES, MISSILES, MRM_LANCE, SRM_DART } from './weapons.ts';
+import { BOMB_ANVIL, CANNONS, COUNTERMEASURES, MISSILES, missilesFor, MRM_LANCE, PLAYER_GUN_REACH, PLAYER_MISSILES, SRM_DART } from './weapons.ts';
 
 describe('weapon data', () => {
   it('matches the cannon table in the spec', () => {
@@ -74,5 +74,25 @@ describe('weapon data', () => {
   it('matches the bomb in the spec', () => {
     expect(BOMB_ANVIL).toMatchObject({ name: 'Anvil', perAircraft: 8, minReleaseIntervalS: 0.25, damage: 40, fullDamageRadiusM: 30, maxDamageRadiusM: 90, maxFallS: 60 });
     expect(BOMB_ANVIL.dragPerM).toBeGreaterThan(0);
+  });
+
+  it("makes the player's weapons easier to hit with than an AI pilot's (revision 20)", () => {
+    expect(missilesFor({ isBot: true })).toBe(MISSILES);
+    expect(missilesFor({ isBot: false })).toBe(PLAYER_MISSILES);
+    for (const kind of ['dart', 'lance'] as const) {
+      const plain = MISSILES[kind];
+      const player = PLAYER_MISSILES[kind];
+      expect(player.id).toBe(plain.id);
+      expect(player.guidance).toBe(plain.guidance);
+      expect(player.decoyChance).toBeCloseTo(plain.decoyChance * 0.3);
+      expect(player.lockTimeS).toBeLessThan(plain.lockTimeS);
+      expect(player.maxAccelG).toBeGreaterThan(plain.maxAccelG);
+      expect(player.responseLagS).toBeLessThan(plain.responseLagS);
+      expect(player.fuzeRadiusM).toBeGreaterThan(plain.fuzeRadiusM);
+      // Same reach and load: only how well it hits changes.
+      expect(player.maxFlightTimeS).toBe(plain.maxFlightTimeS);
+      expect(player.blastDamage).toBe(plain.blastDamage);
+    }
+    expect(PLAYER_GUN_REACH).toBe(2);
   });
 });

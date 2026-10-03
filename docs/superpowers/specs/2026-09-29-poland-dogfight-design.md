@@ -1,4 +1,4 @@
-# Lechovia Skies — Design Spec (revision 19)
+# Lechovia Skies — Design Spec (revision 20)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -61,6 +61,8 @@
     evened out between the sides (§13.4, §14): Sentinels run in a level, bank-limited turn (they used to spiral into the
     ground), start alike, lean inward at the edge; every third fighter of a team escorts, counted within the team; bots
     break off near a Sentinel; every fighter carries 4 Lances; the USA's Sentinels get 50 HP per Russian fighter.
+  - Revision 20 (2026-10-03): the owner found hitting far too hard, missiles above all. The player's weapons now hit
+    more easily than the AI pilots' (§10.5); the AI pilots, wingmen included, keep the plain weapons.
 - **Owner:** Hiroto Matsui
 - **Title:** Lechovia Skies (`lechovia-skies`); the working title until revision 19 was Contested Skies.
 
@@ -567,6 +569,35 @@ The "Anvil" is an abstract, unguided free-fall bomb for the Strike mode (§13.1)
   path meets the terrain. The HUD and the bots use it; it must agree with the real impact within 5 m.
 - **After the launcher dies:** bombs already falling keep going and still count. Impacts after the match has ended
   have no effect.
+
+### 10.5 The player's weapons (revision 20)
+
+The owner found hitting far too hard. In bot duels (a bot brain flying a jet that counts as the player, 30–60 seeds each,
+Kestrel against Kobchik) a Veteran's Darts hit Veteran bots 0% of the time and Rookies 18%: every flare salvo of the
+last three seconds rolls again, so a disciplined bot that releases six salvos decoys about nine missiles in ten. The
+player's weapons (`PLAYER_MISSILES`, `PLAYER_GUN_REACH` in `src/shared/data/weapons.ts`) therefore differ from the
+table above; AI pilots fire the plain ones.
+
+| | Player's Dart and Lance |
+|---|---|
+| Countermeasures | decoy or break chance ×0.3 (Dart 10.5% per salvo, Lance 9%) |
+| Lock time | ×0.7 (Dart 0.56 s, Lance 1.05 s) |
+| Dart acquisition cone | ×1.3 (13°) |
+| Guidance | N = 3.5, 25 g, 0.35 s response lag, 70° gimbal limit |
+| Blast | 130 damage ≤ 6 m, linear to 0 at 20 m; proximity fuze 11 m |
+| Cannon | rounds hit within twice the target's hit radius |
+
+Measured with the same duels (missile hit rates; wins out of the duels flown, 60 after):
+
+| | Before | After |
+|---|---|---|
+| Rookie player vs Veteran bot | Dart 18%, Lance 7%, 5 wins of 40 | Dart 29%, Lance 38%, 38 wins |
+| Rookie player vs Ace bot | Dart 0%, Lance 4%, 3 wins of 40 | Dart 11%, Lance 10%, 11 wins |
+| Veteran player vs Veteran bot | Dart 0%, Lance 16%, 10 wins of 30 | Dart 31%, Lance 38%, 51 wins |
+| Veteran player, guns only, vs Veteran bot | 18% of projectiles hit | 46% |
+
+Aces stay hard: they release the most flares and break best. A first try with stronger assists (×0.2 decoy, 30 g,
+0.25 s lag) made the Dart hit 57–73% and the player win nine duels in ten; the owner asked for "a little" easier.
 
 ## 11. Damage model
 

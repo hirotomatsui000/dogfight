@@ -2,6 +2,7 @@ import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { buildTerrain } from '../data/maps/map-definition.ts';
 import { createTestRange } from '../data/maps/test-range.ts';
+import { getAircraft } from '../data/aircraft/registry.ts';
 import { CANNONS } from '../data/weapons.ts';
 import { DEG } from '../math/units.ts';
 import { FreeFlightMode } from '../modes/free-flight.ts';
@@ -54,6 +55,20 @@ describe('World combat', () => {
     expect(shooter.firingCannon).toBe(true);
   });
 
+  it("hits with the player's rounds within twice the target's hit radius, and no further", () => {
+    const radius = getAircraft('kobchik').damage.hitRadiusM;
+    for (const [offset, hits] of [
+      [1.5 * radius, true],
+      [2.5 * radius, false],
+    ] as const) {
+      const { world, shooter, target } = duel();
+      place(shooter, 0, 3000, 300);
+      place(target, offset, 3000, 0);
+      const events = run(world, 20, () => hold(shooter.id, { fireCannon: true }));
+      expect(events.some((e) => e.type === 'hit' && e.weapon === 'cannon')).toBe(hits);
+    }
+  });
+
   it('designates the enemy ahead automatically, locks the seeker and kills it with a missile', () => {
     const { world, shooter, target } = duel();
     place(shooter, 0, 3000, 2500);
@@ -78,9 +93,9 @@ describe('World combat', () => {
     expect(shooter.stores.srm).toBe(shooter.config.stores.srm);
   });
 
-  it('lets flares decoy missiles some of the time', () => {
+  it("lets flares decoy the player's missiles now and then", () => {
     let decoyed = 0;
-    for (let seed = 1; seed <= 12; seed++) {
+    for (let seed = 1; seed <= 30; seed++) {
       const { world, shooter, target } = duel(new TeamDeathmatchMode(), seed);
       place(shooter, 0, 3000, 2500);
       place(target, 0, 3000, 0);
@@ -95,7 +110,7 @@ describe('World combat', () => {
       if (events.some((e) => e.type === 'missileDecoyed')) decoyed++;
     }
     expect(decoyed).toBeGreaterThan(0);
-    expect(decoyed).toBeLessThan(12);
+    expect(decoyed).toBeLessThan(10);
   });
 
   it('locks on radar with the Lance selected, warns the target, and kills it from 15 km', () => {
@@ -162,9 +177,9 @@ describe('World combat', () => {
     expect(launches).toHaveLength(2);
   });
 
-  it('lets chaff break Lances some of the time', () => {
+  it("lets chaff break the player's Lances now and then", () => {
     let decoyed = 0;
-    for (let seed = 1; seed <= 12; seed++) {
+    for (let seed = 1; seed <= 30; seed++) {
       const { world, shooter, target } = duel(new TeamDeathmatchMode(), seed);
       place(shooter, 0, 3000, 15000);
       place(target, 0, 3000, 0, 180);
@@ -179,7 +194,7 @@ describe('World combat', () => {
       if (events.some((e) => e.type === 'missileDecoyed')) decoyed++;
     }
     expect(decoyed).toBeGreaterThan(0);
-    expect(decoyed).toBeLessThan(12);
+    expect(decoyed).toBeLessThan(10);
   });
 
   it('acts on a button press once, even when no new input follows', () => {

@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { blastDamage } from '../damage/damage.ts';
 import type { TeamId } from '../data/aircraft/types.ts';
-import { AFTERBURNER_THROTTLE, BOMB_ANVIL, CANNONS, COUNTERMEASURES, MRM_LANCE, SRM_DART } from '../data/weapons.ts';
+import { AFTERBURNER_THROTTLE, BOMB_ANVIL, CANNONS, COUNTERMEASURES, missilesFor, PLAYER_GUN_REACH, SRM_DART } from '../data/weapons.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { type Approach, closestApproach } from '../math/closest-approach.ts';
 import type { Rng } from '../math/rng.ts';
@@ -158,7 +158,9 @@ export class Combat {
     if (shots === 0) return;
     const density = atmosphere(a.flight.pos.y, this.air).density;
     for (let i = 0; i < shots; i++) {
-      this.projectiles.push(createProjectile(this.nextProjectileId++, a, spec, this.host.rng, density));
+      const p = createProjectile(this.nextProjectileId++, a, spec, this.host.rng, density);
+      if (!a.isBot) p.reach = PLAYER_GUN_REACH;
+      this.projectiles.push(p);
       a.stores.cannonRounds -= spec.roundsPerProjectile;
     }
   }
@@ -171,7 +173,7 @@ export class Combat {
       return;
     }
     const designated = a.targetId === null ? null : (host.getAircraft(a.targetId) ?? null);
-    updateSeeker(a.seeker, a, host.aircraftList(), designated, SRM_DART, host.terrain, dt, host.clouds);
+    updateSeeker(a.seeker, a, host.aircraftList(), designated, missilesFor(a).dart, host.terrain, dt, host.clouds);
     if (a.seeker.mode !== 'locked' || a.seeker.targetId === null) return;
     const target = host.getAircraft(a.seeker.targetId);
     if (target) {
@@ -183,7 +185,7 @@ export class Combat {
   /** The Lance's radar lock builds while it is selected (spec §10.3); a lock also counts toward kill credit. */
   private updateRadarLock(a: AircraftEntity, dt: number): void {
     const host = this.host;
-    updateRadarLock(a.radarLock, a.config, a.input.weapon === 'mrm' && a.stores.mrm > 0, a.targetId, a.contacts, MRM_LANCE, dt);
+    updateRadarLock(a.radarLock, a.config, a.input.weapon === 'mrm' && a.stores.mrm > 0, a.targetId, a.contacts, missilesFor(a).lance, dt);
     if (a.radarLock.mode !== 'locked' || a.radarLock.targetId === null) return;
     const target = host.getAircraft(a.radarLock.targetId);
     if (target) {
@@ -196,11 +198,12 @@ export class Combat {
   private launchMissile(a: AircraftEntity): void {
     const host = this.host;
     if (!a.input.fireMissile) return;
+    const { dart, lance } = missilesFor(a);
     if (a.input.weapon === 'mrm') {
       const lock = a.radarLock;
       if (lock.mode !== 'locked' || lock.targetId === null || a.stores.mrm <= 0) return;
-      if (host.tick - a.lastMrmTick < MRM_LANCE.minLaunchIntervalS * host.tickRate) return;
-      const m = launchMissile(this.nextMissileId++, a, lock.targetId, MRM_LANCE);
+      if (host.tick - a.lastMrmTick < lance.minLaunchIntervalS * host.tickRate) return;
+      const m = launchMissile(this.nextMissileId++, a, lock.targetId, lance);
       this.missiles.push(m);
       a.stores.mrm--;
       a.lastMrmTick = host.tick;
@@ -209,8 +212,8 @@ export class Combat {
     }
     const s = a.seeker;
     if (s.mode !== 'locked' || s.targetId === null || a.stores.srm <= 0) return;
-    if (host.tick - a.lastMissileTick < SRM_DART.minLaunchIntervalS * host.tickRate) return;
-    const m = launchMissile(this.nextMissileId++, a, s.targetId, SRM_DART);
+    if (host.tick - a.lastMissileTick < dart.minLaunchIntervalS * host.tickRate) return;
+    const m = launchMissile(this.nextMissileId++, a, s.targetId, dart);
     this.missiles.push(m);
     a.stores.srm--;
     a.lastMissileTick = host.tick;
@@ -301,7 +304,7 @@ export class Combat {
       let done = false;
       for (const t of host.aircraftList()) {
         if (!t.alive || t.team === p.team) continue;
-        if (closestApproach(p.prevPos, p.pos, t.prevPos, t.flight.pos, this.approach).distance > t.config.damage.hitRadiusM) continue;
+        if (closestApproach(p.prevPos, p.pos, t.prevPos, t.flight.pos, this.approach).distance > t.config.damage.hitRadiusM * p.reach) continue;
         host.applyDamage(t, p.damage, host.getAircraft(p.ownerId) ?? null, 'cannon');
         done = true;
         break;

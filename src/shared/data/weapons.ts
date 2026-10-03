@@ -197,6 +197,38 @@ export const MRM_LANCE: MissileSpec = {
 
 export const MISSILES: Readonly<Record<MissileKind, MissileSpec>> = { dart: SRM_DART, lance: MRM_LANCE };
 
+/**
+ * The player's missiles (revision 20). The owner found hitting far too hard: in bot duels a Veteran's Dart was decoyed
+ * by nearly every defence (each flare salvo of the last seconds rolls again). The player's missiles lock sooner, shrug
+ * off most countermeasures, turn harder and quicker and burst with a wider blast. AI pilots, wingmen included, keep
+ * the plain specs.
+ */
+function assisted(spec: MissileSpec): MissileSpec {
+  return {
+    ...spec,
+    acquisitionConeDeg: spec.acquisitionConeDeg * 1.3,
+    lockTimeS: spec.lockTimeS * 0.7,
+    navigationConstant: 3.5,
+    maxAccelG: 25,
+    responseLagS: 0.35,
+    gimbalLimitDeg: 70,
+    fuzeRadiusM: 11,
+    blastFullDamageRadiusM: 6,
+    blastMaxRadiusM: 20,
+    decoyChance: spec.decoyChance * 0.3,
+  };
+}
+
+export const PLAYER_MISSILES: Readonly<Record<MissileKind, MissileSpec>> = { dart: assisted(SRM_DART), lance: assisted(MRM_LANCE) };
+
+/** The missiles this pilot fires: the player's assisted ones, or the plain ones for an AI pilot. */
+export function missilesFor(pilot: { readonly isBot: boolean }): Readonly<Record<MissileKind, MissileSpec>> {
+  return pilot.isBot ? MISSILES : PLAYER_MISSILES;
+}
+
+/** The player's cannon rounds hit anything this many times closer than the target's hit radius (revision 20). */
+export const PLAYER_GUN_REACH = 2;
+
 /** One salvo is a flare and a chaff cloud: Darts roll against the flare, Lances against the chaff. */
 export interface CountermeasureSpec {
   /** minimum time between two salvos */

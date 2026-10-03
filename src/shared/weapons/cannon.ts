@@ -22,6 +22,8 @@ export interface Projectile {
   /** drag constant for the air density at launch */
   drag: number;
   damage: number;
+  /** hits within the target's hit radius times this (the player's rounds reach further, revision 20) */
+  reach: number;
   lifetimeS: number;
   ageS: number;
   pos: Vector3;
@@ -71,6 +73,7 @@ export function createProjectile(id: number, shooter: Shooter, spec: CannonSpec,
     muzzleSpeed: spec.muzzleSpeedMs,
     drag: (spec.dragPerM * density) / SEA_LEVEL_DENSITY,
     damage: spec.damagePerProjectile,
+    reach: 1,
     lifetimeS: spec.lifetimeS,
     ageS: 0,
     pos: pos.clone(),
