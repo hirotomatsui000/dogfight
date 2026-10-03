@@ -32,9 +32,6 @@ const WAVES: readonly (readonly [number, number, number])[] = [
 ];
 /** Up and down gusts are weaker than the ones along the ground. */
 const VERTICAL_SHARE = 0.4;
-/** Matches draw a westerly-ish wind: from 200° to 340°. */
-const FROM_MIN = 200 * DEG;
-const FROM_MAX = 340 * DEG;
 
 /**
  * Air velocity over the map (ground frame, m/s), the same for every computer given the settings and seed. The steady
@@ -59,9 +56,12 @@ export class WindField implements SteadyWind {
     }
   }
 
-  /** A weather preset's wind from a direction drawn from the seed. */
+  /**
+   * A weather preset's wind from a direction drawn from the seed, anywhere round the compass (revision 18): the teams
+   * start west and east of a north–south front, so a prevailing westerly would hand one side a tailwind every match.
+   */
   static forWeather(w: { windMs: number; windAloftMs: number; gust: number }, seed: number): WindField {
-    const fromRad = new Rng(seed ^ 0x46524f4d).range(FROM_MIN, FROM_MAX);
+    const fromRad = new Rng(seed ^ 0x46524f4d).range(0, 2 * Math.PI);
     return new WindField({ surfaceMs: w.windMs, aloftMs: w.windAloftMs, gust: w.gust, fromRad }, seed);
   }
 

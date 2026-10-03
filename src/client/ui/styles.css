@@ -247,6 +247,25 @@ input:focus-visible + .option { color: var(--hud); }
 }
 
 .launch { display: grid; gap: 18px; justify-items: start; }
+/* FLY and, beside it, the campaign (revision 18). */
+.launch-row { display: flex; gap: 12px; width: min(100%, 480px); align-items: stretch; }
+.launch-row .fly { flex: 1 1 auto; }
+.campaign-button {
+  flex: 0 0 auto;
+  min-width: 128px;
+  padding: 0 16px;
+  font: 700 18px/1 var(--display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--canopy);
+  background: rgb(8 16 24 / 0.4);
+  border: 0;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.3);
+  cursor: pointer;
+}
+.campaign-button:hover { box-shadow: inset 0 0 0 1px var(--canopy); }
+.campaign-button:focus-visible { outline: 2px solid var(--hud); outline-offset: 4px; }
 .map-screen { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; background: rgb(8 16 24 / 0.45); }
 .map-screen canvas { border-radius: 4px; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.25), 0 8px 40px rgb(0 0 0 / 0.5); opacity: 0.94; }
 .debug-overlay { position: absolute; right: 12px; top: 120px; padding: 6px 8px; font: 500 11px/1.5 var(--mono); color: var(--hud); background: rgb(0 0 0 / 0.55); white-space: pre; pointer-events: none; }
@@ -368,6 +387,48 @@ input:focus-visible + .option { color: var(--hud); }
 .records-buttons { display: flex; gap: 24px; align-items: center; }
 .link.danger { color: var(--warn); }
 
+/* Campaign (revision 18): the missions beside the chosen one's briefing. */
+.campaign-sheet { width: min(860px, calc(100% - 32px)); overflow-y: auto; }
+.campaign-sheet .sheet-title:focus { outline: none; }
+.campaign-body { display: grid; grid-template-columns: minmax(200px, 250px) 1fr; gap: 24px; align-items: start; }
+.mission-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.mission-item {
+  display: grid;
+  grid-template-columns: 2ch 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  width: 100%;
+  padding: 8px 10px;
+  font: 600 16px/1.2 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--ghost);
+  background: transparent;
+  border: 0;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+.mission-item:hover:not(:disabled) { color: var(--canopy); }
+.mission-item[aria-current='true'] { color: var(--canopy); background: rgb(255 255 255 / 0.06); border-left-color: var(--hud); }
+.mission-item:disabled { cursor: default; opacity: 0.45; }
+.mission-item:focus-visible { outline: 2px solid var(--hud); outline-offset: 2px; }
+.mission-number, .mission-status { font: 500 11px/1 var(--mono); letter-spacing: 0.12em; }
+.mission-item.is-cleared .mission-status { color: var(--hud); }
+.mission-item.is-next .mission-status { color: var(--warn); }
+.briefing { display: grid; gap: 10px; align-content: start; }
+.briefing .eyebrow { margin: 0; }
+.briefing-title { margin: 0; font: 700 28px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.briefing-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font: 500 12px/1.4 var(--mono); letter-spacing: 0.06em; color: var(--ghost); }
+.briefing-text { margin: 0; max-width: 60ch; font-size: 15px; line-height: 1.5; }
+.briefing .pick { margin-top: 4px; }
+.button:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+/* After a campaign mission: which mission it was, and the next one's briefing. */
+.result-kicker { margin: 0 0 4px; }
+.next-mission { margin: 6px 0 10px; padding: 12px 14px; border-left: 2px solid var(--hud); background: rgb(255 255 255 / 0.04); }
+.next-mission .eyebrow { margin: 0 0 8px; }
+.next-mission p { margin: 0; font-size: 14px; line-height: 1.5; }
+
 /* Settings dialog: tabs over one scrolling panel */
 .settings { width: min(640px, calc(100% - 32px)); display: grid; gap: 18px; }
 .settings[open] { display: grid; }
@@ -485,6 +546,9 @@ input:focus-visible + .option { color: var(--hud); }
 @media (max-width: 640px) {
   .start { background: rgb(8 16 24 / 0.72); }
   .fly { width: 100%; }
+  .launch-row { width: 100%; }
+  .launch-row .fly { width: auto; }
+  .campaign-body { grid-template-columns: 1fr; }
   .option-name { font-size: 26px; }
 }
 

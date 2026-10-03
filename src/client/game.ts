@@ -53,6 +53,9 @@ import { DebugOverlay } from './ui/debug-overlay.ts';
 import { matchResult, type ResultRow, showEndScreen } from './ui/end-screen.ts';
 import { MatchStats } from './match-stats.ts';
 import { loadCareer, recordMatch, saveCareer } from './career.ts';
+import { campaignOutcome, campaignStart, missionHeading } from './campaign/flow.ts';
+import { missionById } from './campaign/missions.ts';
+import { loadCampaign, saveCampaign } from './campaign/progress.ts';
 import { bestLine } from './ui/records-format.ts';
 import { MapScreen } from './ui/map-screen.ts';
 import { loadingText } from './ui/load-bar.ts';
@@ -68,6 +71,8 @@ const HIT_MARKER_S = 0.25;
 /** How long HIT shows after the local jet is hit (the caption of the hit sound). */
 const HIT_TAKEN_S = 0.6;
 const BANNER_S = 1.5;
+/** A campaign mission's title shows this long at the start. */
+const MISSION_BANNER_S = 4;
 const EXPLOSION_SHAKE_RANGE_M = 1500;
 
 const HINTS: Record<ControlMode, string> = {
@@ -94,10 +99,13 @@ function showLoading(root: HTMLElement, text: string): HTMLElement {
   return overlay;
 }
 
-/** The offline mode for the title screen's choices: Strike gives each side four aircraft per pilot (M5). */
+/**
+ * The offline mode for the title screen's choices: Strike gives each side four aircraft per pilot of the larger side
+ * (M5); a campaign mission may set its own score limit (revision 18).
+ */
 function modeFor(options: StartOptions): GameMode {
-  const size = Math.max(1, options.teamSize ?? 1);
-  return createMode(options.mission, { strike: { aircraftPerTeam: STRIKE_AIRCRAFT_PER_PILOT * size } });
+  const size = Math.max(1, options.teamSize ?? 1, options.enemies ?? 1);
+  return createMode(options.mission, { scoreLimit: options.scoreLimit, strike: { aircraftPerTeam: STRIKE_AIRCRAFT_PER_PILOT * size } });
 }
 
 function deathText(cause: DeathCause, killer: string | null): string {
@@ -158,6 +166,7 @@ export async function startGame(
   const map = loadedMap.def;
   const terrain = loadedMap.terrain;
   const teamSize = Math.max(1, options.teamSize ?? 1);
+  const enemies = Math.max(1, options.enemies ?? teamSize);
   const mode = modeFor(options);
   const session: GameSession = new LocalSession({
     map,
@@ -168,8 +177,11 @@ export async function startGame(
     // A fresh seed per match varies gunfire spread, flare luck and the bot's aim; the World stays deterministic.
     seed: Math.floor(Math.random() * 0x7fffffff),
     // Training brings its own drones; Free Flight has no enemies.
-    opponents: options.mission === 'free-flight' || options.mission === 'training' ? undefined : { count: teamSize, profile: DIFFICULTIES[options.difficulty] },
-    wingmen: options.mission === 'free-flight' || options.mission === 'training' || teamSize < 2 ? undefined : { count: teamSize - 1, profile: DIFFICULTIES[options.difficulty] },
+    opponents: options.mission === 'free-flight' || options.mission === 'training' ? undefined : { count: enemies, profile: DIFFICULTIES[options.difficulty] },
+    wingmen:
+      options.mission === 'free-flight' || options.mission === 'training' || teamSize < 2
+        ? undefined
+        : { count: teamSize - 1, profile: DIFFICULTIES[options.wingmenDifficulty ?? options.difficulty] },
     start: options.start,
     // Training flies a calm noon.
     environment: options.mission === 'training' ? undefined : options.environment,
@@ -338,10 +350,12 @@ export async function startGame(
   const onPointerDown = () => audio?.resume();
   root.addEventListener('pointerdown', onPointerDown);
 
-  const showBanner = (text: string, nowS: number) => {
+  const showBanner = (text: string, nowS: number, seconds = BANNER_S) => {
     banner = text;
-    bannerUntil = nowS + BANNER_S;
+    bannerUntil = nowS + seconds;
   };
+  const campaignMission = options.campaign ? missionById(options.campaign.missionId) : undefined;
+  let missionAnnounced = false;
 
   const handleEvent = (e: GameEvent, nowS: number) => {
     effects.onEvent(e, session);
@@ -486,12 +500,27 @@ export async function startGame(
       if (career.matches === 1) bests.push('First match on record · see Records on the title screen');
       for (const id of newBests) bests.push(`New best · ${bestLine(id, career.bests[id]?.value ?? 0, me.config.id)}`);
     }
+    // Campaign (revision 18): a win opens the next mission, anything else offers the same one again.
+    let again: StartOptions = training ? { ...options, mission: 'team-deathmatch' } : options;
+    let againLabel = training ? 'Fly a dogfight' : undefined;
+    if (campaignMission && me) {
+      const outcome = campaignOutcome(loadCampaign(), me.team, campaignMission, me.config.id, final.winner === me.team, me.kills, me.deaths);
+      saveCampaign(outcome.progress);
+      result.title = outcome.title;
+      result.kicker = outcome.kicker;
+      bests.unshift(...outcome.highlights);
+      againLabel = outcome.againLabel;
+      if (outcome.next) {
+        result.next = { heading: outcome.next.heading, text: outcome.next.briefing };
+        again = campaignStart(outcome.next.mission, me.team, { aircraftId: outcome.next.aircraftId, callsign: options.callsign, controlMode: options.controlMode });
+      }
+    }
     audio?.matchEnd(training || (me && final.winner === me.team) ? 'win' : final.winner === 'draw' ? 'draw' : 'loss');
     closeEndScreen = showEndScreen(root, result, rows, {
-      againLabel: training ? 'Fly a dogfight' : undefined,
+      againLabel,
       onAgain: () => {
         cleanup();
-        handlers.onRestart(training ? { ...options, mission: 'team-deathmatch' } : options);
+        handlers.onRestart(again);
       },
       onMenu: () => {
         cleanup();
@@ -540,7 +569,10 @@ export async function startGame(
         deathCam.stop();
         nextJet = null;
         audio?.respawn();
-        if (me.flight.onGround) showBanner('CLEARED FOR TAKE-OFF', nowS);
+        if (campaignMission && !missionAnnounced) {
+          missionAnnounced = true;
+          showBanner(missionHeading(campaignMission).toUpperCase(), nowS, MISSION_BANNER_S);
+        } else if (me.flight.onGround) showBanner('CLEARED FOR TAKE-OFF', nowS);
         fuelAlert = 'full';
       }
       // The gear motor runs as the wheels start to come up.

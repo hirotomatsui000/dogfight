@@ -11,7 +11,9 @@ import type { ControlMode } from '../input/control-mapper.ts';
 import { controlsHelp, GAMEPAD_HELP } from './controls-help.ts';
 import { isTouchOnly } from './device.ts';
 import { MISSION_LABELS } from './records-format.ts';
+import { campaignSheet } from './campaign-sheet.ts';
 import { recordsSheet } from './records-sheet.ts';
+import { choiceGroup, el } from './choice-group.ts';
 import { openSettings } from './settings-screen.ts';
 import type { SettingsStore } from './settings.ts';
 import { loadSetting, saveSetting } from './storage.ts';
@@ -32,6 +34,14 @@ export interface StartOptions {
   environment?: EnvironmentSettings;
   /** pilots per side: you and AI wingmen against as many AI pilots (M5); 1 when unset */
   teamSize?: number;
+  /** AI pilots on the other side when it differs from `teamSize` (campaign) */
+  enemies?: number;
+  /** the wingmen's skill when it differs from the opponents' (campaign) */
+  wingmenDifficulty?: DifficultyId;
+  /** first to this score instead of the mode's own limit (campaign) */
+  scoreLimit?: number;
+  /** a campaign mission (revision 18) */
+  campaign?: { missionId: string };
 }
 
 export interface StartMenuHandlers {
@@ -72,66 +82,6 @@ export function strikeRole(c: AircraftConfig): string {
 export function aircraftSummary(c: AircraftConfig): string {
   const end = c.description.indexOf('. ');
   return `${c.role} · ${end < 0 ? c.description : c.description.slice(0, end + 1)}`;
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  if (className) e.className = className;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
-
-interface Choice<T extends string> {
-  value: T;
-  label: string;
-  kicker?: string;
-}
-
-/**
- * A radio group drawn as HUD designation boxes: the chosen option is boxed like a designated target. With `rowOf`,
- * the options sit in labelled rows (the jets, one row per team).
- */
-function choiceGroup<T extends string>(
-  name: string,
-  legend: string,
-  choices: readonly Choice<T>[],
-  value: T,
-  onChange: (v: T) => void,
-  rowOf?: (c: Choice<T>) => string,
-): HTMLFieldSetElement {
-  const set = el('fieldset', `pick pick-${name}`);
-  set.appendChild(el('legend', 'eyebrow', legend));
-  const rows = new Map<string, HTMLDivElement>();
-  const rowFor = (c: Choice<T>) => {
-    const key = rowOf ? rowOf(c) : '';
-    let row = rows.get(key);
-    if (!row) {
-      row = el('div', rowOf ? 'options option-row' : 'options');
-      if (rowOf) row.appendChild(el('span', 'option-row-label', key));
-      rows.set(key, row);
-      set.appendChild(row);
-    }
-    return row;
-  };
-  for (const c of choices) {
-    const row = rowFor(c);
-    const input = el('input', 'sr-only');
-    input.type = 'radio';
-    input.name = name;
-    input.id = `pick-${name}-${c.value}`;
-    input.value = c.value;
-    input.checked = c.value === value;
-    input.addEventListener('change', () => {
-      if (input.checked) onChange(c.value);
-    });
-    const label = el('label', 'option');
-    label.htmlFor = input.id;
-    // The space keeps screen readers from running "Russia" and "Kobchik" together; grid layout ignores it.
-    if (c.kicker) label.append(el('span', 'option-kicker', c.kicker), ' ');
-    label.appendChild(el('span', 'option-name', c.label));
-    row.append(input, label);
-  }
-  return set;
 }
 
 /** The world the next match flies in (M4): map, start, time of day, clock and weather. */
@@ -401,6 +351,12 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   const launch = el('div', 'launch');
   const fly = el('button', 'fly', 'Fly');
   fly.type = 'submit';
+  const campaignButton = el('button', 'campaign-button', 'Campaign');
+  campaignButton.type = 'button';
+  campaignButton.title = 'Nine missions in order, for either side';
+  campaignButton.setAttribute('aria-haspopup', 'dialog');
+  const launchRow = el('div', 'launch-row');
+  launchRow.append(fly, campaignButton);
   const links = el('div', 'links');
   const training = el('button', 'link', 'Training');
   training.type = 'button';
@@ -420,7 +376,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   recordsLink.title = 'Your matches, kills and personal bests in this browser';
   recordsLink.setAttribute('aria-haspopup', 'dialog');
   links.append(training, freeFlight, controlsLink, settingsLink, recordsLink);
-  launch.append(fly, links);
+  launch.append(launchRow, links);
 
   const opponents = el('div', 'opponent-row');
   opponents.append(skill, size);
@@ -429,7 +385,14 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
 
   const sheet = controlsSheet(settings);
   const records = recordsSheet();
-  screen.append(form, sheet, records.dialog);
+  const campaign = campaignSheet(
+    () => ({ aircraftId, callsign: sanitizeCallsign(callsign.value), controlMode: settings.current.controlMode }),
+    (options) => {
+      saveSetting('callsign', options.callsign);
+      handlers.onStart(options);
+    },
+  );
+  screen.append(form, sheet, records.dialog, campaign.dialog);
 
   const start = (mission: MissionId) => {
     const w = effectiveWorld(world, mission);
@@ -457,6 +420,7 @@ export function showStartMenu(root: HTMLElement, handlers: StartMenuHandlers, se
   training.addEventListener('click', () => start('training'));
   controlsLink.addEventListener('click', () => sheet.showModal());
   recordsLink.addEventListener('click', () => records.open());
+  campaignButton.addEventListener('click', () => campaign.open());
   settingsLink.addEventListener('click', () => openSettings(root, settings, 'controls'));
 
   root.appendChild(screen);

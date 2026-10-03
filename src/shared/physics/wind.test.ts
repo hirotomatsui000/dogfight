@@ -49,13 +49,16 @@ describe('wind (revision 16)', () => {
     expect(field(0.3, 5).at(p, 12.5, new Vector3()).x).not.toBe(field(0.3, 6).at(p, 12.5, new Vector3()).x);
   });
 
-  it('gives each weather a westerly-ish wind, stronger and gustier in bad weather', () => {
-    for (const id of WEATHER_IDS) {
-      const w = WindField.forWeather(WEATHER[id], 99);
-      const from = w.settings.fromRad / DEG;
-      expect(from).toBeGreaterThanOrEqual(200);
-      expect(from).toBeLessThanOrEqual(340);
+  it('blows from anywhere round the compass across matches, stronger and gustier in bad weather', () => {
+    const quadrants = new Set<number>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const from = WindField.forWeather(WEATHER.clear, seed).settings.fromRad / DEG;
+      expect(from).toBeGreaterThanOrEqual(0);
+      expect(from).toBeLessThan(360);
+      quadrants.add(Math.floor(from / 90));
     }
+    expect(quadrants.size).toBe(4);
+    for (const id of WEATHER_IDS) expect(WindField.forWeather(WEATHER[id], 99).settings.surfaceMs).toBe(WEATHER[id].windMs);
     expect(WEATHER.rain.windMs).toBeGreaterThan(WEATHER.clear.windMs);
     expect(WEATHER.rain.gust).toBeGreaterThan(WEATHER.clear.gust);
   });

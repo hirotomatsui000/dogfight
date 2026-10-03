@@ -10,13 +10,19 @@ rebuilt after every push ([Publish as a website](#publish-as-a-website)).
 **Current milestone: M5 "Modes & polish"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
 "Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02: the game is
 single player against AI pilots and runs entirely in the browser.
+- **Campaign** (2026-10-03): nine missions over Lechovia, flown in order for either side. **Campaign** beside FLY
+  opens the list: pick USA or Russia, read the briefing (mode, time, weather, who you fly with and against, how to
+  win) and choose a jet (one is suggested). Clearing a mission opens the next, and the end screen goes straight on to
+  it with its briefing; a loss or a draw offers a retry. It starts with a 1 v 1 against a Rookie and ends with four
+  Aces a side in Team Objective at dusk, by way of a 2 v 3, a Strike, a night fight and a runway take-off in a storm.
+  Progress is kept in your browser for each side, and campaign matches also count in the Records.
 - **Fuel, wind and spins** (2026-10-02):
   - Every jet carries its real-world share of internal fuel and burns it with the throttle; the afterburner drinks
     about five times as much per unit of thrust. The jet gets lighter as it burns. The HUD shows `FUEL` above the
     throttle; at 20% it says `BINGO FUEL`, and an empty tank flames the engines out (`FLAMEOUT`): you glide. Respawning
     (or Free Flight's "fly from here") fills the tanks.
-  - The wind comes with the weather (light in clear skies, strong and gusty in rain), from the west-ish, stronger and
-    veering higher up. You fly in the moving air: the HUD shows ground speed (`GS`) and the wind under the altitude,
+  - The wind comes with the weather (light in clear skies, strong and gusty in rain), from a different direction each
+    match, stronger and veering higher up. You fly in the moving air: the HUD shows ground speed (`GS`) and the wind under the altitude,
     a headwind shortens the take-off run, bombs drift (the bomb sight allows for it), and smoke and contrails blow
     downwind. Training flies in still air.
   - Too slow and stalled, a jet can depart into a spin, especially if you roll there; it yaws round and falls at

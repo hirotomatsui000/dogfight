@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 17)
+# Contested Skies — Design Spec (revision 18)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -48,6 +48,9 @@
     `docs/superpowers/plans/2026-10-02-fuel-wind-spins.md`.
   - Revision 17 (2026-10-02): at the owner's request, career records kept in the browser (§15.5, §23): totals,
     personal bests, matches by mission and jet, the last ten matches; no account.
+  - Revision 18 (2026-10-03): at the owner's request, a single-player campaign of nine missions flown in order
+    (§13.6, §15.5). The wind now blows from any direction (§12.3): the front runs north–south, so the westerlies of
+    revision 16 handed the western team a tailwind every match.
 - **Owner:** Hiroto Matsui
 - **Working title:** Contested Skies (`contested-skies`)
 
@@ -637,8 +640,8 @@ The "Anvil" is an abstract, unguided free-fall bomb for the Strike mode (§13.1)
   white navigation lights with strobes on every jet.
 - Wind (revision 16): surface / 11 km speed and gust share per preset: Clear 3 / 15 m/s, 10%; Scattered 5 / 20, 15%;
   Broken 7 / 25, 20%; Overcast 9 / 28, 20%; Rain 12 / 32, 35%. The speed holds to 1 km, then rises to the upper-air
-  value at 11 km while the direction veers 30°. The direction it blows from is drawn from the match seed between 200°
-  and 340° (westerlies). Gusts are three smooth waves in space and time per axis (vertical at 40%), bounded by the gust
+  value at 11 km while the direction veers 30°. The direction it blows from is drawn from the match seed, anywhere
+  round the compass (revision 18; revision 16 drew westerlies between 200° and 340°, which favoured one team). Gusts are three smooth waves in space and time per axis (vertical at 40%), bounded by the gust
   share. Training, tests and the balance tournament fly in still air (`EnvironmentSettings.calm`). Smoke, fire and
   contrails drift with the wind; the clouds stay put.
 
@@ -764,6 +767,38 @@ and the player's jet decides the side: the Kestrel defends for the USA, the Kobc
   of an airfield.
 - **Target drones (offline):** four unarmed enemy jets on orbits 6 km round the player; a drone shot down is cleared
   after 2 s and replaced after 10 s; they follow the player to a new spawn. Weapons work only while they fly.
+
+### 13.6 Campaign (revision 18)
+
+Nine missions over Lechovia (`src/client/campaign/missions.ts`), flown in order for either side; each is an ordinary
+match of one of the four scoring modes with the world, sides, skills and score limit fixed by the mission. The clock
+stands still. Mission 1 is always open; clearing (winning) a mission opens the next. A draw does not clear.
+
+| # | Mission | Mode | World | Sides (player's side first) | Skills (opponents / wingmen) | Win |
+|---|---|---|---|---|---|---|
+| 1 | First Sortie | Dogfight | Day, clear | 1 v 1 | Rookie | first to 3 |
+| 2 | Two-Ship | Dogfight | Day, scattered | 2 v 2 | Rookie / Veteran | first to 5 |
+| 3 | The Lake District | Air Superiority | Dawn, broken | 2 v 2 | Veteran / Veteran | first to 120 |
+| 4 | Outnumbered | Dogfight | Dusk, scattered | 2 v 3 | Rookie / Veteran | first to 6 |
+| 5 | Strike Package | Strike (Test Range) | Day, clear | USA 2 v 1, Russia 1 v 1 | USA: Ace bomber; Russia: Veteran / Veteran | Strike rules |
+| 6 | Night Hunters | Dogfight | Night, clear | 3 v 3 | Veteran / Ace | first to 5 |
+| 7 | Eyes in the Sky | Team Objective | Day, overcast | 3 v 3 | USA: Rookie, Russia: Veteran / Veteran | first to 40 |
+| 8 | Storm Front | Air Superiority, runway start | Day, rain | 4 v 4 | Ace / Ace | first to 200 |
+| 9 | Last Light | Team Objective | Dusk, scattered | 4 v 4 | Ace / Ace | first to 60 |
+
+- **Sides:** a mission may give one side other numbers where the mode favours the other. Strike favours the bomber
+  as soon as it has a wingman (in bot play two Veteran defenders held 0 of 10 matches against two bombers), so the
+  Russian player bombs alone against one fighter and the American player with a wingman meets one Ace bomber; in
+  Strike each team has 4 aircraft per pilot of the larger side. Team Objective at 3 v 3 favours Russia (bot play:
+  about 70% Russian wins with the wind calm or blowing, probably the Russian jets' heavier Lance loads), so the
+  American player meets Rookies in mission 7.
+- **Tuning:** each mission was flown by bots with a Veteran in the player's seat, 10–12 seeds per side; every mission
+  is won by that stand-in 40–100% of the time on both sides, harder towards the end.
+- **Jets:** the briefing suggests a jet per side; the player may pick any of their side's four. After a win the next
+  mission flies with its own suggested jet, unless the player chose another one for the mission just won, which they
+  then keep.
+- **Progress** (`localStorage`, key `contested-skies:campaign`, read through a sanitizer): per side, per mission:
+  cleared, attempts, most kills in a cleared run, fewest deaths in a cleared run; and the side last flown for.
 
 ## 14. AI
 
@@ -983,6 +1018,16 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   (values under 1 never count). The end screen says "First match on record" the first time and lists every best a
   match beats ("New best · Most kills in a match: 7"). The title screen's **Records** link opens a sheet with all of
   it, and **Erase records** (two clicks) starts over. Quitting a match from the pause menu records nothing.
+- **Campaign (revision 18):** **Campaign** beside FLY opens a sheet with the side (each with "n of 9 cleared"), the
+  nine missions (Cleared, Next, Open or Locked; locked ones cannot be chosen) and the chosen mission's briefing: its
+  facts (mode; map, time, weather and a runway start; sides, wingmen's and opponents' skill; how it is won), the text,
+  the pilot's progress on it, and the side's four jets with the suggested one marked. A first campaign starts on the
+  side of the jet chosen on the title screen, later ones on the side last flown. The mission's title shows as a
+  banner for 4 s at the start. The end screen names the mission above the title and says **Mission complete**,
+  **Mission failed** or, after the last, **Campaign complete**; a first clear adds "Cleared on the first attempt · 3
+  of 9" (or "after n attempts"). After a win it shows the next mission's briefing, and the main button is **Next
+  mission** (straight into it); otherwise **Retry mission**, and **Fly it again** after the last. Campaign matches
+  count in the career records like any other.
 - **Settings** persist in `localStorage` (try/catch, defaults if unavailable). The settings screen (M1c), from the
   title screen and the pause menu, has five tabs: Controls (steering, mouse sensitivity 25–300%, invert), Keys
   (rebinding), Gamepad (status, assignments, calibration), Display (graphics, HUD color green/amber/white, HUD size

@@ -18,6 +18,10 @@ export interface MatchResult {
   detail: string;
   /** an extra line above the table (Strike: the targets destroyed) */
   note: string | null;
+  /** a small line above the title (campaign: which mission this was) */
+  kicker?: string;
+  /** the next campaign mission's briefing, above the buttons (revision 18) */
+  next?: { heading: string; text: string };
 }
 
 /** "Victory" / "Defeat" / "Draw" with the score, or with the reason in Strike, from the local team's point of view. */
@@ -83,6 +87,12 @@ export function showEndScreen(
   detail.className = 'subtitle';
   detail.textContent = result.detail;
   const parts: HTMLElement[] = [title, detail];
+  if (result.kicker) {
+    const kicker = document.createElement('p');
+    kicker.className = 'eyebrow result-kicker';
+    kicker.textContent = result.kicker;
+    parts.unshift(kicker);
+  }
   if (highlights.length > 0) {
     const list = document.createElement('ul');
     list.className = 'new-bests';
@@ -132,6 +142,17 @@ export function showEndScreen(
     parts.push(table, h, dl);
   } else {
     parts.push(table);
+  }
+  if (result.next) {
+    const next = document.createElement('section');
+    next.className = 'next-mission';
+    const h = document.createElement('h3');
+    h.className = 'eyebrow';
+    h.textContent = result.next.heading;
+    const text = document.createElement('p');
+    text.textContent = result.next.text;
+    next.append(h, text);
+    parts.push(next);
   }
   const again = document.createElement('button');
   again.type = 'button';
