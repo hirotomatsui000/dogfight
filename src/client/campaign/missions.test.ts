@@ -67,8 +67,8 @@ describe('campaign missions (revision 18)', () => {
     const strike = missionById('strike')!;
     expect(missionSetup(strike, 'usa')).toMatchObject({ allies: 2, enemies: 1, difficulty: 'ace' });
     expect(missionSetup(strike, 'russia')).toMatchObject({ allies: 1, enemies: 1, difficulty: 'veteran' });
-    expect(missionSetup(missionById('eyes-in-the-sky')!, 'usa').difficulty).toBe('rookie');
-    expect(missionSetup(missionById('eyes-in-the-sky')!, 'russia').difficulty).toBe('veteran');
+    expect(missionSetup(missionById('eyes-in-the-sky')!, 'russia').difficulty).toBe('ace');
+    expect(missionSetup(missionById('eyes-in-the-sky')!, 'usa').difficulty).toBe('veteran');
     expect(missionById('strike')!.briefing('usa')).not.toBe(missionById('strike')!.briefing('russia'));
   });
 });

@@ -3,14 +3,16 @@ import { FreeFlightMode } from './free-flight.ts';
 import type { GameMode, ModeId } from './mode.ts';
 import { StrikeMode, type StrikeOptions } from './strike.ts';
 import { TeamDeathmatchMode } from './team-deathmatch.ts';
-import { TeamObjectiveMode } from './team-objective.ts';
+import { TeamObjectiveMode, type TeamObjectiveOptions } from './team-objective.ts';
 import { TrainingMode } from './training.ts';
 
 export interface ModeOptions {
   /** Strike: aircraft per team */
   strike?: Partial<StrikeOptions>;
-  /** a lower score limit for the scoring modes (tests) */
+  /** a lower score limit for the scoring modes (tests, campaign) */
   scoreLimit?: number;
+  /** Team Objective: fighters per side (revision 19) */
+  teamObjective?: Pick<TeamObjectiveOptions, 'fighters'>;
 }
 
 /** A fresh mode by id for the World. */
@@ -22,7 +24,7 @@ export function createMode(id: ModeId, options: ModeOptions = {}): GameMode {
     case 'air-superiority':
       return new AirSuperiorityMode(limit);
     case 'team-objective':
-      return new TeamObjectiveMode(limit);
+      return new TeamObjectiveMode({ ...limit, ...options.teamObjective });
     case 'free-flight':
       return new FreeFlightMode();
     case 'strike':

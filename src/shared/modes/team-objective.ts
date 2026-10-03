@@ -7,15 +7,36 @@ import type { BotGoal, GameMode, ModeContext, ModeStatus, SentinelStatus, Suppor
 export interface TeamObjectiveOptions {
   scoreLimit: number;
   timeLimitS: number;
+  /** fighters on each side, players and bots, which set how sturdy the USA's Sentinels are */
+  fighters: Record<TeamId, number>;
 }
 
 /** Spec §13: first to 60, or the most after 15 minutes. */
-export const TEAM_OBJECTIVE_DEFAULTS: TeamObjectiveOptions = { scoreLimit: 60, timeLimitS: 900 };
+export const TEAM_OBJECTIVE_DEFAULTS: TeamObjectiveOptions = { scoreLimit: 60, timeLimitS: 900, fighters: { usa: 3, russia: 3 } };
 export const SENTINEL_POINTS = 20;
 export const DATALINK_DOWN_S = 60;
 export const SENTINEL_RETURN_S = 120;
 export const SENTINEL_ALTITUDE_M = 7000;
 export const SENTINEL_SPEED_MS = 150;
+/**
+ * Every fighter carries this many Lances here (revision 19). Lances wear the big, slow Sentinels down, so the jets'
+ * own loads (Russia's average 4.5 against the USA's 3.5) won about 70% of 3 v 3 bot matches for Russia; with one load
+ * the sides are even.
+ */
+export const TEAM_OBJECTIVE_LANCES = 4;
+/**
+ * Russia's fighters, tougher, with more flares and 30 mm guns, shoot Sentinels down faster than the USA's, and the
+ * more of them hunt, the more it tells: with 400 HP on both sides Russia won about 75% of 3 v 3 bot matches. So the
+ * USA's Sentinels get this many extra hit points per Russian fighter (revision 19): 450 in 1 v 1, 550 in 3 v 3, 600 in
+ * 4 v 4. Bot play then gave the USA 40–48% of the decided matches at every size from 1 v 1 to 4 v 4.
+ */
+export const USA_SENTINEL_HP_PER_ENEMY = 50;
+
+/** A Sentinel's hit points in a match with `russianFighters` fighters on the Russian side. */
+export function sentinelHitPoints(team: TeamId, russianFighters: number): number {
+  const base = sentinelFor(team).damage.hitPoints;
+  return team === 'usa' ? base + USA_SENTINEL_HP_PER_ENEMY * Math.max(0, russianFighters) : base;
+}
 /** Sentinels orbit this share of the combat radius behind the front, either side of the team's axis. */
 const BEHIND_SHARE = 0.6;
 const ASIDE_SHARE = 0.25;
@@ -85,6 +106,10 @@ export class TeamObjectiveMode implements GameMode {
     return 0;
   }
 
+  lanceLoad(): number {
+    return TEAM_OBJECTIVE_LANCES;
+  }
+
   canRespawn(): boolean {
     return true;
   }
@@ -93,7 +118,14 @@ export class TeamObjectiveMode implements GameMode {
     const out: SupportSpec[] = [];
     for (const team of ['usa', 'russia'] as const) {
       sentinelOrbits(map, team).forEach((orbit, i) => {
-        out.push({ team, aircraftId: sentinelFor(team).id, callsign: `Sentinel ${i + 1}`, orbit, respawnDelayS: SENTINEL_RETURN_S });
+        out.push({
+          team,
+          aircraftId: sentinelFor(team).id,
+          callsign: `Sentinel ${i + 1}`,
+          orbit,
+          respawnDelayS: SENTINEL_RETURN_S,
+          hitPoints: sentinelHitPoints(team, this.options.fighters.russia),
+        });
       });
     }
     return out;
@@ -146,7 +178,11 @@ export class TeamObjectiveMode implements GameMode {
    * Sentinel of the right side flying, a bot patrols.
    */
   botGoal(ctx: ModeContext, bot: AircraftEntity): BotGoal | null {
-    const escort = bot.id % ESCORT_EVERY === 0;
+    // Every third fighter of a team, counted among its own fighters (revision 19): counting aircraft ids gave the sides
+    // different numbers of escorts, and a lone 1 v 1 fighter escorted instead of hunting.
+    let place = 0;
+    for (const a of ctx.aircraftList()) if (a.team === bot.team && !a.support && a.spawnSlot < bot.spawnSlot) place++;
+    const escort = place % ESCORT_EVERY === ESCORT_EVERY - 1;
     const wanted = escort ? bot.team : opposingTeam(bot.team);
     let best: AircraftEntity | null = null;
     let bestD = Infinity;

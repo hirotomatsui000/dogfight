@@ -1,6 +1,7 @@
 import { Color, Quaternion, Vector2, Vector3 } from 'three';
 import { DIFFICULTIES } from '../shared/ai/difficulty.ts';
-import { listAircraft } from '../shared/data/aircraft/registry.ts';
+import { getAircraft, listAircraft, opposingTeam } from '../shared/data/aircraft/registry.ts';
+import type { TeamId } from '../shared/data/aircraft/types.ts';
 import type { MapId } from '../shared/data/maps/registry.ts';
 import { BOMB_ANVIL, CANNONS } from '../shared/data/weapons.ts';
 import { timeToImpact } from '../shared/map/ground-proximity.ts';
@@ -101,11 +102,19 @@ function showLoading(root: HTMLElement, text: string): HTMLElement {
 
 /**
  * The offline mode for the title screen's choices: Strike gives each side four aircraft per pilot of the larger side
- * (M5); a campaign mission may set its own score limit (revision 18).
+ * (M5); a campaign mission may set its own score limit (revision 18); Team Objective learns the fighters per side,
+ * which set how sturdy the USA's Sentinels are (revision 19).
  */
 function modeFor(options: StartOptions): GameMode {
-  const size = Math.max(1, options.teamSize ?? 1, options.enemies ?? 1);
-  return createMode(options.mission, { scoreLimit: options.scoreLimit, strike: { aircraftPerTeam: STRIKE_AIRCRAFT_PER_PILOT * size } });
+  const allies = Math.max(1, options.teamSize ?? 1);
+  const enemies = Math.max(1, options.enemies ?? allies);
+  const mine = getAircraft(options.aircraftId).team;
+  const fighters = { [mine]: allies, [opposingTeam(mine)]: enemies } as Record<TeamId, number>;
+  return createMode(options.mission, {
+    scoreLimit: options.scoreLimit,
+    strike: { aircraftPerTeam: STRIKE_AIRCRAFT_PER_PILOT * Math.max(allies, enemies) },
+    teamObjective: { fighters },
+  });
 }
 
 function deathText(cause: DeathCause, killer: string | null): string {

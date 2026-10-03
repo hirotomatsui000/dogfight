@@ -1,6 +1,6 @@
 # Credits
 
-Contested Skies uses these free-license assets and the owner's own aircraft models. The files live in
+Lechovia Skies uses these free-license assets and the owner's own aircraft models. The files live in
 `src/client/assets/`; `tools/fetch-assets.ts` records exactly how each photo was obtained, and
 `tools/prepare-models.ts` how each model was processed.
 

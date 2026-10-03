@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 /**
  * Social sites need an absolute URL for the preview image. Set SITE_URL (for example
- * https://hirotomatsui000.github.io/dogfight/) when building for a known address; without it the links stay relative
+ * https://hirotomatsui000.github.io/lechovia-skies/) when building for a known address; without it the links stay relative
  * to the page.
  */
 function siteUrl(): string {
@@ -15,7 +15,7 @@ function siteUrl(): string {
 const SINGLE_FILE_INLINE_LIMIT = 100_000_000;
 
 export default defineConfig(({ mode }) => ({
-  // Relative asset paths: the site works from any folder, such as GitHub Pages' /dogfight/.
+  // Relative asset paths: the site works from any folder, such as GitHub Pages' /lechovia-skies/.
   base: './',
   plugins: [{ name: 'site-url', transformIndexHtml: (html: string) => html.replaceAll('__SITE_URL__', siteUrl()) }],
   server: { port: 5173 },

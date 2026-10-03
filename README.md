@@ -1,15 +1,20 @@
-# Contested Skies
+# Lechovia Skies
 
 A browser-based flight-combat prototype. Two teams, **USA** and **Russia**, fly **fictional** fighters inspired by
 real aircraft over a fictional landscape inspired by Poland. This repository is being built in milestones (see
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
-**Play it:** https://hirotomatsui000.github.io/dogfight/ (desktop or laptop with a keyboard and mouse). The site is
-rebuilt after every push ([Publish as a website](#publish-as-a-website)).
+**Play it:** https://hirotomatsui000.github.io/lechovia-skies/ (desktop or laptop with a keyboard and mouse). The site
+is rebuilt after every push ([Publish as a website](#publish-as-a-website)). The game was called Contested Skies until
+2026-10-03; settings, records and campaign progress saved under that name carry over.
 
 **Current milestone: M5 "Modes & polish"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
 "Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02: the game is
 single player against AI pilots and runs entirely in the browser.
+- **Team Objective evened out** (2026-10-03): Russia used to win about three matches in four. Now every jet carries 4
+  Lances in this mode, the USA's Sentinels are sturdier the more Russian fighters there are, and the Sentinels fly
+  like radar planes (they used to spiral into the ground when running from a fighter). In bot play the sides now win
+  about equally from 1 v 1 to 4 v 4.
 - **Campaign** (2026-10-03): nine missions over Lechovia, flown in order for either side. **Campaign** beside FLY
   opens the list: pick USA or Russia, read the briefing (mode, time, weather, who you fly with and against, how to
   win) and choose a jet (one is suggested). Clearing a mission opens the next, and the end screen goes straight on to
@@ -35,7 +40,7 @@ single player against AI pilots and runs entirely in the browser.
     side with more jets inside takes a zone; each zone you own scores a point every 2 s. First to 300.
   - **Team Objective**: each side guards two slow **Sentinel** radar planes flown by the game. Shooting one down is
     worth 20 points and takes the other side's datalink down for 60 s; it comes back after 2 minutes. Every fighter
-    shot down is worth a point. First to 60.
+    shot down is worth a point. Every jet carries 4 Lances here. First to 60.
   - **Free Flight**: no enemies. From the pause menu set the time of day, the clock and the weather, and call up
     target drones; on the map (M) click anywhere to fly from there, or on an airfield to start on its runway.
   - Strike and the Training flight are still there.
@@ -224,7 +229,8 @@ jet, Ace bots, 100 seeded duels each, and fails if a pairing wins outside 35–6
 
 ## Publish as a website
 
-The game is published with GitHub Pages at https://hirotomatsui000.github.io/dogfight/. After every push to `main` or
+The game is published with GitHub Pages at https://hirotomatsui000.github.io/lechovia-skies/ (the last part of the
+address is the repository's name; it was `dogfight` until 2026-10-03). After every push to `main` or
 to a `claude/…` branch, the **Publish site** workflow (`.github/workflows/publish.yml`) runs the tests, builds the site
 and replaces the `gh-pages` branch with it, which GitHub Pages serves: the page changes a minute or two after the
 push. The latest push wins, whichever of those branches it went to. When the tests fail nothing is published; the run

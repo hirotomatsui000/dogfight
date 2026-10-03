@@ -59,12 +59,20 @@ export interface AddAircraftOptions {
   start?: SpawnStart;
 }
 
-/** A support aircraft starts west of its orbit's centre heading north, so the right-hand orbit carries it round. */
-function supportFlightState(spec: SupportSpec, physics: AircraftPhysics): FlightState {
+/**
+ * A support aircraft starts on the point of its orbit farthest from `centre` (the middle of the combat area), heading
+ * along its right-hand orbit, so both teams' Sentinels start alike (revision 19; they used to start west of the orbit
+ * centre, which put one team's 16 km nearer the front).
+ */
+function supportFlightState(spec: SupportSpec, physics: AircraftPhysics, centre: { x: number; z: number }): FlightState {
   const o = spec.orbit;
+  const away = Math.hypot(o.x - centre.x, o.z - centre.z);
+  const rx = away > 1 ? (o.x - centre.x) / away : -1;
+  const rz = away > 1 ? (o.z - centre.z) / away : 0;
+  // A right-hand orbit keeps its centre on the right: the path runs along (-rz, rx).
   return createFlightState({
-    position: new Vector3(o.x - o.radiusM, o.altitudeM, o.z),
-    headingRad: 0,
+    position: new Vector3(o.x + rx * o.radiusM, o.altitudeM, o.z + rz * o.radiusM),
+    headingRad: Math.atan2(-rz, -rx),
     speed: o.speedMs,
     throttle: 0.6,
     alphaRad: trimAlpha(physics, o.speedMs, atmosphere(o.altitudeM).density),
@@ -232,6 +240,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       flight: this.spawnState(opts.team, slot, config.physics, opts.start ?? 'air'),
       spawnSlot: slot,
       bombLoad: this.mode.bombLoad(opts.team),
+      lanceLoad: this.mode.lanceLoad?.() ?? null,
       start: opts.start ?? 'air',
     });
     this.aircraft.set(entity.id, entity);
@@ -273,7 +282,8 @@ export class World implements ModeDirector, CombatHost, BotWorld {
 
   /** A mode-flown support aircraft (a Sentinel): it orbits, runs from fighters and returns after its own delay. */
   addSupport(spec: SupportSpec): AircraftEntity {
-    const config = getAircraft(spec.aircraftId);
+    const base = getAircraft(spec.aircraftId);
+    const config = spec.hitPoints === undefined ? base : { ...base, damage: { ...base.damage, hitPoints: spec.hitPoints } };
     if (config.team !== spec.team) throw new Error(`${config.name} does not fly for team ${spec.team}`);
     const entity = createAircraftEntity({
       id: this.nextId++,
@@ -281,7 +291,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       team: spec.team,
       config,
       isBot: true,
-      flight: supportFlightState(spec, config.physics),
+      flight: supportFlightState(spec, config.physics, this.map.combatArea),
       spawnSlot: -1,
       bombLoad: 0,
       support: spec,
@@ -461,7 +471,7 @@ export class World implements ModeDirector, CombatHost, BotWorld {
       a.config = getAircraft(a.nextAircraftId);
       a.nextAircraftId = null;
     }
-    a.flight = a.support ? supportFlightState(a.support, a.config.physics) : this.spawnState(a.team, a.spawnSlot, a.config.physics, a.start);
+    a.flight = a.support ? supportFlightState(a.support, a.config.physics, this.map.combatArea) : this.spawnState(a.team, a.spawnSlot, a.config.physics, a.start);
     a.alive = true;
     a.spawnGen++;
     a.respawnAtTick = -1;

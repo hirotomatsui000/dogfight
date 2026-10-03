@@ -68,5 +68,5 @@ export function objectiveLines(o: ObjectiveStatus, mine: TeamId): [text: string,
 /** The rules of a mission in one line, for the title screen (M5). */
 export const MISSION_RULES: Readonly<Record<'air-superiority' | 'team-objective', string>> = {
   'air-superiority': 'Take and hold zones A, B and C: each zone you own scores a point every 2 s. First to 300.',
-  'team-objective': 'Guard your two Sentinel radar planes, shoot down theirs: +20 each, and their datalink fails for 60 s. First to 60.',
+  'team-objective': 'Guard your two Sentinel radar planes, shoot down theirs: +20 each, and their datalink fails for 60 s. Every jet carries 4 Lances. First to 60.',
 };

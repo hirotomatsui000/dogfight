@@ -56,6 +56,8 @@ export interface AircraftEntity extends CreditRecord {
   lastBombTick: number;
   /** bombs every new aircraft of this one carries in this mode (Strike attackers) */
   readonly bombLoad: number;
+  /** Lances every new aircraft of this one carries when the mode sets one load for all (Team Objective); null: the jet's own */
+  readonly lanceLoad: number | null;
   /** enemies this aircraft currently sees or has on radar */
   readonly contacts: Contact[];
   /** designated target */
@@ -86,6 +88,8 @@ export interface NewAircraft {
   flight: FlightState;
   spawnSlot: number;
   bombLoad: number;
+  /** see AircraftEntity.lanceLoad; the jet's own load when left out */
+  lanceLoad?: number | null;
   start?: SpawnStart;
   support?: SupportSpec;
 }
@@ -116,6 +120,7 @@ export function createAircraftEntity(n: NewAircraft): AircraftEntity {
     lastCountermeasureTick: NEVER,
     lastBombTick: NEVER,
     bombLoad: n.bombLoad,
+    lanceLoad: n.lanceLoad ?? null,
     contacts: [],
     targetId: null,
     seeker: createSeeker(),
@@ -141,7 +146,7 @@ export function resetForSpawn(a: AircraftEntity): void {
   a.hp = a.config.damage.hitPoints;
   a.stores.cannonRounds = s.cannonRounds;
   a.stores.srm = s.srm;
-  a.stores.mrm = s.mrm;
+  a.stores.mrm = a.lanceLoad ?? s.mrm;
   a.stores.countermeasures = s.countermeasures;
   a.stores.bombs = a.bombLoad;
   a.stores.fuelKg = a.config.physics.fuelKg;

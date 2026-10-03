@@ -105,6 +105,8 @@ export interface SupportSpec {
   callsign: string;
   orbit: { x: number; z: number; radiusM: number; altitudeM: number; speedMs: number };
   respawnDelayS: number;
+  /** hit points instead of the aircraft's own (Team Objective, revision 19) */
+  hitPoints?: number;
 }
 
 /** Where a bot should be when it has nothing to fight (M5): a point to fly to and circle at. */
@@ -162,6 +164,8 @@ export interface GameMode {
   groundTargets(map: MapDefinition): readonly GroundTargetSpec[];
   /** Bombs on each new aircraft of a team (Strike attackers); 0 elsewhere. */
   bombLoad(team: TeamId): number;
+  /** Lances on every new fighter when the mode sets one load for all (Team Objective); each jet's own when left out. */
+  lanceLoad?(): number;
   /** False once a team has no aircraft left (Strike). */
   canRespawn(team: TeamId): boolean;
   onAircraftDestroyed(ctx: ModeContext, victim: AircraftEntity, killer: AircraftEntity | null, cause: DeathCause): void;

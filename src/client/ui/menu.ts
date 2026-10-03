@@ -195,11 +195,11 @@ function worldGroup(initial: WorldChoice, onChange: (w: WorldChoice) => void): {
 
 function titleLockup(): HTMLHeadingElement {
   const h1 = el('h1', 'brand-title');
-  h1.setAttribute('aria-label', 'Contested Skies');
+  h1.setAttribute('aria-label', 'Lechovia Skies');
   const kicker = el('span', 'brand-kicker');
   kicker.setAttribute('aria-hidden', 'true');
   // One span per letter so the small word can be spread exactly across the width of the big one.
-  for (const ch of 'CONTESTED') kicker.appendChild(el('span', undefined, ch));
+  for (const ch of 'LECHOVIA') kicker.appendChild(el('span', undefined, ch));
   const word = el('span', 'brand-word', 'SKIES');
   word.setAttribute('aria-hidden', 'true');
   h1.append(kicker, word);

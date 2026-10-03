@@ -4,7 +4,8 @@ import { kestrel } from '../data/aircraft/kestrel.ts';
 import { DEG, RAD } from '../math/units.ts';
 import { neutralInput } from '../physics/controls.ts';
 import { createFlightState, type FlightState, stepFlight } from '../physics/flight-model.ts';
-import { steerToward } from './steering.ts';
+import { sentinelFor } from '../data/aircraft/registry.ts';
+import { steerLevel, steerToward } from './steering.ts';
 
 const northbound = () => createFlightState({ position: new Vector3(0, 3000, 0), headingRad: 0, speed: 200, throttle: 1 });
 const dirFrom = (headingDeg: number, elevationDeg: number) => {
@@ -90,5 +91,40 @@ describe('steerToward (how the turn feels)', () => {
     });
     expect(reached).toBeGreaterThan(0);
     expect(reached).toBeLessThan(2.5);
+  });
+});
+
+describe('steerLevel (revision 19)', () => {
+  const sentinel = sentinelFor('usa').physics;
+  const opts = { maxBankRad: 40 * DEG, gMax: sentinel.gMax, gMin: sentinel.gMin };
+  const out = () => ({ pitch: 0, roll: 0, yaw: 0 });
+
+  it('turns a heavy aircraft round without passing its bank limit or losing height', () => {
+    const s = createFlightState({ position: new Vector3(0, 7000, 0), headingRad: 0, speed: 180, throttle: 0.9 });
+    const input = neutralInput(0.9);
+    const steer = out();
+    const up = new Vector3();
+    let maxBank = 0;
+    for (let t = 0; t < 120 * 60; t++) {
+      steerLevel(s, Math.PI, 0, opts, steer);
+      input.pitch = steer.pitch;
+      input.roll = steer.roll;
+      input.yaw = steer.yaw;
+      stepFlight(s, input, sentinel, 1 / 60);
+      up.set(0, 1, 0).applyQuaternion(s.quat);
+      maxBank = Math.max(maxBank, Math.acos(Math.min(1, up.y)));
+      expect(Math.abs(s.pos.y - 7000)).toBeLessThan(400);
+    }
+    expect(maxBank).toBeLessThan(45 * DEG);
+    // Heading south now.
+    expect(Math.abs(Math.atan2(s.vel.x, -s.vel.z)) * RAD).toBeGreaterThan(170);
+  });
+
+  it('levels the wings before pulling when banked past 75°', () => {
+    const s = northbound();
+    s.quat.setFromEuler(new Euler(0, 0, -80 * DEG, 'YXZ'));
+    const o = steerLevel(s, 0, 0, opts, out());
+    expect(o.pitch).toBe(0);
+    expect(Math.abs(o.roll)).toBeGreaterThan(0.5);
   });
 });

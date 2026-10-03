@@ -7,7 +7,16 @@ import { type ControlInput, neutralInput } from '../physics/controls.ts';
 import { headingRad } from '../physics/flight-model.ts';
 import type { AircraftEntity } from '../world/entities.ts';
 import { TICK_RATE, World } from '../world/world.ts';
-import { DATALINK_DOWN_S, SENTINEL_ALTITUDE_M, SENTINEL_RETURN_S, sentinelOrbits, TeamObjectiveMode } from './team-objective.ts';
+import { createMode } from './registry.ts';
+import {
+  DATALINK_DOWN_S,
+  SENTINEL_ALTITUDE_M,
+  SENTINEL_RETURN_S,
+  sentinelHitPoints,
+  sentinelOrbits,
+  TEAM_OBJECTIVE_LANCES,
+  TeamObjectiveMode,
+} from './team-objective.ts';
 
 const map = createTestRange(1);
 const terrain = buildTerrain(map);
@@ -39,7 +48,8 @@ describe('Sentinels in the World', () => {
     const w = newWorld();
     const list = sentinels(w);
     expect(list.map((s) => s.team).sort()).toEqual(['russia', 'russia', 'usa', 'usa']);
-    expect(list.every((s) => s.isBot && s.config.support && s.hp === 400)).toBe(true);
+    // Three fighters a side by default: the USA's Sentinels are sturdier (revision 19).
+    expect(list.every((s) => s.isBot && s.config.support && s.hp === (s.team === 'usa' ? 550 : 400))).toBe(true);
     run(w, 120 * TICK_RATE);
     for (const s of list) {
       const o = s.support!.orbit;
@@ -105,13 +115,79 @@ describe('Sentinels in the World', () => {
     expect(mode.status(w)).toMatchObject({ scores: { usa: 22, russia: 0 }, winner: 'usa' });
   });
 
-  it('sends most bots after the enemy Sentinels and some to guard their own', () => {
-    const mode = new TeamObjectiveMode();
-    const w = newWorld(mode);
-    const goals = [0, 1, 2].map((i) => mode.botGoal(w, { id: 30 + i, team: 'usa', flight: { pos: new Vector3() } } as unknown as AircraftEntity));
-    const near = (g: (typeof goals)[number], team: 'usa' | 'russia') => sentinels(w).some((s) => s.team === team && g && Math.hypot(s.flight.pos.x - g.x, s.flight.pos.z - g.z) < 1);
-    expect(goals.filter((g) => near(g, 'russia'))).toHaveLength(2);
-    expect(goals.filter((g) => near(g, 'usa'))).toHaveLength(1);
+  it('sends most bots after the enemy Sentinels and every third fighter of a team to guard its own', () => {
+    const guards = (perSide: number) => {
+      const mode = new TeamObjectiveMode();
+      const w = newWorld(mode);
+      const fighters: AircraftEntity[] = [];
+      for (const team of ['usa', 'russia'] as const)
+        for (let i = 0; i < perSide; i++) fighters.push(w.addAircraft({ callsign: `${team}${i}`, team, aircraftId: team === 'usa' ? 'condor' : 'sapsan' }));
+      const near = (g: ReturnType<TeamObjectiveMode['botGoal']>, team: 'usa' | 'russia') =>
+        sentinels(w).some((s) => s.team === team && g !== null && Math.hypot(s.flight.pos.x - g.x, s.flight.pos.z - g.z) < 1);
+      const count = (team: 'usa' | 'russia') => fighters.filter((f) => f.team === team && near(mode.botGoal(w, f), team)).length;
+      const hunters = (team: 'usa' | 'russia') => fighters.filter((f) => f.team === team && near(mode.botGoal(w, f), team === 'usa' ? 'russia' : 'usa')).length;
+      return { usa: count('usa'), russia: count('russia'), hunters: hunters('usa') + hunters('russia') };
+    };
+    // A lone fighter hunts; both sides always guard with as many fighters (counting ids gave them different numbers).
+    expect(guards(1)).toEqual({ usa: 0, russia: 0, hunters: 2 });
+    expect(guards(2)).toEqual({ usa: 0, russia: 0, hunters: 4 });
+    expect(guards(3)).toEqual({ usa: 1, russia: 1, hunters: 4 });
+    expect(guards(4)).toEqual({ usa: 1, russia: 1, hunters: 6 });
+  });
+
+  it('makes the USA Sentinels sturdier the more Russian fighters there are', () => {
+    expect([1, 2, 3, 4].map((n) => sentinelHitPoints('usa', n))).toEqual([450, 500, 550, 600]);
+    expect(sentinelHitPoints('russia', 4)).toBe(400);
+    const w = new World({ map, terrain, mode: createMode('team-objective', { teamObjective: { fighters: { usa: 1, russia: 4 } } }), seed: 3 });
+    for (const s of sentinels(w)) {
+      expect(s.hp).toBe(s.team === 'usa' ? 600 : 400);
+      expect(s.config.damage.hitPoints).toBe(s.hp);
+    }
+  });
+
+  it('arms every fighter with the same Lances, whatever its own load', () => {
+    const w = newWorld();
+    const sapsan = w.addAircraft({ callsign: 'S', team: 'russia', aircraftId: 'sapsan' });
+    const kestrel = w.addAircraft({ callsign: 'K', team: 'usa', aircraftId: 'kestrel' });
+    expect([sapsan.stores.mrm, kestrel.stores.mrm]).toEqual([TEAM_OBJECTIVE_LANCES, TEAM_OBJECTIVE_LANCES]);
+    expect(sapsan.config.stores.mrm).toBe(6);
+    // Other modes keep each jet's own load.
+    const tdm = new World({ map, terrain, mode: createMode('team-deathmatch'), seed: 3 });
+    expect(tdm.addAircraft({ callsign: 'S', team: 'russia', aircraftId: 'sapsan' }).stores.mrm).toBe(6);
+  });
+
+  it('starts every Sentinel on the far side of its orbit from the middle, so both teams start alike', () => {
+    const w = newWorld();
+    const c = map.combatArea;
+    for (const s of sentinels(w)) {
+      const o = s.support!.orbit;
+      expect(Math.hypot(s.flight.pos.x - c.x, s.flight.pos.z - c.z)).toBeCloseTo(Math.hypot(o.x - c.x, o.z - c.z) + o.radiusM, 0);
+    }
+    const [u, r] = ['usa', 'russia'].map((t) => sentinels(w).filter((s) => s.team === t).map((s) => Math.hypot(s.flight.pos.x - c.x, s.flight.pos.z - c.z)));
+    expect(Math.min(...u)).toBeCloseTo(Math.min(...r), 0);
+  });
+
+  it('runs from a fighter in a level, bank-limited turn instead of spiralling into the ground', () => {
+    const w = newWorld();
+    const target = sentinels(w).find((s) => s.team === 'russia')!;
+    const hunter = w.addAircraft({ callsign: 'H', team: 'usa', aircraftId: 'kestrel' });
+    let lowest = Infinity;
+    let steepest = 0;
+    const up = new Vector3();
+    for (let t = 0; t < 90 * TICK_RATE; t++) {
+      // A fighter sitting 6 km off its nose keeps it running the whole time.
+      const f = target.flight;
+      const ahead = new Vector3(0, 0, -1).applyQuaternion(f.quat).setY(0).normalize();
+      hunter.flight.pos.set(f.pos.x + ahead.x * 6000, f.pos.y, f.pos.z + ahead.z * 6000);
+      hunter.flight.vel.set(0, 0, 0);
+      w.step(new Map([[hunter.id, neutralInput(0.8)]]));
+      lowest = Math.min(lowest, f.pos.y);
+      up.set(0, 1, 0).applyQuaternion(f.quat);
+      steepest = Math.max(steepest, Math.acos(Math.min(1, up.y)));
+    }
+    expect(target.alive).toBe(true);
+    expect(lowest).toBeGreaterThan(SENTINEL_ALTITUDE_M - 800);
+    expect(steepest).toBeLessThan(55 * DEG);
   });
 });
 

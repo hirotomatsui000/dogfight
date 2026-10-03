@@ -182,11 +182,12 @@ export const CAMPAIGN: readonly CampaignMission[] = [
     allies: 3,
     enemies: 3,
     difficulty: 'veteran',
-    wingmenDifficulty: 'veteran',
+    wingmenDifficulty: 'ace',
     scoreLimit: 40,
-    jet: { usa: 'shade', russia: 'prizrak' },
-    // Team Objective favours the Russian jets' heavier missile load: the USA side meets rookies.
-    sides: { usa: { difficulty: 'rookie' } },
+    // The Tempest's long bursts suit Sentinel hunting best of the USA's jets.
+    jet: { usa: 'tempest', russia: 'prizrak' },
+    // With these two jets in the lead, a Russian pilot needs Ace opponents for the same fight (revision 19).
+    sides: { russia: { difficulty: 'ace' } },
   },
   {
     id: 'storm-front',

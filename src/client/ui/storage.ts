@@ -1,3 +1,4 @@
+// The game's first name (revision 19 renamed it Lechovia Skies): kept so settings, records and campaign progress survive.
 const PREFIX = 'contested-skies:';
 
 /** Per-browser convenience settings. Storage may be unavailable (private mode, blocked): always fall back. */

@@ -65,6 +65,11 @@ const MIN_IMPACT_JUDGEMENT = 0.3;
 /** Break away from a target this close that is still closing fast, instead of flying into it. */
 const COLLISION_BREAK_RANGE_M = 350;
 const COLLISION_BREAK_CLOSURE_MS = 100;
+/**
+ * A Sentinel is slow and 30 m across: a bot creeping up behind it at low closure flew into it (about 1.5 times a
+ * match). Inside this range any closure breaks off (revision 19).
+ */
+const SUPPORT_BREAK_RANGE_M = 200;
 /** Strike (spec §14): bombing runs fly this high above the target, just below afterburner. */
 const RUN_AGL_M = 1500;
 const RUN_THROTTLE = 0.88;
@@ -361,7 +366,7 @@ export class BotPilot {
     this.toTarget.subVectors(this.tPos, f.pos).normalize();
     const closure = -this.rel.subVectors(this.tVel, f.vel).dot(this.toTarget);
     out.airbrake = range < 600 && closure > 80;
-    if (range < COLLISION_BREAK_RANGE_M && closure > COLLISION_BREAK_CLOSURE_MS) {
+    if ((range < COLLISION_BREAK_RANGE_M && closure > COLLISION_BREAK_CLOSURE_MS) || (target.support && range < SUPPORT_BREAK_RANGE_M && closure > 0)) {
       this.desired.copy(f.vel).normalize().sub(this.toTarget).normalize();
       this.fly(f, this.desired, 1, 1, out);
       return;

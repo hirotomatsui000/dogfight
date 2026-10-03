@@ -2,13 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "contested-skies-dev",
+      "name": "lechovia-skies-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
     },
     {
-      "name": "contested-skies-single",
+      "name": "lechovia-skies-single",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "4173", "--directory", "dist-single"],
       "port": 4173

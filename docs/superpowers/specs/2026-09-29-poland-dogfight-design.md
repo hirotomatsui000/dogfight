@@ -1,4 +1,4 @@
-# Contested Skies — Design Spec (revision 18)
+# Lechovia Skies — Design Spec (revision 19)
 
 - **Date:** 2026-09-29
 - **Status:** Approved.
@@ -51,8 +51,14 @@
   - Revision 18 (2026-10-03): at the owner's request, a single-player campaign of nine missions flown in order
     (§13.6, §15.5). The wind now blows from any direction (§12.3): the front runs north–south, so the westerlies of
     revision 16 handed the western team a tailwind every match.
+  - Revision 19 (2026-10-03): at the owner's request the game is renamed **Lechovia Skies** (first published as
+    Contested Skies; browser storage keeps the old `contested-skies:` prefix so saved data survives), and the site
+    moves to https://hirotomatsui000.github.io/lechovia-skies/ once the repository is renamed (§24). Team Objective is
+    evened out between the sides (§13.4, §14): Sentinels run in a level, bank-limited turn (they used to spiral into the
+    ground), start alike, lean inward at the edge; every third fighter of a team escorts, counted within the team; bots
+    break off near a Sentinel; every fighter carries 4 Lances; the USA's Sentinels get 50 HP per Russian fighter.
 - **Owner:** Hiroto Matsui
-- **Working title:** Contested Skies (`contested-skies`)
+- **Title:** Lechovia Skies (`lechovia-skies`); the working title until revision 19 was Contested Skies.
 
 ## 1. Summary
 
@@ -680,7 +686,7 @@ All modes implement `GameMode`: setup, per-tick update, scoring on events, spawn
 | **Free Flight** | No scoring or enemies (optional passive AI targets); spawn anywhere; time-of-day and weather controls | M1 |
 | **Team Deathmatch** | +1 per enemy kill; each death of a team's aircraft gives the other team +1; first to 15 or most after 10 min | M1 (vs AI), M2 (online) |
 | **Air Superiority** | Three capture zones (cylinders, 4 km radius, 1–7 km altitude) along the front. A zone's capture progress moves toward the team with more aircraft inside (rate ∝ numeric advantage, 10 s to capture with +1). Each owned zone gives +1 point every 2 s. First to 300 or most after 12 min. Details in §13.3 | M5 |
-| **Team Objective** | Each team protects two AI-flown high-value "Sentinel" radar aircraft (slow, 400 HP) orbiting behind its lines. Destroying one gives +20 and cuts the enemy team's datalink for 60 s; kills give +1; destroyed Sentinels return after 120 s. First to 60 or most after 15 min. Details in §13.4 | M5 |
+| **Team Objective** | Each team protects two AI-flown high-value "Sentinel" radar aircraft (slow, 400 HP; the USA's sturdier, §13.4) orbiting behind its lines. Destroying one gives +20 and cuts the enemy team's datalink for 60 s; kills give +1; destroyed Sentinels return after 120 s. First to 60 or most after 15 min. Details in §13.4 | M5 |
 | **Strike** | Russia must destroy two of three ground targets; the USA must hold them for 9 min. 4 aircraft per team. Details in §13.1 | M1d (vs AI) |
 | **Training** | A guided first flight in four lessons; no score, cannot be lost. Details in §13.2 | M1c |
 
@@ -748,9 +754,19 @@ and the player's jet decides the side: the Kestrel defends for the USA, the Kobc
 - **Sentinels:** two per team, 0.6 × the combat radius behind the front on the team's side and a quarter radius either
   side of its axis, orbiting (radius 0.15 × the combat radius, at most 8 km) at 7,000 m and 150 m/s. A fictional
   four-engine radar aircraft: 60 t, 400 HP, a 16 m hit radius, a 150 km all-round radar, 60 countermeasure salvos, no
-  weapons; never offered to pilots or bots and outside the balance tournament.
+  weapons; never offered to pilots or bots and outside the balance tournament. Each starts (and returns) on the point
+  of its orbit farthest from the middle of the combat area (revision 19; before, both teams' started west of the orbit
+  centre, one team's 16 km nearer the front).
 - **Sentinel pilot:** flies its orbit; turns away from the nearest enemy fighter within 18 km at full power and its
-  orbit height (keeping inside 0.8 × the combat radius); releases countermeasures when a missile is under 3 s away.
+  orbit height, in a turn of at most 40° of bank that holds its height (revision 19: the fighter-style roll-and-pull
+  spiralled it into the ground, half of all Sentinel losses); keeps inside 0.7 × the combat radius, leaning inward
+  beyond it; releases countermeasures when a missile is under 3 s away.
+- **Balance (revision 19):** Russia won about 75% of 3 v 3 bot matches. Identical jets on both sides gave an even
+  mode, so the rosters made the difference: the Russian jets' Lance loads (4.5 a jet against 3.5), and their toughness,
+  flares and 30 mm guns, which shoot Sentinels down faster the more fighters hunt. So every fighter in Team Objective
+  carries 4 Lances (a mode rule, like Strike's bombs), and the USA's Sentinels have 400 + 50 HP per Russian fighter
+  (450 in 1 v 1, 550 in 3 v 3, 600 in 4 v 4; the game passes the fighters per side to the mode). Bot play, Veterans
+  with random jets: the USA won 11–14 (1 v 1, 15 draws), 16–24 (2 v 2), 35–42 (3 v 3, 80 matches) and 19–21 (4 v 4).
 - **Scoring:** a Sentinel shot down gives the other team +20 and takes its own team's datalink down for 60 s; it
   returns at its orbit after 120 s. Every death of a fighter gives the other team +1. First to 60, or the higher
   score after 15 minutes.
@@ -782,16 +798,16 @@ stands still. Mission 1 is always open; clearing (winning) a mission opens the n
 | 4 | Outnumbered | Dogfight | Dusk, scattered | 2 v 3 | Rookie / Veteran | first to 6 |
 | 5 | Strike Package | Strike (Test Range) | Day, clear | USA 2 v 1, Russia 1 v 1 | USA: Ace bomber; Russia: Veteran / Veteran | Strike rules |
 | 6 | Night Hunters | Dogfight | Night, clear | 3 v 3 | Veteran / Ace | first to 5 |
-| 7 | Eyes in the Sky | Team Objective | Day, overcast | 3 v 3 | USA: Rookie, Russia: Veteran / Veteran | first to 40 |
+| 7 | Eyes in the Sky | Team Objective | Day, overcast | 3 v 3 | USA: Veteran, Russia: Ace / Ace | first to 40 |
 | 8 | Storm Front | Air Superiority, runway start | Day, rain | 4 v 4 | Ace / Ace | first to 200 |
 | 9 | Last Light | Team Objective | Dusk, scattered | 4 v 4 | Ace / Ace | first to 60 |
 
 - **Sides:** a mission may give one side other numbers where the mode favours the other. Strike favours the bomber
   as soon as it has a wingman (in bot play two Veteran defenders held 0 of 10 matches against two bombers), so the
   Russian player bombs alone against one fighter and the American player with a wingman meets one Ace bomber; in
-  Strike each team has 4 aircraft per pilot of the larger side. Team Objective at 3 v 3 favours Russia (bot play:
-  about 70% Russian wins with the wind calm or blowing, probably the Russian jets' heavier Lance loads), so the
-  American player meets Rookies in mission 7.
+  Strike each team has 4 aircraft per pilot of the larger side. In mission 7 the suggested jets lead (Tempest for
+  the USA, Prizrak for Russia): the Russian player meets Aces for the same fight (revision 19; before Team Objective
+  was evened out, the American player met Rookies).
 - **Tuning:** each mission was flown by bots with a Veteran in the player's seat, 10–12 seeds per side; every mission
   is won by that stand-in 40–100% of the time on both sides, harder towards the end.
 - **Jets:** the briefing suggests a jet per side; the player may pick any of their side's four. After a win the next
@@ -838,7 +854,10 @@ stands still. Mission 1 is always open; clearing (winning) a mission opens the n
 - **Mode-specific AI:** Sentinel aircraft (Team Objective) fly orbits and flee threats; bots contest zones in Air
   Superiority. As built (M5): a mode gives each bot a goal. In Air Superiority it is a zone its side does not own (or
   one the enemy is in), spread over the candidates by bot id, circled at 4,000 m inside the zone; in Team Objective
-  two bots in three hunt the nearest enemy Sentinel and one escorts its own. With a goal, a bot fights enemy fighters
+  two bots in three hunt the nearest enemy Sentinel and every third fighter of a team escorts its own (counted among
+  the team's fighters since revision 19: counting aircraft ids gave the sides different numbers of escorts, and a lone
+  1 v 1 fighter escorted). A bot closing on a Sentinel breaks off inside 200 m (revision 19; slow, 30 m wide, it was
+  rammed about 1.5 times a match). With a goal, a bot fights enemy fighters
   only within 12 km of itself and near the goal (within its radius + 4 km) or on its tail within 2.5 km; an enemy
   Sentinel within 25 km comes first, and the bot steps its designation onto it. Otherwise it flies to the goal and
   circles there. Over 4v4 bot matches on Lechovia both modes run to a close finish.
@@ -1212,7 +1231,7 @@ its milestone.
 | Hardware range | Low/Medium/High graphics presets (pixel ratio, texture size, draw distance, effects), chosen automatically from the measured frame rate and changeable in settings | M1c |
 | Loading | A loading progress bar. Once assets pass about 5 MB, publish the multi-file build (`dist/`) instead of one HTML file so browsers cache and load pieces in parallel | M1c (progress), M2 (multi-file) |
 | Sharing | A title screen with a Play button over a live 3D background (M1b); page title, description, social-preview image and icon (M1c) | M1b, M1c |
-| Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle. (Revision 13: Netlify is linked to the repository and builds the multi-file site on every push that changes the page, per `netlify.toml`; the one-file build remains for hand deploys.) (Revision 14: no server; GitHub Pages serves the multi-file site from the `gh-pages` branch, which `.github/workflows/publish.yml` rebuilds after the tests pass on every push to `main` or a `claude/…` branch, at https://hirotomatsui000.github.io/dogfight/) | M2 |
+| Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle. (Revision 13: Netlify is linked to the repository and builds the multi-file site on every push that changes the page, per `netlify.toml`; the one-file build remains for hand deploys.) (Revision 14: no server; GitHub Pages serves the multi-file site from the `gh-pages` branch, which `.github/workflows/publish.yml` rebuilds after the tests pass on every push to `main` or a `claude/…` branch, at https://hirotomatsui000.github.io/dogfight/; revision 19: https://hirotomatsui000.github.io/lechovia-skies/ once the repository is renamed `lechovia-skies`) | M2 |
 | Joining | An invite link per room, and "Quick play" that joins the busiest room. Bots fill empty seats so one human plus bots is a full match. (Removed in revision 14) | M2 |
 | Safety | Server authority for all hits (§7); callsign filter; preset quick-chat messages only; rate limits; a short privacy note (no accounts, no tracking) | M2 |
 | Updates | A page/server version check that asks players to reload; browser error reporting; a server health check; one automated browser smoke test (load the site, fly 10 s) before each deploy. (Revision 14: all removed with the server; the publish workflow runs the unit tests before each deploy) | M2 |
