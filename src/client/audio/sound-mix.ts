@@ -1,28 +1,21 @@
-import { AFTERBURNER_THROTTLE } from '../../shared/data/weapons.ts';
 import { clamp } from '../../shared/math/units.ts';
 import type { SeekerMode } from '../../shared/targeting/ir-seeker.ts';
 import type { RadarLockMode } from '../../shared/targeting/radar-lock.ts';
 
-export interface EngineMix {
-  engineHz: number;
-  engineGain: number;
-  afterburnerGain: number;
+export interface WindMix {
   windHz: number;
   windGain: number;
 }
 
-const SILENT: EngineMix = { engineHz: 55, engineGain: 0, afterburnerGain: 0, windHz: 300, windGain: 0 };
+const SILENT: WindMix = { windHz: 300, windGain: 0 };
 
-/** Engine, afterburner and wind loudness from the throttle and airspeed. */
-export function engineMix(throttle: number, airspeedMs: number, alive: boolean): EngineMix {
+/**
+ * The rush of air over the jet, from the airspeed. (The synthesized engine and afterburner, and other jets' engines
+ * heard as they pass, were removed at the owner's request in revision 19.)
+ */
+export function windMix(airspeedMs: number, alive: boolean): WindMix {
   if (!alive) return SILENT;
-  const t = clamp(throttle, 0, 1);
-  const military = Math.min(t / AFTERBURNER_THROTTLE, 1);
-  const ab = t > AFTERBURNER_THROTTLE ? (t - AFTERBURNER_THROTTLE) / (1 - AFTERBURNER_THROTTLE) : 0;
   return {
-    engineHz: 55 + 70 * military,
-    engineGain: 0.08 + 0.12 * military,
-    afterburnerGain: 0.25 * ab,
     windHz: 300 + 4 * airspeedMs,
     windGain: 0.02 + 0.18 * clamp(airspeedMs / 400, 0, 1),
   };
@@ -58,7 +51,7 @@ export function beepOn(timeS: number, rateHz: number, duty = 0.5): boolean {
   return (timeS * rateHz) % 1 < duty;
 }
 
-/** Speed of sound for the Doppler shift of other jets, m/s. */
+/** Speed of sound for the Doppler shift of passing missiles, m/s. */
 const SOUND_SPEED_MS = 340;
 
 /**
@@ -72,12 +65,6 @@ export function dopplerFactor(rel: { x: number; y: number; z: number }, sourceVe
   const vs = (sourceVel.x * rel.x + sourceVel.y * rel.y + sourceVel.z * rel.z) / d;
   const vl = (listenerVel.x * rel.x + listenerVel.y * rel.y + listenerVel.z * rel.z) / d;
   return clamp((SOUND_SPEED_MS + vl) / Math.max(SOUND_SPEED_MS + vs, 60), 0.5, 2);
-}
-
-/** Loudness of another jet heard from `distanceM` away: full close by, gone past 2.5 km. */
-export function flybyGain(distanceM: number, throttle: number): number {
-  const k = clamp(1 - distanceM / 2500, 0, 1);
-  return k * k * (0.35 + 0.65 * clamp(throttle, 0, 1));
 }
 
 export interface SoundSource {

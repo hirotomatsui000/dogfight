@@ -761,10 +761,9 @@ export async function startGame(
         const cam = renderer.camera;
         if (dt > 0) listenerVel.subVectors(cam.position, lastListener).divideScalar(dt);
         lastListener.copy(cam.position);
-        const near = (pos: Vector3, vel: Vector3, throttle: number, id: number) => ({ id, pos, vel, throttle });
+        const near = (pos: Vector3, vel: Vector3, id: number) => ({ id, pos, vel });
         audio.update({
           alive: local.alive,
-          throttle: f.throttle,
           airspeedMs: f.airspeed,
           seeker: missileTone(local.seeker.mode, local.radarLock.mode),
           missileWarning: local.incoming !== null,
@@ -777,14 +776,8 @@ export async function startGame(
           rollingMs: local.alive && f.onGround ? f.airspeed : 0,
           rain: environment.raining,
           listener: { pos: cam.position, forward: forward.set(0, 0, -1).applyQuaternion(cam.quaternion), up: upward.set(0, 1, 0).applyQuaternion(cam.quaternion), vel: listenerVel },
-          jets: nearestSources(
-            [...session.views()].filter((v) => v.alive && !v.isLocal).map((v) => near(v.position, v.flight.vel, v.flight.throttle, v.id)),
-            cam.position,
-            2,
-            2500,
-          ),
           missiles: nearestSources(
-            [...session.missiles()].map((m) => near(m.position, m.velocity, 1, m.id)),
+            [...session.missiles()].map((m) => near(m.position, m.velocity, m.id)),
             cam.position,
             1,
             700,

@@ -55,7 +55,7 @@
     Contested Skies; browser storage keeps the old `contested-skies:` prefix so saved data survives), and the site
     moves to https://lechovia-skies.github.io/._./ (the owner moved the repository to a free organization
     `lechovia-skies` and named it `._.`, §24). A soundtrack chosen by the owner plays on the title screen and in
-    flight (§15.5). Team Objective is
+    flight (§15.5), and the synthesized engine sound is gone. Team Objective is
     evened out between the sides (§13.4, §14): Sentinels run in a level, bank-limited turn (they used to spiral into the
     ground), start alike, lean inward at the edge; every third fighter of a team escorts, counted within the team; bots
     break off near a Sentinel; every fighter carries 4 Lances; the USA's Sentinels get 50 HP per Russian fighter.
@@ -188,7 +188,7 @@ The renderer, HUD and input depend only on the `GameSession` interface. M1 uses 
 | AI | `src/shared/ai/` | Steering primitive, bot pilot behaviors, difficulty profiles |
 | Multiplayer/networking | `src/shared/net/`, `src/server/`, `src/client/session/` | Protocol and codecs, authoritative rooms, prediction and interpolation |
 | UI | `src/client/ui/`, `src/client/hud/` | Menus, overlays, settings, fighter HUD, radar display |
-| Audio | `src/client/audio/` | WebAudio-synthesized engine, weapons, tones and warnings; the soundtrack player (revision 19) |
+| Audio | `src/client/audio/` | WebAudio-synthesized wind, weapons, tones and warnings; the soundtrack player (revision 19) |
 | Maps | `src/shared/map/`, `src/shared/data/maps/`, `src/client/render/terrain/` | Terrain generation and sampling, features (settlements, roads, airfields), map definitions, terrain rendering |
 | Game modes | `src/shared/modes/` | A `GameMode` interface plus TDM, Air Superiority, Team Objective, Free Flight |
 | World | `src/shared/world/` | Entities, the fixed-step simulation, events, spawning |
@@ -1059,12 +1059,13 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   music volume on the title screen and at 40% of that in flight, fades over 0.8 s between them, and pauses while the
   tab is hidden. Settings → Sound: Music on/off and Music volume (default 60%); Sound off silences it too.
 - **Audio:** WebAudio-synthesized, no asset files.
-  - Engine and afterburner, wind, cannons.
+  - Wind, cannons. (The engine and afterburner were removed at the owner's request in revision 19: "the engine sound
+    is awful, I don't want it".)
   - SRM growl and lock tone, radar lock warning, missile warning, explosions and hits.
   - Bomb release (a short thump); bomb impacts use the explosion sound, scaled by distance.
   - Master volume.
-  - M5: explosions panned to where they happen; the two nearest jets within 2.5 km and the nearest missile within
-    700 m as positional voices with a Doppler shift; a stall horn, a pull-up tone, runway rumble, rain, the gear
+  - M5: explosions panned to where they happen; the nearest missile within 700 m as a positional voice with a
+    Doppler shift (the two nearest jets' engines were heard the same way until revision 19); a stall horn, a pull-up tone, runway rumble, rain, the gear
     motor, a respawn whoosh, a kill chime, zone and Sentinel cues, and a chord at the end of a match.
   - Settings (M5): Reduce motion (shake, G effects, kill cam), Reduce flashing (steady warnings, no strobes) and Team
     colours (blue/red or a colour-blind safe blue/orange).

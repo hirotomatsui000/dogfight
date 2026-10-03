@@ -1,4 +1,4 @@
-import { beepOn, dopplerFactor, engineMix, flybyGain, type SeekerTone } from './sound-mix.ts';
+import { beepOn, dopplerFactor, type SeekerTone, windMix } from './sound-mix.ts';
 
 interface Vec3 {
   x: number;
@@ -6,17 +6,14 @@ interface Vec3 {
   z: number;
 }
 
-/** Another jet or a missile near the listener (M5). */
+/** A missile near the listener (M5). */
 export interface NearbySound {
   pos: Vec3;
   vel: Vec3;
-  /** 0..1; missiles use 1 */
-  throttle: number;
 }
 
 export interface SoundFrame {
   alive: boolean;
-  throttle: number;
   airspeedMs: number;
   seeker: SeekerTone;
   missileWarning: boolean;
@@ -35,16 +32,13 @@ export interface SoundFrame {
   rain?: boolean;
   /** M5: where the listener (the camera) is, which way it faces, and how fast it moves */
   listener?: { pos: Vec3; forward: Vec3; up: Vec3; vel: Vec3 };
-  /** M5: the other jets nearest the listener, nearest first */
-  jets?: readonly NearbySound[];
   /** M5: the missiles nearest the listener, nearest first */
   missiles?: readonly NearbySound[];
 }
 
 const MASTER_GAIN = 0.7;
 const SMOOTH_S = 0.05;
-/** Positional voices for nearby jets and missiles. */
-const JET_VOICES = 2;
+/** Positional voices for missiles going past. */
 const MISSILE_VOICES = 1;
 const MISSILE_HEAR_M = 700;
 
@@ -59,18 +53,16 @@ interface Voice {
 }
 
 /**
- * Synthesized cockpit sound (spec §15.5): engine, afterburner, wind, cannon, seeker growl and lock tone, radar-lock
- * beeps, missile and radar-lock (RWR) warnings, and one-shot launches, hits, flares and explosions. M5 adds positional
- * sound (explosions, nearby jets with Doppler, missiles going past), the stall horn and pull-up tone, runway rumble,
- * the gear motor, rain, and chimes for kills, zones, Sentinels and the end of a match. No audio files.
+ * Synthesized cockpit sound (spec §15.5): wind, cannon, seeker growl and lock tone, radar-lock beeps, missile and
+ * radar-lock (RWR) warnings, and one-shot launches, hits, flares and explosions. M5 adds positional sound (explosions,
+ * missiles going past), the stall horn and pull-up tone, runway rumble, the gear motor, rain, and chimes for kills,
+ * zones, Sentinels and the end of a match. No audio files. (The engine, the afterburner and other jets' engines were
+ * removed at the owner's request in revision 19.)
  */
 export class AudioEngine {
   private readonly ctx: AudioContext;
   private readonly master: GainNode;
   private readonly noise: AudioBuffer;
-  private readonly engineOscs: OscillatorNode[];
-  private readonly engineGain: GainNode;
-  private readonly abGain: GainNode;
   private readonly windFilter: BiquadFilterNode;
   private readonly windGain: GainNode;
   private readonly cannonGain: GainNode;
@@ -85,7 +77,6 @@ export class AudioEngine {
   private readonly pullUpOsc: OscillatorNode;
   private readonly rumbleGain: GainNode;
   private readonly rainGain: GainNode;
-  private readonly jetVoices: Voice[] = [];
   private readonly missileVoices: Voice[] = [];
   private muted = false;
   /** master volume from the settings, 0..1 */
@@ -109,13 +100,6 @@ export class AudioEngine {
     this.noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const data = this.noise.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-
-    this.engineGain = this.gain(0, this.master);
-    const engineFilter = this.filter('lowpass', 700, 0.7, this.engineGain);
-    this.engineOscs = [this.osc('sawtooth', 60, engineFilter), this.osc('sawtooth', 90, engineFilter)];
-
-    this.abGain = this.gain(0, this.master);
-    this.loopNoise(this.filter('lowpass', 450, 0.7, this.abGain));
 
     this.windGain = this.gain(0, this.master);
     this.windFilter = this.filter('bandpass', 1000, 0.6, this.windGain);
@@ -157,7 +141,6 @@ export class AudioEngine {
     this.rainGain = this.gain(0, this.master);
     this.loopNoise(this.filter('highpass', 2600, 0.5, this.rainGain));
 
-    for (let i = 0; i < JET_VOICES; i++) this.jetVoices.push(this.voice([85, 128], 'sawtooth', 'bandpass', 520));
     for (let i = 0; i < MISSILE_VOICES; i++) this.missileVoices.push(this.voice([], 'sawtooth', 'highpass', 1400));
   }
 
@@ -178,11 +161,7 @@ export class AudioEngine {
   }
 
   update(f: SoundFrame): void {
-    const mix = engineMix(f.throttle, f.airspeedMs, f.alive);
-    this.set(this.engineGain.gain, mix.engineGain);
-    this.set(this.engineOscs[0].frequency, mix.engineHz);
-    this.set(this.engineOscs[1].frequency, mix.engineHz * 1.5);
-    this.set(this.abGain.gain, mix.afterburnerGain);
+    const mix = windMix(f.airspeedMs, f.alive);
     this.set(this.windGain.gain, mix.windGain);
     this.set(this.windFilter.frequency, mix.windHz);
     const firing = f.alive && f.firingCannon;
@@ -200,7 +179,6 @@ export class AudioEngine {
     this.set(this.rumbleGain.gain, f.alive ? 0.3 * Math.min(1, (f.rollingMs ?? 0) / 70) : 0);
     this.set(this.rainGain.gain, f.rain ? 0.035 : 0, 0.3);
     if (f.listener) this.placeListener(f.listener);
-    this.updateVoices(this.jetVoices, f.jets ?? [], f.listener, (d, s) => flybyGain(d, s.throttle) * 0.6);
     this.updateVoices(this.missileVoices, f.missiles ?? [], f.listener, (d) => {
       const k = Math.max(0, 1 - d / MISSILE_HEAR_M);
       return 0.35 * k * k;
@@ -209,8 +187,8 @@ export class AudioEngine {
 
   /** Silences the loops (pause, match end) without muting one-shots already playing. */
   quiet(): void {
-    const loops = [this.engineGain, this.abGain, this.windGain, this.cannonGain, this.cannonDepth, this.growlGain, this.lockGain, this.warnGain, this.rwrGain, this.stallGain, this.pullUpGain, this.rumbleGain, this.rainGain];
-    for (const g of [...loops, ...this.jetVoices.map((v) => v.gain), ...this.missileVoices.map((v) => v.gain)]) this.set(g.gain, 0);
+    const loops = [this.windGain, this.cannonGain, this.cannonDepth, this.growlGain, this.lockGain, this.warnGain, this.rwrGain, this.stallGain, this.pullUpGain, this.rumbleGain, this.rainGain];
+    for (const g of [...loops, ...this.missileVoices.map((v) => v.gain)]) this.set(g.gain, 0);
   }
 
   explosion(gain: number): void {
@@ -284,7 +262,7 @@ export class AudioEngine {
     this.ctx.close().catch((err: unknown) => console.info('Sound shutdown failed:', err instanceof Error ? err.message : String(err)));
   }
 
-  private updateVoices(voices: Voice[], sources: readonly NearbySound[], listener: SoundFrame['listener'], loudness: (distanceM: number, s: NearbySound) => number): void {
+  private updateVoices(voices: Voice[], sources: readonly NearbySound[], listener: SoundFrame['listener'], loudness: (distanceM: number) => number): void {
     voices.forEach((v, i) => {
       const s = sources[i];
       if (!s || !listener) {
@@ -295,8 +273,8 @@ export class AudioEngine {
       const d = Math.hypot(rel.x, rel.y, rel.z);
       const doppler = dopplerFactor(rel, s.vel, listener.vel);
       this.place(v.panner, s.pos);
-      this.set(v.gain.gain, loudness(d, s), 0.08);
-      v.oscs.forEach((o, k) => this.set(o.frequency, v.baseHz[k] * doppler * (0.8 + 0.4 * s.throttle), 0.05));
+      this.set(v.gain.gain, loudness(d), 0.08);
+      v.oscs.forEach((o, k) => this.set(o.frequency, v.baseHz[k] * doppler, 0.05));
       this.set(v.filter.frequency, v.filterHz * doppler, 0.05);
     });
   }

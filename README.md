@@ -13,7 +13,7 @@ is rebuilt after every push ([Publish as a website](#publish-as-a-website)). The
 single player against AI pilots and runs entirely in the browser.
 - **Music** (2026-10-03): "Life in the Danger Zone" by DJARTMUSIC (Pixabay) plays on the title screen from your
   first click or key press, and more quietly in flight. **Settings** → **Sound** has a Music switch and a music
-  volume.
+  volume. The synthesized engine sound is gone.
 - **Team Objective evened out** (2026-10-03): Russia used to win about three matches in four. Now every jet carries 4
   Lances in this mode, the USA's Sentinels are sturdier the more Russian fighters there are, and the Sentinels fly
   like radar planes (they used to spiral into the ground when running from a fighter). In bot play the sides now win
@@ -53,8 +53,9 @@ single player against AI pilots and runs entirely in the browser.
 - **While you wait to respawn**: a kill cam on whoever shot you down, then spectating (A / D to switch pilots), and
   Q / E to pick a different jet for the next life.
 - **Contrails** above 8 km, **wingtip vapour** above 5 G, jets that burn when badly hit, and wrecks that fall in flames.
-- **Fuller sound**: explosions and nearby jets heard from where they are (with a Doppler shift as they pass), missiles
-  going by, a stall horn, a pull-up tone, runway rumble, rain, and chimes for kills, zones and Sentinels.
+- **Fuller sound**: explosions heard from where they are, missiles going by (with a Doppler shift as they pass), a
+  stall horn, a pull-up tone, runway rumble, rain, and chimes for kills, zones and Sentinels. There is no engine sound
+  (taken out on 2026-10-03 at the owner's request).
 - **Records** (2026-10-02): every finished match is saved in your browser, no account needed. **Records** on the
   title screen shows your totals (matches, wins, kills, deaths, missiles and hits, damage, time in the air), personal
   bests (most kills in a match, longest kill streak, most damage, longest life, top speed), matches by mission and by
