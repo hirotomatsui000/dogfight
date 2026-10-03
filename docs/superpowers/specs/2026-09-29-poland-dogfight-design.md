@@ -55,8 +55,9 @@
     Contested Skies; browser storage keeps the old `contested-skies:` prefix so saved data survives), and the site
     moves to https://lechovia-skies.github.io/._./ (the owner moved the repository to a free organization
     `lechovia-skies` and named it `._.`, §24). A soundtrack chosen by the owner plays on the title screen and in
-    flight (§15.5), the synthesized engine sound is gone, dusk and night are lit brighter (§12.3), and the title screen
-    no longer offers the weather or "Clock runs" (§15.5). Team Objective is
+    flight (§15.5), the synthesized engine sound is gone, dusk and night are lit brighter (§12.3), the title screen
+    no longer offers the weather or "Clock runs" (§15.5), and the afterburner is a glowing gas instead of an orange
+    cone (§15.4). Team Objective is
     evened out between the sides (§13.4, §14): Sentinels run in a level, bank-limited turn (they used to spiral into the
     ground), start alike, lean inward at the edge; every third fighter of a team escorts, counted within the team; bots
     break off near a Sentinel; every fighter carries 4 Lances; the USA's Sentinels get 50 HP per Russian fighter.
@@ -990,6 +991,13 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   - A photographed sky that also lights the scene, satellite-photo terrain, an animated sea and distance haze
     (`2026-09-29-realistic-graphics-design.md`).
   - Simple effects: afterburner, tracers, missile trails, flares, explosions, smoke.
+  - Afterburner (revision 19; the owner found the single orange cone far too plain): each nozzle's flame is traced
+    through a volume in a shader (`src/client/render/effects/afterburner.ts`). A white-hot core comes out of the nozzle
+    and turns yellow down the middle, with shock diamonds about a nozzle diameter apart; an orange mantle cools to red,
+    streams with turbulence and breaks into ragged tongues at the tail. The plume runs from 2.5 nozzle diameters when
+    the afterburner lights (throttle above 90%) to 7.5 at full and flickers; barely lit it burns thin and pale blue. The
+    flame lets its own light through but dims the sky behind it a little, so it keeps its colour by day; it fades into
+    the haze with distance. The title-screen jet cruises at half afterburner.
   - Visibility (revision 5): an aircraft farther away than where it would shrink below about 0.7° is drawn larger in
     proportion to distance (up to 8×), and a missile likewise below about 0.4°, so neither fades to a single pixel. A
     missile shows a bright motor flame while its motor burns and leaves a thick smoke trail. Hit detection is unaffected.

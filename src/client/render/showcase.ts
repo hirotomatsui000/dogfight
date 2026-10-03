@@ -11,6 +11,7 @@ import type { LoadedMap } from './terrain/map-loader.ts';
 import { TerrainLod } from './terrain/terrain-lod.ts';
 import { WorldFeatures } from './world/world-features.ts';
 import { Environment } from './environment/environment.ts';
+import { setAfterburner } from './effects/afterburner.ts';
 import type { EnvironmentSettings } from '../../shared/world/time-of-day.ts';
 import { createTerrainMaterial } from './terrain-material.ts';
 
@@ -79,7 +80,7 @@ const SHOWCASE_FOV = 45;
 /** On wide screens the jet sits in the right-hand third, clear of the menu column. */
 const WIDE_LAYOUT_PX = 900;
 const FRAME_SHIFT = 0.17;
-const AFTERBURNER = 0.25;
+const AFTERBURNER = 0.5;
 
 /** The live scene behind the title screen: the chosen jet circling over Lechovia. */
 export class Showcase {
@@ -186,11 +187,7 @@ export class Showcase {
     if (this.model) {
       this.model.root.position.copy(this.pose.position);
       this.model.root.quaternion.copy(this.pose.quaternion);
-      for (const [i, flame] of this.model.afterburners.entries()) {
-        const flicker = this.still ? 1 : 1 + 0.12 * Math.sin(t * 47 + i * 1.7) + 0.06 * Math.sin(t * 91);
-        flame.visible = true;
-        flame.scale.set(1, 1, (2 + 5 * AFTERBURNER) * flicker);
-      }
+      for (const flame of this.model.afterburners) setAfterburner(flame, AFTERBURNER, t);
     }
     showcaseCameraPosition(t, this.pose, camera.position);
     camera.lookAt(this.pose.position);

@@ -1,7 +1,5 @@
 import {
-  AdditiveBlending,
   CircleGeometry,
-  ConeGeometry,
   CylinderGeometry,
   DoubleSide,
   Group,
@@ -16,6 +14,7 @@ import {
 } from 'three';
 import type { AircraftConfig, AircraftVisual, TeamId } from '../../shared/data/aircraft/types.ts';
 import { DEG } from '../../shared/math/units.ts';
+import { createAfterburner, unshareAfterburner } from './effects/afterburner.ts';
 import { type LoftSection, loftGeometry, type PanelSpec, panelGeometry, projectUV } from './airframe-geometry.ts';
 import { liveryFor, liveryTextures, type Roundel } from './livery.ts';
 
@@ -331,33 +330,18 @@ export function buildAircraftModel(v: AircraftVisual, look: ModelLook = {}): Air
 
 /**
  * Adds a nozzle exit at each point (body metres) with an afterburner flame pointing aft. The flames start hidden;
- * SceneSync shows them and scales their length with throttle.
+ * SceneSync lights them with the throttle (effects/afterburner.ts).
  */
 export function addEngines(root: Object3D, exits: readonly Vector3[], nozzleRadiusM: number): Pick<AircraftModel, 'nozzles' | 'afterburners'> {
   const nozzles: Object3D[] = [];
   const afterburners: Mesh[] = [];
-  const flameMaterial = new MeshBasicMaterial({
-    color: 0xffa24a,
-    transparent: true,
-    opacity: 0.85,
-    blending: AdditiveBlending,
-    depthWrite: false,
-    side: DoubleSide,
-  });
   for (const point of exits) {
     const exit = new Object3D();
     exit.name = 'nozzle-exit';
     exit.position.copy(point);
     root.add(exit);
     nozzles.push(exit);
-
-    // Cone pointing aft (+z) from the nozzle exit, 1 m long until scaled.
-    const flameGeometry = new ConeGeometry(nozzleRadiusM * 0.9, 1, 12, 1, true);
-    flameGeometry.rotateX(Math.PI / 2);
-    flameGeometry.translate(0, 0, 0.5);
-    const flame = new Mesh(flameGeometry, flameMaterial);
-    flame.name = 'afterburner';
-    flame.visible = false;
+    const flame = createAfterburner(nozzleRadiusM);
     exit.add(flame);
     afterburners.push(flame);
   }
@@ -378,7 +362,10 @@ export function parametricModel(config: AircraftConfig): AircraftModel {
   const afterburners: Mesh[] = [];
   root.traverse((o) => {
     if (o.name === 'nozzle-exit') nozzles.push(o);
-    if (o.name === 'afterburner' && o instanceof Mesh) afterburners.push(o);
+    if (o.name === 'afterburner' && o instanceof Mesh) {
+      unshareAfterburner(o);
+      afterburners.push(o);
+    }
   });
   return { root, nozzles, afterburners };
 }

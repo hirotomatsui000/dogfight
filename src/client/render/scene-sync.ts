@@ -3,6 +3,7 @@ import type { AircraftConfig } from '../../shared/data/aircraft/types.ts';
 import { DEG } from '../../shared/math/units.ts';
 import type { AircraftView } from '../session/game-session.ts';
 import { type AircraftModel, parametricModel } from './aircraft-model.ts';
+import { afterburnerLevel, setAfterburner } from './effects/afterburner.ts';
 import { navLights } from './environment/night-lights.ts';
 import { landingGear, setGear } from './landing-gear.ts';
 import { ROTODOME_RAD_PER_S } from './sentinel-model.ts';
@@ -16,7 +17,6 @@ interface Entry {
   dome: Object3D | null;
 }
 
-const AFTERBURNER_THRESHOLD = 0.9;
 /** Other aircraft never look smaller than this (spec §15.4), so a jet 5 km out is a shape, not a pixel. */
 const MIN_APPARENT_ANGLE = 0.7 * DEG;
 const MAX_VISIBILITY_SCALE = 8;
@@ -58,14 +58,8 @@ export class SceneSync {
       setGear(entry.gear, v.alive ? v.flight.gear : 0);
       if (entry.dome) entry.dome.rotation.y = (timeS * ROTODOME_RAD_PER_S) % (Math.PI * 2);
 
-      const ab = (v.flight.throttle - AFTERBURNER_THRESHOLD) / (1 - AFTERBURNER_THRESHOLD);
-      for (const [i, flame] of entry.model.afterburners.entries()) {
-        flame.visible = ab > 0;
-        if (ab > 0) {
-          const flicker = 1 + 0.12 * Math.sin(timeS * 47 + i * 1.7) + 0.06 * Math.sin(timeS * 91);
-          flame.scale.set(1, 1, (2 + 5 * ab) * flicker);
-        }
-      }
+      const level = afterburnerLevel(v.flight.throttle);
+      for (const flame of entry.model.afterburners) setAfterburner(flame, level, timeS);
     }
     for (const [id, entry] of this.entries) {
       if (!seen.has(id)) {

@@ -14,7 +14,8 @@ single player against AI pilots and runs entirely in the browser.
 - **Music** (2026-10-03): "Life in the Danger Zone" by DJARTMUSIC (Pixabay) plays on the title screen from your
   first click or key press, and more quietly in flight. **Settings** → **Sound** has a Music switch and a music
   volume. The synthesized engine sound is gone, and dusk and night are brighter: the land, the horizon, the clouds
-  and other jets stay visible.
+  and other jets stay visible. The afterburner flame looks like burning gas: a white-hot core, shock diamonds and an
+  orange flame that flickers and breaks up at the tail.
 - **Team Objective evened out** (2026-10-03): Russia used to win about three matches in four. Now every jet carries 4
   Lances in this mode, the USA's Sentinels are sturdier the more Russian fighters there are, and the Sentinels fly
   like radar planes (they used to spiral into the ground when running from a fighter). In bot play the sides now win

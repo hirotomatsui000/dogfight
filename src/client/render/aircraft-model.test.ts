@@ -65,6 +65,7 @@ describe('generated models for the whole roster (M3)', () => {
     expect(a.root).not.toBe(b.root);
     expect(a.afterburners).toHaveLength(2);
     expect(a.afterburners[0]).not.toBe(b.afterburners[0]);
+    expect(a.afterburners[0].material).not.toBe(b.afterburners[0].material);
     const fa = a.root.getObjectByName('fuselage') as Mesh;
     const fb = b.root.getObjectByName('fuselage') as Mesh;
     expect(fa.geometry).toBe(fb.geometry);
