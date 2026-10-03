@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 /**
  * Social sites need an absolute URL for the preview image. Set SITE_URL (for example
- * https://lechovia-skies.github.io/) when building for a known address; without it the links stay relative
+ * https://lechovia-skies.github.io/._./) when building for a known address; without it the links stay relative
  * to the page.
  */
 function siteUrl(): string {

@@ -1,4 +1,5 @@
 import './ui/styles.css';
+import { MusicPlayer } from './audio/music.ts';
 import { startGame } from './game.ts';
 import { type AircraftMeshes, IMPORTED_MODELS, loadAircraftMeshes } from './render/aircraft-meshes.ts';
 import { loadSceneryTextures, type SceneryTextures } from './render/assets.ts';
@@ -43,7 +44,9 @@ const prefersReducedMotion = () =>
   typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function run(scenery: Promise<SceneryTextures>, world: Promise<LoadedMap>, aircraftMeshes: Promise<AircraftMeshes>, settings: SettingsStore, progress: LoadProgress): void {
+  const music = new MusicPlayer(settings);
   const launch = (options: StartOptions): void => {
+    music.setScene('flight');
     startGame(app, options, { onQuit: showMenu, onRestart: launch }, scenery, aircraftMeshes, settings, progress).catch((err: unknown) => {
       console.error(err);
       showError(err instanceof Error ? err.message : String(err));
@@ -51,6 +54,7 @@ function run(scenery: Promise<SceneryTextures>, world: Promise<LoadedMap>, aircr
   };
 
   function showMenu(): void {
+    music.setScene('menu');
     const s = settings.current;
     const quality = QUALITY_PRESETS[resolveQuality(s.graphics, s.autoGraphics, window.innerWidth, window.innerHeight, window.devicePixelRatio)];
     const showcase = new Showcase(app, scenery, world, aircraftMeshes, prefersReducedMotion(), quality);

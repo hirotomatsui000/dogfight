@@ -178,6 +178,8 @@ export function openSettings(root: HTMLElement, store: SettingsStore, tab: Setti
         return [
           checkbox('Sound on', s.sound, (v) => store.update({ sound: v })),
           slider('Volume', 0, 1, 0.05, s.volume, percent, (v) => store.update({ volume: v })),
+          checkbox('Music', s.music, (v) => store.update({ music: v })),
+          slider('Music volume', 0, 1, 0.05, s.musicVolume, percent, (v) => store.update({ musicVolume: v })),
           el('p', 'sheet-note', 'Every warning sound is also shown as text on the HUD: MISSILE, SRM TRK, SRM LOCK and HIT.'),
         ];
     }

@@ -10,6 +10,7 @@ Lechovia Skies uses these free-license assets and the owner's own aircraft model
 | Close-up ground detail `detail-grass-rock.jpg` ("Aerial Grass Rock") | https://polyhaven.com/a/aerial_grass_rock | Rob Tuytel | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | Water normal map `waternormals.jpg` | https://github.com/mrdoob/three.js (`examples/textures`, r186) | three.js authors | [MIT](https://github.com/mrdoob/three.js/blob/dev/LICENSE) |
 | Aircraft models `models/shade.glb` (F-35A-inspired, flown as the Shade) and `models/prizrak.glb` (Su-57-inspired, flown as the Prizrak), simplified, re-oriented and with resized textures by `tools/prepare-models.ts` | Generated with Tripo (https://www.tripo3d.ai) | Hiroto Matsui (project owner) | The owner's generated models; Tripo's terms of service apply |
+| Soundtrack `public/audio/life-in-the-danger-zone.mp3` ("Life in the Danger Zone", hybrid trailer music; re-encoded at 128 kbps), chosen by the owner | Pixabay (file 304406) | DJARTMUSIC | Pixabay Content License (no attribution required; credited anyway) |
 | three.js library | https://threejs.org | three.js authors | MIT |
 | Display font Rajdhani (Latin subset, weights 600 and 700), bundled from the `@fontsource/rajdhani` package | https://fonts.google.com/specimen/Rajdhani | Indian Type Foundry | [SIL Open Font License 1.1](https://openfontlicense.org) (full text: `node_modules/@fontsource/rajdhani/LICENSE`) |
 

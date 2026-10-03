@@ -53,8 +53,9 @@
     revision 16 handed the western team a tailwind every match.
   - Revision 19 (2026-10-03): at the owner's request the game is renamed **Lechovia Skies** (first published as
     Contested Skies; browser storage keeps the old `contested-skies:` prefix so saved data survives), and the site
-    moves to https://lechovia-skies.github.io/ once the repository moves to a free organization `lechovia-skies` as
-    `lechovia-skies.github.io` (§24). Team Objective is
+    moves to https://lechovia-skies.github.io/._./ (the owner moved the repository to a free organization
+    `lechovia-skies` and named it `._.`, §24). A soundtrack chosen by the owner plays on the title screen and in
+    flight (§15.5). Team Objective is
     evened out between the sides (§13.4, §14): Sentinels run in a level, bank-limited turn (they used to spiral into the
     ground), start alike, lean inward at the edge; every third fighter of a team escorts, counted within the team; bots
     break off near a Sentinel; every fighter carries 4 Lances; the USA's Sentinels get 50 HP per Russian fighter.
@@ -187,7 +188,7 @@ The renderer, HUD and input depend only on the `GameSession` interface. M1 uses 
 | AI | `src/shared/ai/` | Steering primitive, bot pilot behaviors, difficulty profiles |
 | Multiplayer/networking | `src/shared/net/`, `src/server/`, `src/client/session/` | Protocol and codecs, authoritative rooms, prediction and interpolation |
 | UI | `src/client/ui/`, `src/client/hud/` | Menus, overlays, settings, fighter HUD, radar display |
-| Audio | `src/client/audio/` | WebAudio-synthesized engine, weapons, tones and warnings |
+| Audio | `src/client/audio/` | WebAudio-synthesized engine, weapons, tones and warnings; the soundtrack player (revision 19) |
 | Maps | `src/shared/map/`, `src/shared/data/maps/`, `src/client/render/terrain/` | Terrain generation and sampling, features (settlements, roads, airfields), map definitions, terrain rendering |
 | Game modes | `src/shared/modes/` | A `GameMode` interface plus TDM, Air Superiority, Team Objective, Free Flight |
 | World | `src/shared/world/` | Entities, the fixed-step simulation, events, spawning |
@@ -1052,6 +1053,11 @@ The game is always third-person (revision 4). There is no first-person, cockpit 
   title screen and the pause menu, has five tabs: Controls (steering, mouse sensitivity 25–300%, invert), Keys
   (rebinding), Gamepad (status, assignments, calibration), Display (graphics, HUD color green/amber/white, HUD size
   80–140%, reduce camera shake) and Sound (on/off, master volume).
+- **Music (revision 19):** the owner's choice, "Life in the Danger Zone" by DJARTMUSIC (Pixabay, Pixabay Content
+  License; `public/audio/life-in-the-danger-zone.mp3`, 67 s at 128 kbps, credited on the title screen and in
+  CREDITS.md), looped from the first click or key press (browsers block sound before one). It plays at master ×
+  music volume on the title screen and at 40% of that in flight, fades over 0.8 s between them, and pauses while the
+  tab is hidden. Settings → Sound: Music on/off and Music volume (default 60%); Sound off silences it too.
 - **Audio:** WebAudio-synthesized, no asset files.
   - Engine and afterburner, wind, cannons.
   - SRM growl and lock tone, radar lock warning, missile warning, explosions and hits.
@@ -1232,7 +1238,7 @@ its milestone.
 | Hardware range | Low/Medium/High graphics presets (pixel ratio, texture size, draw distance, effects), chosen automatically from the measured frame rate and changeable in settings | M1c |
 | Loading | A loading progress bar. Once assets pass about 5 MB, publish the multi-file build (`dist/`) instead of one HTML file so browsers cache and load pieces in parallel | M1c (progress), M2 (multi-file) |
 | Sharing | A title screen with a Play button over a live 3D background (M1b); page title, description, social-preview image and icon (M1c) | M1b, M1c |
-| Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle. (Revision 13: Netlify is linked to the repository and builds the multi-file site on every push that changes the page, per `netlify.toml`; the one-file build remains for hand deploys.) (Revision 14: no server; GitHub Pages serves the multi-file site from the `gh-pages` branch, which `.github/workflows/publish.yml` rebuilds after the tests pass on every push to `main` or a `claude/…` branch, at https://hirotomatsui000.github.io/dogfight/; revision 19: https://lechovia-skies.github.io/ once the repository moves to the organization `lechovia-skies` as `lechovia-skies.github.io`; the workflow builds for the root of the address when the repository is named `<owner>.github.io`) | M2 |
+| Hosting | Netlify (or any static host) serves single-player builds. Online play needs a Node host with WebSockets; the simplest setup serves the page and the game from one server (§7). Free tiers usually sleep when idle. (Revision 13: Netlify is linked to the repository and builds the multi-file site on every push that changes the page, per `netlify.toml`; the one-file build remains for hand deploys.) (Revision 14: no server; GitHub Pages serves the multi-file site from the `gh-pages` branch, which `.github/workflows/publish.yml` rebuilds after the tests pass on every push to `main` or a `claude/…` branch, at https://hirotomatsui000.github.io/dogfight/; revision 19: https://lechovia-skies.github.io/._./, the repository `lechovia-skies/._.`; the workflow builds for the root of the address when a repository is named `<owner>.github.io`) | M2 |
 | Joining | An invite link per room, and "Quick play" that joins the busiest room. Bots fill empty seats so one human plus bots is a full match. (Removed in revision 14) | M2 |
 | Safety | Server authority for all hits (§7); callsign filter; preset quick-chat messages only; rate limits; a short privacy note (no accounts, no tracking) | M2 |
 | Updates | A page/server version check that asks players to reload; browser error reporting; a server health check; one automated browser smoke test (load the site, fly 10 s) before each deploy. (Revision 14: all removed with the server; the publish workflow runs the unit tests before each deploy) | M2 |

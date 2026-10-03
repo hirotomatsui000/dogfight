@@ -4,13 +4,16 @@ A browser-based flight-combat prototype. Two teams, **USA** and **Russia**, fly 
 real aircraft over a fictional landscape inspired by Poland. This repository is being built in milestones (see
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
-**Play it:** https://lechovia-skies.github.io/ (desktop or laptop with a keyboard and mouse). The site
+**Play it:** https://lechovia-skies.github.io/._./ (desktop or laptop with a keyboard and mouse). The site
 is rebuilt after every push ([Publish as a website](#publish-as-a-website)). The game was called Contested Skies until
 2026-10-03; settings, records and campaign progress saved under that name carry over.
 
 **Current milestone: M5 "Modes & polish"** (after M1a "Fly", M1b "Fight", M1d "Strike", M1c "Website basics", M2
 "Multiplayer", M3 "Roster & weapons" and M4 "World"). Online play (M2) was taken out again on 2026-10-02: the game is
 single player against AI pilots and runs entirely in the browser.
+- **Music** (2026-10-03): "Life in the Danger Zone" by DJARTMUSIC (Pixabay) plays on the title screen from your
+  first click or key press, and more quietly in flight. **Settings** → **Sound** has a Music switch and a music
+  volume.
 - **Team Objective evened out** (2026-10-03): Russia used to win about three matches in four. Now every jet carries 4
   Lances in this mode, the USA's Sentinels are sturdier the more Russian fighters there are, and the Sentinels fly
   like radar planes (they used to spiral into the ground when running from a fighter). In bot play the sides now win
@@ -229,10 +232,10 @@ jet, Ace bots, 100 seeded duels each, and fails if a pairing wins outside 35–6
 
 ## Publish as a website
 
-The game is published with GitHub Pages at https://lechovia-skies.github.io/: the repository is
-`lechovia-skies/lechovia-skies.github.io`, in a free GitHub organization, and a repository named `<owner>.github.io` is
-served at the root of that address (until 2026-10-03 it was `hirotomatsui000/dogfight`, served at
-https://hirotomatsui000.github.io/dogfight/). After every push to `main` or
+The game is published with GitHub Pages at https://lechovia-skies.github.io/._./: the repository is
+`lechovia-skies/._.`, in a free GitHub organization, and GitHub Pages serves a repository at
+`<owner>.github.io/<repository>/` (a repository named `<owner>.github.io` would be served at the root). Until
+2026-10-03 it was `hirotomatsui000/dogfight`, at https://hirotomatsui000.github.io/dogfight/. After every push to `main` or
 to a `claude/…` branch, the **Publish site** workflow (`.github/workflows/publish.yml`) runs the tests, builds the site
 and replaces the `gh-pages` branch with it, which GitHub Pages serves: the page changes a minute or two after the
 push. The latest push wins, whichever of those branches it went to. When the tests fail nothing is published; the run

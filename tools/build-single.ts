@@ -3,7 +3,7 @@
  * Run through `npm run build:single` (which builds first). Deploy by dropping dist-single/ on any static host (the page plus its preview image and icon).
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, normalize, sep } from 'node:path';
+import { dirname, join, normalize, sep } from 'node:path';
 import { findExternalAssetRefs, inlineAssets } from './inline-assets.ts';
 
 const root = process.cwd();
@@ -23,8 +23,11 @@ if (leftovers.length > 0) {
 }
 mkdirSync(outDir, { recursive: true });
 writeFileSync(join(outDir, 'index.html'), html);
-// The social-preview image and the touch icon are fetched by other sites and devices, not by the page: copy them.
-for (const file of ['og-image.jpg', 'icon-180.png']) {
-  if (existsSync(join(distDir, file))) copyFileSync(join(distDir, file), join(outDir, file));
+// The social-preview image and the touch icon are fetched by other sites and devices, not by the page, and the
+// soundtrack streams beside it rather than swelling the page by 1.4 MB: copy them.
+for (const file of ['og-image.jpg', 'icon-180.png', 'audio/life-in-the-danger-zone.mp3']) {
+  if (!existsSync(join(distDir, file))) continue;
+  mkdirSync(dirname(join(outDir, file)), { recursive: true });
+  copyFileSync(join(distDir, file), join(outDir, file));
 }
 console.log(`dist-single/index.html written (${Math.round(Buffer.byteLength(html) / 1024)} kB, no external assets)`);

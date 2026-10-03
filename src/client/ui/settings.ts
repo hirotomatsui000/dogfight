@@ -23,6 +23,10 @@ export interface Settings {
   volume: number;
   /** the mute toggle */
   sound: boolean;
+  /** the soundtrack on or off */
+  music: boolean;
+  /** the soundtrack's share of the master volume, 0..1 */
+  musicVolume: number;
   controlMode: ControlMode;
   /** multiplier on the base mouse sensitivity, 0.25..3 */
   mouseSensitivity: number;
@@ -49,6 +53,8 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   volume: 0.8,
   sound: true,
+  music: true,
+  musicVolume: 0.6,
   controlMode: 'mouse-aim',
   mouseSensitivity: 1,
   invertY: false,
@@ -109,6 +115,8 @@ export function sanitizeSettings(stored: unknown): Settings {
   return {
     volume: number(raw.volume, d.volume, 0, 1),
     sound: bool(raw.sound, d.sound),
+    music: bool(raw.music, d.music),
+    musicVolume: number(raw.musicVolume, d.musicVolume, 0, 1),
     controlMode: oneOf(raw.controlMode, ['mouse-aim', 'direct'] as const, d.controlMode),
     mouseSensitivity: number(raw.mouseSensitivity, d.mouseSensitivity, MOUSE_SENSITIVITY_RANGE.min, MOUSE_SENSITIVITY_RANGE.max),
     invertY: bool(raw.invertY, d.invertY),
