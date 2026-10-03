@@ -4,7 +4,7 @@ A browser-based flight-combat prototype. Two teams, **USA** and **Russia**, fly 
 real aircraft over a fictional landscape inspired by Poland. This repository is being built in milestones (see
 `docs/superpowers/specs/2026-09-29-poland-dogfight-design.md`).
 
-**Play it:** https://hirotomatsui000.github.io/lechovia-skies/ (desktop or laptop with a keyboard and mouse). The site
+**Play it:** https://lechovia-skies.github.io/ (desktop or laptop with a keyboard and mouse). The site
 is rebuilt after every push ([Publish as a website](#publish-as-a-website)). The game was called Contested Skies until
 2026-10-03; settings, records and campaign progress saved under that name carry over.
 
@@ -229,8 +229,10 @@ jet, Ace bots, 100 seeded duels each, and fails if a pairing wins outside 35–6
 
 ## Publish as a website
 
-The game is published with GitHub Pages at https://hirotomatsui000.github.io/lechovia-skies/ (the last part of the
-address is the repository's name; it was `dogfight` until 2026-10-03). After every push to `main` or
+The game is published with GitHub Pages at https://lechovia-skies.github.io/: the repository is
+`lechovia-skies/lechovia-skies.github.io`, in a free GitHub organization, and a repository named `<owner>.github.io` is
+served at the root of that address (until 2026-10-03 it was `hirotomatsui000/dogfight`, served at
+https://hirotomatsui000.github.io/dogfight/). After every push to `main` or
 to a `claude/…` branch, the **Publish site** workflow (`.github/workflows/publish.yml`) runs the tests, builds the site
 and replaces the `gh-pages` branch with it, which GitHub Pages serves: the page changes a minute or two after the
 push. The latest push wins, whichever of those branches it went to. When the tests fail nothing is published; the run
