@@ -485,7 +485,7 @@ compensated in multiplayer). There is no friendly fire.
 | Dispersion σ (mrad) | 2.5 | 3.0 | 3.5 |
 | Lifetime (s) | 3 | 3 | 3 |
 
-**Lead marker** (a shared function used by the HUD and bots): iterate the time of flight `t` three times,
+**Lead marker** (a shared function used by the HUD, bots and the player's aim assist, §10.5): iterate the time of flight `t` three times,
 then aim direction `= normalize(Δp + Δv·t + ½g·t²·ŷ)`.
 
 ### 10.2 Missiles
@@ -586,6 +586,7 @@ table above; AI pilots fire the plain ones.
 | Guidance | N = 3.5, 25 g, 0.35 s response lag, 70° gimbal limit |
 | Blast | 130 damage ≤ 6 m, linear to 0 at 20 m; proximity fuze 11 m |
 | Cannon | rounds hit within three times the target's hit radius (twice at first; the owner asked for more) |
+| Gun aim assist | with the nose within 3° of an enemy's lead point (the HUD pipper) and within 1.5 km, the rounds leave toward the lead point; the help fades out by 6° (`src/shared/weapons/gun-assist.ts`). The HUD draws a ring that closes on the pipper as the assist takes hold and turns red when it holds fully |
 
 Measured with the same duels (missile hit rates; wins out of the duels flown, 60 after):
 
@@ -595,6 +596,7 @@ Measured with the same duels (missile hit rates; wins out of the duels flown, 60
 | Rookie player vs Ace bot | Dart 0%, Lance 4%, 3 wins of 40 | Dart 11%, Lance 10%, 11 wins |
 | Veteran player vs Veteran bot | Dart 0%, Lance 16%, 10 wins of 30 | Dart 31%, Lance 38%, 51 wins |
 | Veteran player, guns only, vs Veteran bot | 18% of projectiles hit | 46% at twice the radius, 57% at three times |
+| The same, firing whenever the enemy is within 8° and 1 km (a loose, human-like trigger) | — | 13% at three times the radius, 18% with the aim assist (vs Rookies 3% → 6%) |
 
 Aces stay hard: they release the most flares and break best. A first try with stronger assists (×0.2 decoy, 30 g,
 0.25 s lag) made the Dart hit 57–73% and the player win nine duels in ten; the owner asked for "a little" easier.

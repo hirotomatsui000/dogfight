@@ -1,17 +1,19 @@
 import { Vector3 } from 'three';
 import { blastDamage } from '../damage/damage.ts';
 import type { TeamId } from '../data/aircraft/types.ts';
-import { AFTERBURNER_THROTTLE, BOMB_ANVIL, CANNONS, COUNTERMEASURES, missilesFor, PLAYER_GUN_REACH, SRM_DART } from '../data/weapons.ts';
+import { AFTERBURNER_THROTTLE, BOMB_ANVIL, type CannonSpec, CANNONS, COUNTERMEASURES, missilesFor, PLAYER_GUN_REACH, SRM_DART } from '../data/weapons.ts';
 import type { Terrain } from '../map/terrain.ts';
 import { type Approach, closestApproach } from '../math/closest-approach.ts';
 import type { Rng } from '../math/rng.ts';
-import { type AirData, atmosphere } from '../physics/atmosphere.ts';
+import { type AirData, atmosphere, SEA_LEVEL_DENSITY } from '../physics/atmosphere.ts';
 import { autoDesignate, cycleDesignation, isContact } from '../targeting/designation.ts';
 import { resetSeeker, updateSeeker } from '../targeting/ir-seeker.ts';
 import { resetRadarLock, updateRadarLock } from '../targeting/radar-lock.ts';
 import { detectContacts, type Obscurant, RADAR_SCAN_INTERVAL_S } from '../targeting/sensors.ts';
 import { advanceProjectile, createProjectile, type Projectile, pullTrigger, TRIGGER_AT_REST } from '../weapons/cannon.ts';
 import { decoyChance, rollDecoy } from '../weapons/countermeasures.ts';
+import { assistedAim, GUN_ASSIST_RANGE_M, gunAssistPull } from '../weapons/gun-assist.ts';
+import { leadDirection } from '../weapons/lead.ts';
 import type { SteadyWind } from '../physics/wind.ts';
 import { type Bomb, bombDamage, hasLanded, releaseBomb, stepBomb, surfaceCrossing } from '../weapons/bomb.ts';
 import { activeRangeM, isArmed, isSpent, launchMissile, type Missile, stepMissile, withinGimbal } from '../weapons/missile.ts';
@@ -61,6 +63,10 @@ export class Combat {
   private readonly burst = new Vector3();
   private readonly victimPos = new Vector3();
   private readonly impact = new Vector3();
+  private readonly nose = new Vector3();
+  private readonly lead = new Vector3();
+  private readonly solution = new Vector3();
+  private readonly aim = new Vector3();
   private readonly sharedUsa = new Set<number>();
   private readonly sharedRussia = new Set<number>();
 
@@ -157,12 +163,36 @@ export class Combat {
     const shots = pullTrigger(a, spec, dt, a.stores.cannonRounds);
     if (shots === 0) return;
     const density = atmosphere(a.flight.pos.y, this.air).density;
+    const aim = a.isBot ? null : this.playerAim(a, spec, density);
     for (let i = 0; i < shots; i++) {
-      const p = createProjectile(this.nextProjectileId++, a, spec, this.host.rng, density);
+      const p = createProjectile(this.nextProjectileId++, a, spec, this.host.rng, density, aim);
       if (!a.isBot) p.reach = PLAYER_GUN_REACH;
       this.projectiles.push(p);
       a.stores.cannonRounds -= spec.roundsPerProjectile;
     }
+  }
+
+  /**
+   * Where the player's rounds go (revision 20): bent from the nose toward the firing solution of the enemy that the
+   * aim assist pulls hardest, or null when no enemy is close enough to the nose.
+   */
+  private playerAim(a: AircraftEntity, spec: CannonSpec, density: number): Vector3 | null {
+    const f = a.flight;
+    this.nose.set(0, 0, -1).applyQuaternion(f.quat);
+    const drag = (spec.dragPerM * density) / SEA_LEVEL_DENSITY;
+    let best = 0;
+    for (const t of this.host.aircraftList()) {
+      if (!t.alive || t.team === a.team) continue;
+      const range = f.pos.distanceTo(t.flight.pos);
+      if (range > GUN_ASSIST_RANGE_M) continue;
+      leadDirection(f.pos, f.vel, t.flight.pos, t.flight.vel, spec.muzzleSpeedMs, drag, this.lead);
+      const pull = gunAssistPull(this.nose, this.lead, range);
+      if (pull > best) {
+        best = pull;
+        this.solution.copy(this.lead);
+      }
+    }
+    return best > 0 ? assistedAim(this.nose, this.solution, best, this.aim) : null;
   }
 
   private updateSeeker(a: AircraftEntity, dt: number): void {

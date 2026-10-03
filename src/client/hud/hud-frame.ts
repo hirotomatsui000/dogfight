@@ -17,6 +17,8 @@ export interface HudFrame {
   target: AircraftView | null;
   /** gun aim point for the designated target, when it is within gun range */
   leadDirection: Vector3 | null;
+  /** how hard the gun aim assist pulls toward that aim point now, 0..1 (revision 20) */
+  gunAssist?: number;
   camera: PerspectiveCamera;
   aimDirection: Vector3 | null;
   status: ModeStatus;

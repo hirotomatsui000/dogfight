@@ -51,14 +51,13 @@ export interface Shooter {
 const right = new Vector3();
 const up = new Vector3();
 
-/** A projectile leaving along the shooter's nose with random dispersion. */
-export function createProjectile(id: number, shooter: Shooter, spec: CannonSpec, rng: Rng, density: number): Projectile {
+/** A projectile leaving along the shooter's nose, or along `aim` (a unit direction) when given, with random dispersion. */
+export function createProjectile(id: number, shooter: Shooter, spec: CannonSpec, rng: Rng, density: number, aim: Vector3 | null = null): Projectile {
   const q = shooter.flight.quat;
   const sigma = spec.dispersionMrad / 1000;
   right.set(1, 0, 0).applyQuaternion(q);
   up.set(0, 1, 0).applyQuaternion(q);
-  const dir = new Vector3(0, 0, -1)
-    .applyQuaternion(q)
+  const dir = (aim ? new Vector3().copy(aim) : new Vector3(0, 0, -1).applyQuaternion(q))
     .addScaledVector(right, rng.gaussian() * sigma)
     .addScaledVector(up, rng.gaussian() * sigma)
     .normalize();

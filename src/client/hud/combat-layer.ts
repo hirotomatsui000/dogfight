@@ -47,7 +47,7 @@ export function drawCombatLayer(ctx: CanvasRenderingContext2D, p: Projector, f: 
     else drawMarker(ctx, friendly);
   }
   drawMissileMarkers(ctx, p, f, clock);
-  if (f.leadDirection && p.direction(f.camera, f.leadDirection, pt)) drawPipper(ctx);
+  if (f.leadDirection && p.direction(f.camera, f.leadDirection, pt)) drawPipper(ctx, f.gunAssist ?? 0);
   drawSeeker(ctx, p, f, clock);
   drawWeaponsStatus(ctx, p, f);
   drawRadarWarning(ctx, p, f, clock);
@@ -169,7 +169,8 @@ export function drawEdgeArrow(ctx: CanvasRenderingContext2D, p: Projector, f: Hu
 }
 
 /** Gun aim point: put the nose (the boresight cross) on it to hit. */
-function drawPipper(ctx: CanvasRenderingContext2D): void {
+/** The gun aim point; an outer ring closes in on it as the aim assist takes hold, and turns red once it holds fully. */
+function drawPipper(ctx: CanvasRenderingContext2D, assist: number): void {
   ctx.save();
   ctx.strokeStyle = WHITE;
   ctx.fillStyle = WHITE;
@@ -180,6 +181,13 @@ function drawPipper(ctx: CanvasRenderingContext2D): void {
   ctx.beginPath();
   ctx.arc(pt.x, pt.y, 2, 0, Math.PI * 2);
   ctx.fill();
+  if (assist > 0) {
+    ctx.strokeStyle = assist >= 1 ? RED : WHITE;
+    ctx.globalAlpha = 0.4 + 0.6 * assist;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, 26 - 9 * assist, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

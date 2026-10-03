@@ -11,6 +11,7 @@ import { createMode } from '../shared/modes/registry.ts';
 import { STRIKE_AIRCRAFT_PER_PILOT } from '../shared/modes/strike.ts';
 import { atmosphere } from '../shared/physics/atmosphere.ts';
 import { predictImpact } from '../shared/weapons/bomb.ts';
+import { gunAssistPull } from '../shared/weapons/gun-assist.ts';
 import { leadDirection } from '../shared/weapons/lead.ts';
 import type { DeathCause, GameEvent } from '../shared/world/events.ts';
 import { DT } from '../shared/world/world.ts';
@@ -283,6 +284,7 @@ export async function startGame(
   let fuelAlert: 'full' | 'bingo' | 'dry' = 'full';
   const bufferSize = new Vector2();
   const lead = new Vector3();
+  const gunLine = new Vector3();
   const burst = new Vector3();
 
   let paused = false;
@@ -699,10 +701,13 @@ export async function startGame(
       const designated = local.targetId === null ? null : session.view(local.targetId);
       const targetView = designated && designated.alive ? designated : null;
       let leadDir: Vector3 | null = null;
-      if (targetView && local.alive && f.pos.distanceTo(targetView.flight.pos) < LEAD_MARKER_RANGE_M) {
+      let gunAssist = 0;
+      const targetRange = targetView ? f.pos.distanceTo(targetView.flight.pos) : Infinity;
+      if (targetView && local.alive && targetRange < LEAD_MARKER_RANGE_M) {
         const cannon = CANNONS[local.config.stores.cannon];
         leadDirection(f.pos, f.vel, targetView.flight.pos, targetView.flight.vel, cannon.muzzleSpeedMs, cannon.dragPerM * atmosphere(f.pos.y).sigma, lead);
         leadDir = lead;
+        gunAssist = gunAssistPull(gunLine.set(0, 0, -1).applyQuaternion(f.quat), lead, targetRange);
       }
       const message = paused || !deathMessage ? null : `${deathMessage} — RESPAWN IN ${Math.max(0, Math.ceil(respawnAt - nowS))}`;
       const deathInfo: string[] = [];
@@ -732,6 +737,7 @@ export async function startGame(
         missiles: [...session.missiles()],
         target: targetView,
         leadDirection: leadDir,
+        gunAssist,
         camera: renderer.camera,
         aimDirection: aim,
         status,
