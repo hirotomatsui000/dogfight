@@ -7,6 +7,7 @@ import { CANNONS } from '../data/weapons.ts';
 import { DEG } from '../math/units.ts';
 import { FreeFlightMode } from '../modes/free-flight.ts';
 import type { GameMode } from '../modes/mode.ts';
+import { StrikeMode } from '../modes/strike.ts';
 import { TeamDeathmatchMode } from '../modes/team-deathmatch.ts';
 import { type ControlInput, neutralInput } from '../physics/controls.ts';
 import { createFlightState } from '../physics/flight-model.ts';
@@ -247,6 +248,22 @@ describe('World combat', () => {
     const full = shooter.config.stores;
     expect(shooter.stores).toEqual({ cannonRounds: full.cannonRounds, srm: full.srm, mrm: full.mrm, countermeasures: full.countermeasures, bombs: 0, fuelKg: shooter.config.physics.fuelKg });
     expect(shooter.targetId).toBeNull();
+  });
+
+  it('counts the match seconds to a respawn, and has none for a side with no jets left (Strike)', () => {
+    const { world, shooter, target } = duel();
+    expect(world.respawnInS(shooter)).toBeNull();
+    world.applyDamage(shooter, 999, target, 'cannon');
+    expect(world.respawnInS(shooter)).toBeCloseTo(5);
+    run(world, 2 * TICK_RATE);
+    expect(world.respawnInS(shooter)).toBeCloseTo(3);
+    run(world, 3 * TICK_RATE + 1);
+    expect(shooter.alive).toBe(true);
+    expect(world.respawnInS(shooter)).toBeNull();
+
+    const strike = duel(new StrikeMode({ timeLimitS: 540, aircraftPerTeam: 1, targetsToWin: 2 }));
+    strike.world.applyDamage(strike.shooter, 999, strike.target, 'cannon');
+    expect(strike.world.respawnInS(strike.shooter)).toBeNull();
   });
 
   it('scores Team Deathmatch through the mode', () => {

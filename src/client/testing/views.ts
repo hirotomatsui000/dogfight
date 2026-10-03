@@ -24,6 +24,7 @@ export function testView(id: number, over: Partial<AircraftView> = {}): Aircraft
     quaternion: new Quaternion(),
     flight,
     boundarySecondsLeft: null,
+    respawnInS: null,
     kills: 0,
     deaths: 0,
     firingCannon: false,

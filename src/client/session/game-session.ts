@@ -35,6 +35,8 @@ export interface AircraftView {
   /** latest simulated state, for HUD readouts */
   flight: FlightState;
   boundarySecondsLeft: number | null;
+  /** match seconds until a shot-down aircraft flies again; null while alive or with no aircraft left */
+  respawnInS: number | null;
   kills: number;
   deaths: number;
   firingCannon: boolean;

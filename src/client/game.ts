@@ -13,7 +13,7 @@ import { atmosphere } from '../shared/physics/atmosphere.ts';
 import { predictImpact } from '../shared/weapons/bomb.ts';
 import { gunAssistPull } from '../shared/weapons/gun-assist.ts';
 import { leadDirection } from '../shared/weapons/lead.ts';
-import type { DeathCause, GameEvent } from '../shared/world/events.ts';
+import type { GameEvent } from '../shared/world/events.ts';
 import { DT } from '../shared/world/world.ts';
 import { AudioEngine } from './audio/audio-engine.ts';
 import { explosionGain, missileTone, nearestSources } from './audio/sound-mix.ts';
@@ -55,6 +55,7 @@ import { DebugOverlay } from './ui/debug-overlay.ts';
 import { matchResult, type ResultRow, showEndScreen } from './ui/end-screen.ts';
 import { MatchStats } from './match-stats.ts';
 import { loadCareer, recordMatch, saveCareer } from './career.ts';
+import { deathText, respawnText } from './death-text.ts';
 import { campaignOutcome, campaignStart, missionHeading } from './campaign/flow.ts';
 import { missionById } from './campaign/missions.ts';
 import { loadCampaign, saveCampaign } from './campaign/progress.ts';
@@ -116,13 +117,6 @@ function modeFor(options: StartOptions): GameMode {
     strike: { aircraftPerTeam: STRIKE_AIRCRAFT_PER_PILOT * Math.max(allies, enemies) },
     teamObjective: { fighters },
   });
-}
-
-function deathText(cause: DeathCause, killer: string | null): string {
-  if (killer) return `SHOT DOWN BY ${killer}`;
-  if (cause === 'boundary') return 'LEFT THE COMBAT AREA';
-  if (cause === 'collision') return 'MID-AIR COLLISION';
-  return 'CRASHED';
 }
 
 /**
@@ -294,7 +288,6 @@ export async function startGame(
   let last = performance.now();
   let spawnGen = -1;
   let deathMessage: string | null = null;
-  let respawnAt = 0;
   let hitMarkerUntil = 0;
   let hitTakenUntil = 0;
   let settingsOpen = false;
@@ -388,7 +381,6 @@ export async function startGame(
       else if (victim && killer?.isLocal && killer.team !== victim.team) stats.localKill(killer.config.id);
       if (e.aircraftId === session.localId) {
         deathMessage = deathText(e.cause, killer?.callsign ?? null);
-        respawnAt = nowS + mode.respawnDelayS;
         if (victim) {
           deathCam.start(victim.position, killer && killer.id !== victim.id ? killer.id : null);
           nextJet = victim.config.id;
@@ -709,7 +701,7 @@ export async function startGame(
         leadDir = lead;
         gunAssist = gunAssistPull(gunLine.set(0, 0, -1).applyQuaternion(f.quat), lead, targetRange);
       }
-      const message = paused || !deathMessage ? null : `${deathMessage} — RESPAWN IN ${Math.max(0, Math.ceil(respawnAt - nowS))}`;
+      const message = paused || !deathMessage ? null : `${deathMessage} — ${respawnText(local.respawnInS)}`;
       const deathInfo: string[] = [];
       if (message && !local.alive) {
         const keys = settings.current.keys;

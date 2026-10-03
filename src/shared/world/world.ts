@@ -424,6 +424,16 @@ export class World implements ModeDirector, CombatHost, BotWorld {
     return dx * dx + dz * dz > c.radiusM * c.radiusM || a.flight.pos.y > CEILING_M;
   }
 
+  /**
+   * Seconds of match time until a shot-down aircraft flies again; null while it is alive or when its team has no
+   * aircraft left (Strike). Counted in ticks, so it agrees with the respawn however fast the match runs.
+   */
+  respawnInS(a: AircraftEntity): number | null {
+    if (a.alive || a.respawnAtTick < 0) return null;
+    if (a.support === null && !this.mode.canRespawn(a.team)) return null;
+    return Math.max(0, (a.respawnAtTick - this.tick) / TICK_RATE);
+  }
+
   /** Seconds until a boundary kill, or null when the aircraft is not currently counting down. */
   boundarySecondsLeft(a: AircraftEntity): number | null {
     if (a.outOfBoundsTicks === 0) return null;

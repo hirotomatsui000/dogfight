@@ -233,6 +233,7 @@ export class LocalSession implements GameSession {
           quaternion: a.flight.quat.clone(),
           flight: a.flight,
           boundarySecondsLeft: null,
+          respawnInS: null,
           kills: 0,
           deaths: 0,
           firingCannon: false,
@@ -262,6 +263,7 @@ export class LocalSession implements GameSession {
       view.spawnGen = a.spawnGen;
       view.flight = a.flight;
       view.boundarySecondsLeft = this.world.boundarySecondsLeft(a);
+      view.respawnInS = this.world.respawnInS(a);
       view.kills = a.kills;
       view.deaths = a.deaths;
       view.firingCannon = a.firingCannon;
