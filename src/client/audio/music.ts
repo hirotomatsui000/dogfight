@@ -24,6 +24,11 @@ export class MusicPlayer {
   private readonly audio: HTMLAudioElement;
   private scene: MusicScene = 'menu';
   private unlocked = false;
+  /**
+   * The volume as faded so far. Kept here rather than read back from the element: iOS ignores scripted volume, so a
+   * fade that waited for `audio.volume` to arrive would never end, and switching the music off would never pause it.
+   */
+  private level = 0;
   private fadeTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(settings: SettingsStore, url = MUSIC_URL) {
@@ -50,8 +55,15 @@ export class MusicPlayer {
   }
 
   private apply(): void {
+    if (document.hidden) {
+      // Timers crawl in a background tab, so a fade would keep the music playing there for many seconds: stop now.
+      this.stopFade();
+      this.setLevel(0);
+      this.audio.pause();
+      return;
+    }
     const target = musicLevel(this.settings.current, this.scene);
-    if (!this.unlocked || document.hidden || target <= 0) {
+    if (!this.unlocked || target <= 0) {
       this.fadeTo(0, () => this.audio.pause());
       return;
     }
@@ -59,20 +71,29 @@ export class MusicPlayer {
     this.fadeTo(target);
   }
 
+  private setLevel(v: number): void {
+    this.level = Math.min(1, Math.max(0, v));
+    this.audio.volume = this.level;
+  }
+
+  private stopFade(): void {
+    if (this.fadeTimer !== null) clearInterval(this.fadeTimer);
+    this.fadeTimer = null;
+  }
+
   /** Moves the volume to `target` over FADE_S, then calls `done`. */
   private fadeTo(target: number, done?: () => void): void {
-    if (this.fadeTimer !== null) clearInterval(this.fadeTimer);
+    this.stopFade();
     const stepS = 0.05;
-    const step = Math.max(0.01, (Math.abs(target - this.audio.volume) * stepS) / FADE_S);
-    this.fadeTimer = setInterval(() => {
-      const v = this.audio.volume;
-      const next = Math.abs(target - v) <= step ? target : v + Math.sign(target - v) * step;
-      this.audio.volume = Math.min(1, Math.max(0, next));
-      if (next === target) {
-        if (this.fadeTimer !== null) clearInterval(this.fadeTimer);
-        this.fadeTimer = null;
-        done?.();
-      }
-    }, stepS * 1000);
+    const step = Math.max(0.01, (Math.abs(target - this.level) * stepS) / FADE_S);
+    const tick = () => {
+      const v = this.level;
+      this.setLevel(Math.abs(target - v) <= step ? target : v + Math.sign(target - v) * step);
+      if (this.level !== target) return false;
+      this.stopFade();
+      done?.();
+      return true;
+    };
+    if (!tick()) this.fadeTimer = setInterval(tick, stepS * 1000);
   }
 }

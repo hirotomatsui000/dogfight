@@ -216,8 +216,12 @@ export class Effects {
     const model = this.options.wreckModel?.(id);
     if (!model) return;
     const obj = model.clone(true);
-    // No lights or wheels on a wreck.
-    for (const name of ['nav-lights', 'landing-gear']) obj.getObjectByName(name)?.removeFromParent();
+    // No lights, wheels or afterburner flames on a wreck (a copied flame would also share the live jet's material).
+    const dead: Object3D[] = [];
+    obj.traverse((o) => {
+      if (o.name === 'nav-lights' || o.name === 'landing-gear' || o.name === 'afterburner') dead.push(o);
+    });
+    for (const o of dead) o.removeFromParent();
     obj.visible = true;
     obj.position.copy(v.position);
     obj.quaternion.copy(v.quaternion);

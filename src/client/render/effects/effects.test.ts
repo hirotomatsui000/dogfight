@@ -9,6 +9,7 @@ import { TeamDeathmatchMode } from '../../../shared/modes/team-deathmatch.ts';
 import { neutralInput } from '../../../shared/physics/controls.ts';
 import { LocalSession } from '../../session/local-session.ts';
 import { testView } from '../../testing/views.ts';
+import { createAfterburner, setAfterburner } from './afterburner.ts';
 import { Effects } from './effects.ts';
 
 const map = createTestRange(1);
@@ -95,6 +96,13 @@ describe('Effects', () => {
     const scene = new Scene();
     const model = new Group();
     model.name = 'jet';
+    // A twin on afterburner when it was hit: the wreck keeps neither flame.
+    for (const x of [-1, 1]) {
+      const flame = createAfterburner(0.5);
+      flame.position.x = x;
+      setAfterburner(flame, 1, 0);
+      model.add(flame);
+    }
     const fx = new Effects(scene, { terrain, wreckModel: () => model });
     const v = testView(1, { config: condor });
     v.position.set(0, 400, 0);
@@ -104,6 +112,8 @@ describe('Effects', () => {
     expect(scene.getObjectByName('jet')).toBeUndefined();
     fx.onEvent({ type: 'destroyed', aircraftId: 1, cause: 'missile', killerId: 2 }, session);
     expect(scene.getObjectByName('jet')).toBeDefined();
+    expect(scene.getObjectByName('jet')?.getObjectByName('afterburner')).toBeUndefined();
+    expect(model.getObjectByName('afterburner')).toBeDefined();
     for (let i = 0; i < 20 * 60 && scene.getObjectByName('jet'); i++) fx.update(1 / 60, session, frame, new Vector3());
     expect(scene.getObjectByName('jet')).toBeUndefined();
     const impacts = fx.drainImpacts();
